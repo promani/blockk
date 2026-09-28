@@ -7,7 +7,7 @@ y el sistema genera el **despiece real pieza por pieza**, la **optimización de 
 
 > **Stack:** PHP 8.4 · Symfony 7.4 (LTS) · Twig · AssetMapper (ES modules, sin Node ni paso de build) · Canvas 2D · PHPUnit 12.
 
-Alcance implementado: **Fase 1 (MVP)** del PRD. Ver [Alcance](#alcance-y-lo-que-queda-para-fases-2-y-3).
+Alcance implementado: **Fase 1 (MVP)** del PRD. Ver [Alcance](#alcance).
 
 ## Ejecutar
 
@@ -102,14 +102,14 @@ cobertura total de cada corrida y ausencia de piezas superpuestas en **todas** l
 cómputo (áreas exactas, pallets, mortero, hormigón/hierro, cierre de la cotización), madera, validación, solar, sugeridor,
 plantillas y la API HTTP.
 
-## Alcance y lo que queda para Fases 2 y 3
+## Alcance
 
 Implementado (Fase 1): editor ortogonal con vistas isométrica/cenital, piezas HCCA de 7,5/10/15/20 cm y U, entrepiso de madera,
 límite de 2 pisos, simulador solar, cómputo con exportación y catálogo.
 
-No implementado (según el roadmap del PRD): planos de replanteo con cotas acumuladas, guardado en la nube y enlace público
-(Fase 2); integración con API de distribuidores, flete por geolocalización y exportación IFC (Fase 3). La cotización usa
-**precios de ejemplo editables**; el envío a distribuidores es por correo/WhatsApp.
+Fuera de alcance por decisión del proyecto: guardado en la nube y enlace público, integración con API de distribuidores,
+flete por geolocalización, exportación IFC y toda la Fase 3 del PRD. El proyecto se guarda solo en el navegador (con exportar/abrir
+`.json`). La cotización usa **precios de ejemplo editables** y el pedido a un distribuidor se canaliza por correo o WhatsApp.
 
 Los controles del editor son de **predimensionado y coherencia geométrica**: capacidades por pallet, luces máximas de madera, consumos
 y esbelteces son valores referenciales y **no reemplazan el cálculo estructural** (CIRSOC 501 / Eurocódigo 6) ni las fichas del

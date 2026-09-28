@@ -222,7 +222,7 @@ function summaryText() {
         `- Mortero adhesivo de junta delgada: ${int(bom.total.mortar.adhesiveBags)} bolsas de 25 kg`,
         `- Mortero cementicio de nivelación: ${int(bom.total.mortar.levelingBags)} bolsas de 25 kg`,
         '',
-        'Consulto disponibilidad, flete y plazo de entrega. Gracias.',
+        'Consulto disponibilidad y plazo de entrega. Gracias.',
     ];
     return lines.join('\n');
 }
