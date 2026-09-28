@@ -32,8 +32,15 @@ final class TimberPlanner
         $bandMl = 0.0;
         $plates = 0;
 
+        $fieldsSeen = [];
         foreach ($ground->timber as $element) {
             if ($element instanceof JoistField) {
+                foreach ($fieldsSeen as $other) {
+                    if ($element->x < $other->x + $other->w && $other->x < $element->x + $element->w && $element->y < $other->y + $other->h && $other->y < $element->y + $element->h) {
+                        $issues[] = $this->issue('timber.overlap', 'error', 'Dos entrepisos de madera se superponen: se estarían contando dos veces los tirantes y las placas. Ajuste o elimine uno.', $element->id, $element->x, $element->y);
+                    }
+                }
+                $fieldsSeen[] = $element;
                 $field = $this->joistField($element, $ground, $issues);
                 $fields[] = $field;
                 foreach ($field['joists'] as $j) {
@@ -98,13 +105,15 @@ final class TimberPlanner
         $clearCm = Hcca::ticksToCm($clear);
         $section = Hcca::timberSections()[$f->section];
 
-        if ($clearCm > $section['maxSpanCm'] + 0.001) {
+        // La luz máxima de referencia corresponde a 40 cm entre ejes; a igual deformación admisible varía con (40/separación)^(1/3).
+        $maxSpan = $section['maxSpanCm'] * (40 / $f->spacing) ** (1 / 3);
+        if ($clearCm > $maxSpan + 0.001) {
             $issues[] = $this->issue('timber.span', 'error', sprintf(
-                'Luz libre de %s m excede el máximo referencial de %s m para %s a %d cm entre ejes. Use una sección mayor o agregue un muro de apoyo.',
+                'Luz libre de %s m excede el máximo referencial de %s m para %s a %d cm entre ejes. Use una sección mayor, menor separación o agregue un muro de apoyo.',
                 $this->m($clearCm),
-                $this->m($section['maxSpanCm']),
+                $this->m($maxSpan),
                 $section['label'],
-                40,
+                $f->spacing,
             ), $f->id, $f->x + intdiv($f->w, 2), $f->y + intdiv($f->h, 2));
         }
 

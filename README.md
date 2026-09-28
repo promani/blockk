@@ -16,7 +16,7 @@ Requisitos: PHP ≥ 8.4 (extensiones habituales de Symfony: `ctype`, `iconv`, `i
 ```bash
 composer install
 composer start            # php -S 127.0.0.1:8000 -t public   →   http://127.0.0.1:8000
-composer test             # PHPUnit (102 tests)
+composer test             # PHPUnit (118 tests)
 ```
 
 En producción: `APP_ENV=prod composer install --no-dev -o && php bin/console asset-map:compile && php bin/console cache:warmup`
@@ -50,7 +50,7 @@ rueda = zoom · clic central o `Espacio`+arrastre = paneo · `F` encuadrar · `X
 | Pallets completos (1,44–1,80 m³ según espesor), mortero adhesivo 1,5–2,5 kg/m² | `Hcca`, `BomCalculator` |
 | Asoleamiento: rosa de los vientos, sol de 06:00 a 19:00, sombras, sugeridor de aberturas (ganancia solar + ventilación cruzada) | `SunCalculator`, `ExposureAnalyzer`, `OpeningSuggester` |
 
-**Resultados medidos** (tests y plantillas): descarte de material 0,7–1,2 % (objetivo PRD < 4 %); la superficie de mampostería
+**Resultados medidos** (tests y plantillas; el motor además se sometió a fuzzing de ~22.000 proyectos aleatorios contra los invariantes de traba, cobertura, piezas mínimas y cómputo): descarte de material 0,7–1,2 % (objetivo PRD < 4 %); la superficie de mampostería
 coincide exactamente con el cómputo manual (test `wallAreaMatchesTheManualComputationExactly`).
 
 ## Arquitectura
@@ -73,7 +73,7 @@ los tramos libres de cada muro (`slots`), de modo que la regla de jambas no se d
 
 - Geometría interna en **ticks enteros de 0,5 mm** (12,5 cm = 250 ticks): sin errores de coma flotante en trabas ni remanentes.
 - Coordenadas del proyecto en **unidades de 12,5 cm** (enteros).
-- Rendimiento: análisis ≈ 50 ms para una vivienda de 2 niveles; presupuesto de complejidad de 800 tramos por nivel.
+- Rendimiento: análisis ≈ 50 ms para una vivienda de 2 niveles. Presupuestos de entrada (API pública sin estado): 800 tramos de muro por nivel (se corta antes de materializar las intersecciones), 112,5 m de lado máximo, 1.500 vanos y 40 elementos de madera por nivel, ids que empiezan con letra.
   En el navegador el editor sostiene 60 FPS con render por software (capa estática en caché + descarte de cajas fuera de pantalla).
 
 ### API JSON

@@ -130,4 +130,37 @@ final class WallNormalizerTest extends TestCase
 
         self::assertEquals($once, $twice);
     }
+
+    #[Test]
+    public function mergingKeepsOpeningsAndUBeamsThatLiveOnTheSecondWall(): void
+    {
+        // B (5→25) ya tenía una puerta; se dibuja A (0→5) pegada a su inicio y ambas se fusionan en 0→25.
+        $level = new Level(
+            [Wall::between('B', 5, 0, 25, 0, self::T), Wall::between('A', 0, 0, 5, 0, self::T)],
+            [new Opening('o1', 'B', 2, 8, 0, 8, OpeningKind::Door, 'P100'), new Opening('o2', 'B', 6, 8, 0, 8, OpeningKind::Door, 'P100')],
+            [new \App\Domain\Model\UBeam('u1', 'B', 3, 2, 5)],
+        );
+
+        $result = (new WallNormalizer())->normalize($level);
+
+        self::assertCount(1, $result->level->walls);
+        self::assertSame([], $result->notices, 'Nada se descarta: los vanos caben en el muro fusionado');
+        $positions = array_map(static fn (Opening $o): int => $o->pos, $result->level->openings);
+        sort($positions);
+        self::assertSame([7, 11], $positions, 'Posición absoluta = 5 (largo de A) + posición sobre B');
+        self::assertSame(8, $result->level->ubeams[0]->pos);
+    }
+
+    #[Test]
+    public function rejectsIntersectionsThatWouldExplodeIntoTooManySegments(): void
+    {
+        $walls = [];
+        for ($i = 0; $i < 400; ++$i) {
+            $walls[] = Wall::between("h$i", 0, $i, 399, $i, self::T);
+            $walls[] = Wall::between("v$i", $i, 0, $i, 399, self::T);
+        }
+
+        $this->expectException(\App\Domain\Model\InvalidProjectException::class);
+        (new WallNormalizer())->normalize(new Level($walls));
+    }
 }

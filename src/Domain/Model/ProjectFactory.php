@@ -51,8 +51,8 @@ final class ProjectFactory
             settings: $settings,
             north: $this->intInRange($data['north'] ?? 0, 0, 359, 'north') % 360,
             latitude: $this->floatInRange($data['lat'] ?? -34.6, -66.0, 66.0, 'lat'),
-            lotW: $this->intInRange($lot['w'] ?? 24, 4, 200, 'lot.w'),
-            lotD: $this->intInRange($lot['d'] ?? 20, 4, 200, 'lot.d'),
+            lotW: $this->intInRange($lot['w'] ?? 24, 4, 100, 'lot.w'),
+            lotD: $this->intInRange($lot['d'] ?? 20, 4, 100, 'lot.d'),
         );
 
         if ([] !== $this->errors) {
@@ -95,11 +95,11 @@ final class ProjectFactory
         }
 
         $openings = [];
-        foreach ($this->list($d['openings'] ?? []) as $i => $o) {
+        foreach ($this->list($d['openings'] ?? [], Hcca::MAX_OPENINGS_PER_LEVEL, "$path.openings") as $i => $o) {
             $openings[] = $this->opening($o, "$path.openings[$i]", $ids);
         }
         $ubeams = [];
-        foreach ($this->list($d['ubeams'] ?? []) as $i => $u) {
+        foreach ($this->list($d['ubeams'] ?? [], Hcca::MAX_UBEAMS_PER_LEVEL, "$path.ubeams") as $i => $u) {
             $ubeams[] = new UBeam(
                 $this->id($u['id'] ?? null, "$path.ubeams[$i].id", $ids),
                 $this->string($u['wall'] ?? '', 40, "$path.ubeams[$i].wall"),
@@ -109,7 +109,7 @@ final class ProjectFactory
             );
         }
         $timber = [];
-        foreach ($this->list($d['timber'] ?? []) as $i => $t) {
+        foreach ($this->list($d['timber'] ?? [], Hcca::MAX_TIMBER_PER_LEVEL, "$path.timber") as $i => $t) {
             $timber[] = $this->timber($t, "$path.timber[$i]", $ids);
         }
 
@@ -168,8 +168,8 @@ final class ProjectFactory
             $id,
             $this->coord($t['x'] ?? null, "$path.x"),
             $this->coord($t['y'] ?? null, "$path.y"),
-            $this->intInRange($t['w'] ?? 8, 2, Hcca::MAX_COORD_UNITS, "$path.w"),
-            $this->intInRange($t['h'] ?? 8, 2, Hcca::MAX_COORD_UNITS, "$path.h"),
+            $this->intInRange($t['w'] ?? 8, 2, Hcca::MAX_BBOX_UNITS, "$path.w"),
+            $this->intInRange($t['h'] ?? 8, 2, Hcca::MAX_BBOX_UNITS, "$path.h"),
             Axis::tryFrom((string) ($t['dir'] ?? 'x')) ?? Axis::X,
             $section,
             $this->intInRange($t['spacing'] ?? 40, Hcca::JOIST_MIN_SPACING_CM, Hcca::JOIST_MAX_SPACING_CM, "$path.spacing"),
@@ -197,20 +197,24 @@ final class ProjectFactory
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function list(mixed $value): array
+    private function list(mixed $value, int $max, string $path): array
     {
         if (!is_array($value)) {
             return [];
         }
+        if (count($value) > $max) {
+            $this->errors[] = "$path: demasiados elementos (máx. $max por nivel)";
+            $value = array_slice($value, 0, $max);
+        }
 
-        return array_values(array_filter(array_slice($value, 0, 4000), is_array(...)));
+        return array_values(array_filter($value, is_array(...)));
     }
 
     /** @param array<string, true> $seen */
     private function id(mixed $value, string $path, array &$seen): string
     {
         $id = is_string($value) || is_int($value) ? (string) $value : '';
-        if (!preg_match('/^[A-Za-z0-9_.-]{1,40}$/', $id)) {
+        if (!preg_match('/^[A-Za-z][A-Za-z0-9_.-]{0,39}$/', $id)) {
             $this->errors[] = "$path inválido";
 
             return 'invalid';

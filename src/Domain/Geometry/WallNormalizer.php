@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domain\Geometry;
 
+use App\Domain\Hcca;
 use App\Domain\Model\Axis;
+use App\Domain\Model\InvalidProjectException;
 use App\Domain\Model\Level;
 use App\Domain\Model\Opening;
 use App\Domain\Model\UBeam;
@@ -20,7 +22,11 @@ use App\Domain\Model\Wall;
  *     único muro (una sola hilada continua, sin juntas verticales alineadas).
  *
  * Los vanos y vigas U se reubican en el tramo que los contiene; si quedan partidos se descartan.
- * La función es pura: devuelve un nuevo Level.
+ * La función es pura: devuelve un nuevo Level. Lanza InvalidProjectException si las intersecciones generarían
+ * más tramos que el presupuesto de complejidad (se corta antes de materializarlos).
+ *
+ * Los mapas internos tienen la forma id_viejo => [[id_nuevo, desde_viejo, largo, desde_nuevo], …]: el tramo
+ * [desde_viejo, desde_viejo + largo) del muro viejo pasa a ocupar [desde_nuevo, desde_nuevo + largo) del nuevo.
  */
 final class WallNormalizer
 {
@@ -58,7 +64,7 @@ final class WallNormalizer
     /**
      * @param list<Wall> $walls
      *
-     * @return array{list<Wall>, array<string, list<array{string, int, int}>>} muros y mapa id_viejo => [[id_nuevo, offset, largo]]
+     * @return array{list<Wall>, array<string, list<array{string, int, int, int}>>}
      */
     private function resolveOverlaps(array $walls): array
     {
@@ -94,7 +100,7 @@ final class WallNormalizer
                 }
                 $out[] = $piece;
                 $accepted[$key][] = [$fs, $fe];
-                $map[$w->id][] = [$piece->id, $fs - $w->startU(), $fe - $fs];
+                $map[$w->id][] = [$piece->id, $fs - $w->startU(), $fe - $fs, 0];
             }
         }
 
@@ -104,11 +110,12 @@ final class WallNormalizer
     /**
      * @param list<Wall> $walls
      *
-     * @return array{list<Wall>, array<string, list<array{string, int, int}>>}
+     * @return array{list<Wall>, array<string, list<array{string, int, int, int}>>}
      */
     private function splitAtJunctions(array $walls): array
     {
         $splits = [];
+        $pieces = count($walls);
         foreach ($walls as $w) {
             foreach ($walls as $v) {
                 if ($w === $v || $w->axis() === $v->axis()) {
@@ -121,8 +128,12 @@ final class WallNormalizer
                     continue;
                 }
                 $along = Axis::X === $w->axis() ? $cx : $cy;
-                if ($along > $w->startU() && $along < $w->endU()) {
+                if ($along > $w->startU() && $along < $w->endU() && !isset($splits[$w->id][$along])) {
                     $splits[$w->id][$along] = true;
+                    if (++$pieces > Hcca::MAX_SEGMENTS_PER_LEVEL) {
+                        // Se corta antes de materializar los tramos: una rejilla densa explotaría en memoria.
+                        throw new InvalidProjectException([sprintf('El proyecto es demasiado complejo (más de %d tramos de muro por nivel tras dividir las intersecciones).', Hcca::MAX_SEGMENTS_PER_LEVEL)]);
+                    }
                 }
             }
         }
@@ -141,7 +152,7 @@ final class WallNormalizer
                     $piece = $piece->withId($this->uniqueId($w->id, $k, $usedIds));
                 }
                 $out[] = $piece;
-                $map[$w->id][] = [$piece->id, $bounds[$k] - $w->startU(), $bounds[$k + 1] - $bounds[$k]];
+                $map[$w->id][] = [$piece->id, $bounds[$k] - $w->startU(), $bounds[$k + 1] - $bounds[$k], 0];
             }
         }
 
@@ -154,7 +165,7 @@ final class WallNormalizer
      *
      * @param list<Wall> $walls
      *
-     * @return array{list<Wall>, array<string, list<array{string, int, int}>>, bool}
+     * @return array{list<Wall>, array<string, list<array{string, int, int, int}>>, bool}
      */
     private function mergeStraight(array $walls): array
     {
@@ -180,11 +191,12 @@ final class WallNormalizer
             $out = [];
             foreach ($walls as $w) {
                 if ($w->id === $second->id) {
-                    $map[$w->id] = [[$first->id, $first->lengthU(), $second->lengthU()]];
+                    // Todo el muro viejo pasa a ocupar el final del fusionado (desde_nuevo = largo del primero).
+                    $map[$w->id] = [[$first->id, 0, $second->lengthU(), $first->lengthU()]];
                     continue;
                 }
                 $out[] = $w->id === $first->id ? $merged : $w;
-                $map[$w->id] = [[$w->id, 0, $w->id === $first->id ? $first->lengthU() : $w->lengthU()]];
+                $map[$w->id] = [[$w->id, 0, $w->lengthU(), 0]];
             }
 
             return [$out, $map, true];
@@ -198,7 +210,7 @@ final class WallNormalizer
      *
      * @param list<Opening>                                     $openings
      * @param list<UBeam>                                       $ubeams
-     * @param array<string, list<array{string, int, int}>>      $map
+     * @param array<string, list<array{string, int, int, int}>> $map
      *
      * @return array{list<Opening>, list<UBeam>, int}
      */
@@ -206,9 +218,9 @@ final class WallNormalizer
     {
         $dropped = 0;
         $place = static function (string $wallId, int $pos, int $span) use ($map): ?array {
-            foreach ($map[$wallId] ?? [] as [$newId, $offset, $length]) {
-                if ($pos >= $offset && $pos + $span <= $offset + $length) {
-                    return [$newId, $pos - $offset];
+            foreach ($map[$wallId] ?? [] as [$newId, $oldStart, $length, $newStart]) {
+                if ($pos >= $oldStart && $pos + $span <= $oldStart + $length) {
+                    return [$newId, $pos - $oldStart + $newStart];
                 }
             }
 

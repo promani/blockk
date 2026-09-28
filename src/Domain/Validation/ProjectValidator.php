@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Validation;
 
+use App\Domain\Geometry\NodeType;
 use App\Domain\Hcca;
 use App\Domain\LevelAnalysis;
 use App\Domain\Model\Axis;
@@ -48,6 +49,7 @@ final class ProjectValidator
                 $this->wall($issues, $index, $wall, $analysis);
             }
             $this->openings($issues, $index, $analysis);
+            $this->junctions($issues, $index, $analysis);
             foreach ($analysis->courses->warnings as $w) {
                 $issues[] = new Issue(Issue::WARN, 'bond', $w, $index);
             }
@@ -89,6 +91,15 @@ final class ProjectValidator
         if ($wall->lengthU() < 2) {
             $issues[] = new Issue(Issue::WARN, 'wall.short', sprintf('Muro de %s cm: demasiado corto para trabar con bloques (mín. 25 cm).', $this->cm($wall->lengthU() * Hcca::GRID_CM)), $index, $wall->id, $x, $y);
         }
+        // En las hiladas donde el muro queda recortado por los transversales, la corrida no debe bajar de 12,5 cm.
+        foreach ([0, 1] as $course) {
+            $start = $analysis->topology->endCondition($wall, true, $course);
+            $end = $analysis->topology->endCondition($wall, false, $course);
+            if (!$start['merge'] && !$end['merge'] && $wall->lengthTicks() + $start['ext'] + $end['ext'] < Hcca::MIN_PIECE) {
+                $issues[] = new Issue(Issue::WARN, 'wall.short', sprintf('Muro de %s cm entre muros gruesos: en las hiladas alternadas queda una pieza menor a 12,5 cm que no se puede colocar. Alargue el tramo o achique los muros vecinos.', $this->cm($wall->lengthU() * Hcca::GRID_CM)), $index, $wall->id, $x, $y);
+                break;
+            }
+        }
         $slenderness = Hcca::LEVEL_HEIGHT_CM / $tCm;
         $limit = $wall->isLoadBearing() ? self::MAX_SLENDERNESS_BEARING : self::MAX_SLENDERNESS_PARTITION;
         if ($slenderness > $limit) {
@@ -96,6 +107,27 @@ final class ProjectValidator
         }
         if (!$wall->isLoadBearing() && isset($analysis->regions->exterior[$wall->id])) {
             $issues[] = new Issue(Issue::WARN, 'wall.exterior-thin', sprintf('Muro exterior de %s cm: las fachadas deben ser portantes (≥ 15 cm).', $this->cm($tCm)), $index, $wall->id, $x, $y);
+        }
+    }
+
+    /** @param list<Issue> $issues */
+    private function junctions(array &$issues, int $index, LevelAnalysis $analysis): void
+    {
+        foreach ($analysis->topology->nodes() as $node) {
+            if (!in_array($node->type(), [NodeType::Tee, NodeType::Cross], true)) {
+                continue;
+            }
+            foreach ([\App\Domain\Model\Axis::X, \App\Domain\Model\Axis::Y] as $axis) {
+                $pair = $node->armsOn($axis);
+                if (2 === count($pair) && $pair[0]->t !== $pair[1]->t) {
+                    $issues[] = new Issue(Issue::WARN, 'junction.thickness', sprintf(
+                        'Encuentro con muros pasantes de distinto espesor (%s y %s cm): el muro transversal no apoya de manera uniforme y puede quedar un hueco de mampostería. Verificar el detalle.',
+                        $this->cm(Hcca::ticksToCm($pair[0]->t)),
+                        $this->cm(Hcca::ticksToCm($pair[1]->t)),
+                    ), $index, null, $node->x, $node->y);
+                    break;
+                }
+            }
         }
     }
 

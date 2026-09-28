@@ -116,6 +116,29 @@ final class ApiTest extends WebTestCase
         self::assertStringContainsString('demasiado complejo', implode(' ', $json['details']));
     }
 
+    public function testAnalyzeRejectsFootprintsLargerThanTheBudget(): void
+    {
+        // Dos muros de 1 módulo en extremos opuestos del rango: la grilla de ambientes ocuparía gigas de memoria.
+        $client = static::createClient();
+        $json = $this->post($client, '/api/analyze', ['levels' => [['walls' => [
+            ['id' => 'a', 'x1' => -1000, 'y1' => -1000, 'x2' => -999, 'y2' => -1000, 't' => 20],
+            ['id' => 'b', 'x1' => 1000, 'y1' => 999, 'x2' => 1000, 'y2' => 1000, 't' => 20],
+        ]]]]);
+
+        self::assertResponseStatusCodeSame(422);
+        self::assertStringContainsString('superficie demasiado grande', implode(' ', $json['details']));
+    }
+
+    public function testNumericWallIdsAreRejectedInsteadOfCrashingTheSuggester(): void
+    {
+        $client = static::createClient();
+        $data = Fixtures::room()->build();
+        $data['levels'][0]['walls'][0]['id'] = '1';
+        $this->post($client, '/api/suggest', $data);
+
+        self::assertResponseStatusCodeSame(422);
+    }
+
     public function testAnalyzeRejectsGarbageAndOversizedBodies(): void
     {
         $client = static::createClient();

@@ -96,4 +96,15 @@ final class RegionAnalyzerTest extends TestCase
         self::assertGreaterThan(0.0, $map->rooms[0]->netM2);
         self::assertFalse($map->rooms[0]->isRectangular());
     }
+
+    #[Test]
+    public function aDeadEndStubDoesNotUnderReportTheNetArea(): void
+    {
+        // Tabique de 10 cm que baja 12 módulos desde el muro norte: ocupa 0,10 m × (1,50 − 0,10) m dentro del ambiente.
+        $level = new Level([...$this->rect(40, 30, 400), Wall::between('stub', 20, 0, 20, 12, 200)]);
+        $map = $this->analyze($level);
+
+        self::assertCount(1, $map->rooms);
+        self::assertEqualsWithDelta(4.80 * 3.55 - 0.10 * 1.40, $map->rooms[0]->netM2, 0.0005);
+    }
 }

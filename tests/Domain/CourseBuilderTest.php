@@ -11,6 +11,7 @@ use App\Domain\Masonry\CourseModel;
 use App\Domain\Masonry\PieceKind;
 use App\Domain\Masonry\Run;
 use App\Domain\ProjectAnalyzer;
+use App\Domain\Templates\TemplateBuilder;
 use App\Domain\Templates\TemplateCatalog;
 use App\Tests\Support\Fixtures;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -19,7 +20,7 @@ use PHPUnit\Framework\TestCase;
 
 final class CourseBuilderTest extends TestCase
 {
-    private function model(\App\Domain\Templates\TemplateBuilder $b, int $level = 0): CourseModel
+    private function model(TemplateBuilder $b, int $level = 0): CourseModel
     {
         $analyzer = new ProjectAnalyzer();
         [$normalized] = $analyzer->normalize(Fixtures::build($b));
@@ -228,5 +229,51 @@ final class CourseBuilderTest extends TestCase
                 }
             }
         }
+    }
+
+    #[Test]
+    public function aLintelNextToACornerNeverLeavesATinyBlockStub(): void
+    {
+        // Puerta a 37,5 cm de la esquina en un muro que en la hilada del dintel queda recortado por el transversal.
+        $model = $this->model(Fixtures::room(40, 30, 20.0)->opening(0, 'P100', 'y', 40, 3));
+
+        self::assertSame([], $model->warnings);
+        foreach ($model->pieces() as [$c, , $piece]) {
+            self::assertGreaterThanOrEqual(Hcca::MIN_PIECE, $piece->length(), 'Pieza < 12,5 cm en la hilada '.($c + 1));
+        }
+        $this->assertRunsAreFullyCovered($model);
+    }
+
+    #[Test]
+    public function thinWallsKeepTheBondEvenWhenTheOriginIsOffTheHalfCentimetreLattice(): void
+    {
+        // Muros de 7,5 cm: los extremos recortados caen en múltiplos de 3,75 cm y la reparación debe seguir hallando patrón.
+        $model = $this->model(Fixtures::room(28, 10, 7.5)->opening(0, 'V100', 'x', 0, 7)->opening(0, 'V62', 'x', 0, 17));
+
+        self::assertSame([], $model->warnings);
+        $this->assertBondBetweenCourses($model);
+    }
+
+    #[Test]
+    public function manualUBeamBoundariesRespectTheBondToo(): void
+    {
+        $data = Fixtures::room(40, 30, 20.0)->build();
+        $data['levels'][0]['ubeams'][] = ['id' => 'u1', 'wall' => 'w1', 'pos' => 4, 'len' => 2, 'course' => 1];
+        $analyzer = new ProjectAnalyzer();
+        [$normalized] = $analyzer->normalize(Fixtures::project($data));
+        $model = $analyzer->analyzeLevels($normalized)[0]->courses;
+
+        self::assertSame([], $model->warnings);
+        $this->assertBondBetweenCourses($model);
+    }
+
+    #[Test]
+    public function aVeryLongWallIsLaidOutInReasonableTime(): void
+    {
+        $started = microtime(true);
+        $model = $this->model((new TemplateBuilder('largo'))->wall(0, 0, 0, 900, 0, 20.0)->wall(0, 0, 4, 900, 4, 20.0));
+
+        self::assertLessThan(4.0, microtime(true) - $started, 'El armado de hiladas debe ser casi lineal en la longitud del muro');
+        self::assertNotEmpty($model->courses[0]);
     }
 }

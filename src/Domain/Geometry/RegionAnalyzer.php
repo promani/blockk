@@ -184,7 +184,9 @@ final class RegionAnalyzer
                 foreach (array_unique(array_filter($quad)) as $r) {
                     $inside = array_keys(array_filter($quad, static fn (int $q): bool => $q === $r));
                     $count = count($inside);
-                    if (1 === $count || (2 === $count && $this->isDiagonal($inside))) {
+                    // 1 celda: esquina convexa; 2 celdas: dos esquinas (en diagonal, o un tabique ciego que llega a un muro).
+                    // Con dos celdas contiguas sobre un muro recto uno de los espesores es 0 y la corrección se anula sola.
+                    if (1 === $count || 2 === $count) {
                         foreach ($inside as $pos) {
                             $corner[$r] += intdiv($edges[$pos][0], 2) * intdiv($edges[$pos][1], 2);
                         }
@@ -215,14 +217,6 @@ final class RegionAnalyzer
         }
 
         return $rooms;
-    }
-
-    /** @param list<string> $positions */
-    private function isDiagonal(array $positions): bool
-    {
-        sort($positions);
-
-        return $positions === ['NE', 'SW'] || $positions === ['NW', 'SE'];
     }
 
     /** @return array{array<string, array{neg: list<int>, pos: list<int>}>, array<string, array{int, int}>, list<string>} */

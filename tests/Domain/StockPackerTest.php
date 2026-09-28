@@ -64,4 +64,16 @@ final class StockPackerTest extends TestCase
         self::assertSame([42.5, 20.0], $patterns[0]['pattern']);
         self::assertSame(2, $patterns[0]['blocks']);
     }
+
+    #[Test]
+    public function planBestNeverNeedsMoreBlocksThanPackingEachGroupSeparately(): void
+    {
+        // Cada grupo entra en un solo bloque; best-fit sobre la unión abriría 3 (heurística no monótona).
+        $groups = [[375, 250, 625], [500, 500, 250]];
+
+        self::assertSame(3, StockPacker::plan([...$groups[0], ...$groups[1]])->blocks(), 'La heurística sola no es monótona');
+        $best = \App\Domain\Cutting\CutPlanner::planBest($groups);
+        self::assertLessThanOrEqual(2, $best->blocks());
+        self::assertSame(array_sum(array_map('array_sum', $groups)), array_sum(array_map(static fn (array $b): int => array_sum($b['cuts']), $best->bins)));
+    }
 }

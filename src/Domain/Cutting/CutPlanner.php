@@ -12,6 +12,24 @@ use App\Domain\Hcca;
  */
 final class CutPlanner
 {
+    /**
+     * Mejor plan para varios grupos de piezas (p. ej. una lista por nivel): la unión optimizada o la simple suma de los
+     * planes por grupo, lo que use menos bloques (best-fit decreasing no es monótono: la unión puede salir peor).
+     *
+     * @param list<list<int>> $groups
+     */
+    public static function planBest(array $groups): CutPlan
+    {
+        $groups = array_values(array_filter($groups, static fn (array $g): bool => [] !== $g));
+        if (count($groups) <= 1) {
+            return self::plan($groups[0] ?? []);
+        }
+        $union = self::plan(array_merge(...$groups));
+        $sum = CutPlan::merge(array_map(self::plan(...), $groups));
+
+        return [$sum->blocks(), $sum->scrapTicks()] < [$union->blocks(), $union->scrapTicks()] ? $sum : $union;
+    }
+
     /** @param list<int> $pieces largos en ticks (cada uno < BLOCK_L) */
     public static function plan(array $pieces): CutPlan
     {

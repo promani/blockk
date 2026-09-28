@@ -35,12 +35,21 @@ final class CourseBuilder
         $previousJoints = [];
         $courses = [];
         $warnings = [];
+        // Vanos y vigas U indexados por muro (evita recorrer todos los vanos para cada corrida de cada hilada).
+        $openings = [];
+        foreach ($level->openings as $o) {
+            $openings[$o->wallId][] = $o;
+        }
+        $beams = [];
+        foreach ($level->ubeams as $u) {
+            $beams[$u->wallId][] = $u;
+        }
 
         for ($c = 0; $c < Hcca::COURSES; ++$c) {
             $runs = [];
             $joints = [];
             foreach ($this->seeds($topology, $c) as $seed) {
-                $run = $this->fillRun($level, $seed, $c, $previousJoints, $packer, $warnings);
+                $run = $this->fillRun($openings, $beams, $seed, $c, $previousJoints, $packer, $warnings);
                 $runs[] = $run;
                 foreach ($run->pieces as $i => $piece) {
                     if (isset($run->pieces[$i + 1]) && $run->pieces[$i + 1]->a === $piece->b) {
@@ -49,6 +58,10 @@ final class CourseBuilder
                 }
             }
             $courses[] = $runs;
+            foreach ($joints as &$positions) {
+                sort($positions); // las corridas de una recta se recorren de menor a mayor, pero se garantiza el orden
+            }
+            unset($positions);
             $previousJoints = $joints;
         }
 
@@ -111,11 +124,13 @@ final class CourseBuilder
     }
 
     /**
+     * @param array<string, list<\App\Domain\Model\Opening>>                       $openings vanos por id de muro
+     * @param array<string, list<\App\Domain\Model\UBeam>>                         $beams    vigas U por id de muro
      * @param array{axis: Axis, line: int, a: int, b: int, t: int, walls: list<Wall>} $seed
      * @param array<string, list<int>>                                                 $previousJoints
      * @param list<string>                                                             $warnings
      */
-    private function fillRun(Level $level, array $seed, int $course, array $previousJoints, StockPacker $packer, array &$warnings): Run
+    private function fillRun(array $openings, array $beams, array $seed, int $course, array $previousJoints, StockPacker $packer, array &$warnings): Run
     {
         ['axis' => $axis, 'line' => $line, 'a' => $a, 'b' => $b, 't' => $t, 'walls' => $walls] = $seed;
         $voids = [];
@@ -124,7 +139,7 @@ final class CourseBuilder
 
         foreach ($walls as $w) {
             $base = $w->startU() * Hcca::GRID;
-            foreach ($level->openingsOn($w->id) as $o) {
+            foreach ($openings[$w->id] ?? [] as $o) {
                 $g0 = $base + $o->pos * Hcca::GRID;
                 $g1 = $g0 + $o->w * Hcca::GRID;
                 if ($o->sill <= $course && $course < $o->sill + $o->h) {
@@ -139,10 +154,15 @@ final class CourseBuilder
                     ];
                 }
             }
-            foreach ($level->ubeamsOn($w->id) as $u) {
+            foreach ($beams[$w->id] ?? [] as $u) {
                 if ($u->course === $course) {
                     $g0 = $base + $u->pos * Hcca::GRID;
-                    $uSpans[] = [$g0, $g0 + $u->len * Hcca::GRID, 'beam'];
+                    // Como los dinteles, el borde bloque/U de una viga manual no puede coincidir con una junta inferior.
+                    $uSpans[] = [
+                        $this->clearBoundary($g0, -1, $prev, $a),
+                        $this->clearBoundary($g0 + $u->len * Hcca::GRID, 1, $prev, $b),
+                        'beam',
+                    ];
                 }
             }
         }
@@ -170,6 +190,38 @@ final class CourseBuilder
     }
 
     /**
+     * Distancia de $x a la junta más cercana de una lista ordenada (búsqueda binaria); PHP_INT_MAX si no hay juntas.
+     *
+     * @param list<int> $sorted
+     */
+    private static function distanceToNearest(array $sorted, int $x): int
+    {
+        $n = count($sorted);
+        if (0 === $n) {
+            return PHP_INT_MAX;
+        }
+        $lo = 0;
+        $hi = $n;
+        while ($lo < $hi) {
+            $mid = ($lo + $hi) >> 1;
+            if ($sorted[$mid] < $x) {
+                $lo = $mid + 1;
+            } else {
+                $hi = $mid;
+            }
+        }
+        $best = PHP_INT_MAX;
+        if ($lo < $n) {
+            $best = $sorted[$lo] - $x;
+        }
+        if ($lo > 0) {
+            $best = min($best, $x - $sorted[$lo - 1]);
+        }
+
+        return $best;
+    }
+
+    /**
      * Ubica un borde de dintel: parte de $pos (apoyo mínimo) y lo aleja del vano en pasos de 2,5 cm hasta que
      * la junta bloque/U quede a >= 12,5 cm de las juntas de la hilada inferior. Si el borde llega al final de la
      * corrida ($limit) no hay junta que cuidar.
@@ -183,14 +235,7 @@ final class CourseBuilder
             if ($direction * ($p - $limit) >= 0) {
                 return $limit;
             }
-            $clear = true;
-            foreach ($previousJoints as $j) {
-                if (abs($p - $j) < Hcca::MIN_BOND) {
-                    $clear = false;
-                    break;
-                }
-            }
-            if ($clear) {
+            if (self::distanceToNearest($previousJoints, $p) >= Hcca::MIN_BOND) {
                 return $p;
             }
         }
@@ -257,6 +302,7 @@ final class CourseBuilder
         $spans = [];
         foreach ($solid as [$ss, $se]) {
             $cur = $ss;
+            $last = null; // índice del último tramo U de este intervalo
             foreach ($uSpans as [$us, $ue, $role]) {
                 $s = max($us, $ss);
                 $e = min($ue, $se);
@@ -264,14 +310,22 @@ final class CourseBuilder
                     continue;
                 }
                 $s = max($s, $cur);
-                if ($s > $cur) {
+                // Un remanente de bloque macizo < 12,5 cm antes del U no se puede colocar: el U lo absorbe.
+                if ($s > $cur && $s - $cur >= Hcca::MIN_PIECE) {
                     $spans[] = [$cur, $s, PieceKind::Block, null];
+                } else {
+                    $s = $cur;
                 }
                 $spans[] = [$s, $e, PieceKind::U, $role];
+                $last = count($spans) - 1;
                 $cur = $e;
             }
             if ($cur < $se) {
-                $spans[] = [$cur, $se, PieceKind::Block, null];
+                if (null !== $last && $se - $cur < Hcca::MIN_PIECE) {
+                    $spans[$last][1] = $se; // ídem después del último U
+                } else {
+                    $spans[] = [$cur, $se, PieceKind::Block, null];
+                }
             }
         }
 
@@ -305,9 +359,7 @@ final class CourseBuilder
                 }
                 $clearance = PHP_INT_MAX;
                 foreach ($joints as $j) {
-                    foreach ($previousJoints as $p) {
-                        $clearance = min($clearance, abs($j - $p));
-                    }
+                    $clearance = min($clearance, self::distanceToNearest($previousJoints, $j));
                 }
                 $cuts = array_values(array_filter($lengths, static fn (int $l): bool => Hcca::BLOCK_L !== $l));
                 $score = [
@@ -346,17 +398,10 @@ final class CourseBuilder
      */
     private function repairLayout(int $span, int $origin, array $previousJoints): ?array
     {
-        $step = 50;
+        // Todas las posiciones (orígenes y juntas) son múltiplos de 25 ticks: los medios espesores son 75/100/150/200.
+        $step = 25;
         $near = array_values(array_filter($previousJoints, static fn (int $p): bool => $p > $origin - Hcca::MIN_BOND && $p < $origin + $span + Hcca::MIN_BOND));
-        $allowed = static function (int $pos) use ($near): bool {
-            foreach ($near as $p) {
-                if (abs($pos - $p) < Hcca::MIN_BOND) {
-                    return false;
-                }
-            }
-
-            return true;
-        };
+        $allowed = static fn (int $pos): bool => self::distanceToNearest($near, $pos) >= Hcca::MIN_BOND;
 
         // best[m] = [cortes, piezas, m anterior]: mejor forma de llegar a la junta m·step.
         $best = [0 => [0, 0, -1]];

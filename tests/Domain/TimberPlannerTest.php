@@ -114,4 +114,26 @@ final class TimberPlannerTest extends TestCase
         self::assertCount(1, $plan['beams']);
         self::assertNotContains('timber.beam-support', array_column($plan['issues'], 'code'));
     }
+
+    #[Test]
+    public function overlappingFieldsAreReportedInsteadOfDoubleCounted(): void
+    {
+        $plan = $this->plan(Fixtures::room(30, 24, 20.0)->joists(0, 0, 30, 24, 'x')->joists(0, 0, 30, 24, 'x'));
+
+        self::assertContains('timber.overlap', $this->codes($plan));
+    }
+
+    #[Test]
+    public function allowedSpanShrinksWithWiderSpacing(): void
+    {
+        // Luz libre de 3,55 m: pasa a 30 y 40 cm entre ejes, no a 60 cm.
+        $close = $this->plan(Fixtures::room(30, 30, 20.0)->joists(0, 0, 30, 30, 'x'));
+        self::assertNotContains('timber.span', $this->codes($close));
+
+        $data = Fixtures::room(30, 30, 20.0)->joists(0, 0, 30, 30, 'x')->build();
+        $data['levels'][0]['timber'][0]['spacing'] = 60;
+        [$normalized] = (new ProjectAnalyzer())->normalize(Fixtures::project($data));
+        $wide = (new TimberPlanner())->plan($normalized->level(0))->toArray();
+        self::assertContains('timber.span', $this->codes($wide));
+    }
 }

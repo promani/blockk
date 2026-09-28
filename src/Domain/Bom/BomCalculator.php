@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Bom;
 
 use App\Domain\Cutting\CutPlan;
-use App\Domain\Cutting\StockPacker;
+use App\Domain\Cutting\CutPlanner;
 use App\Domain\Geometry\NodeType;
 use App\Domain\Geometry\Topology;
 use App\Domain\Hcca;
@@ -65,7 +65,7 @@ final class BomCalculator
      */
     private function scope(array $models, array $topologies, int $reservePct, bool $used): array
     {
-        /** @var array<string, array{kind: PieceKind, t: int, full: int, cuts: list<int>, lengthTicks: int}> $stats */
+        /** @var array<string, array{kind: PieceKind, t: int, full: int, cuts: list<int>, groups: array<int, list<int>>, lengthTicks: int}> $stats */
         $stats = [];
         $areaByT = []; // ticks² de cara de muro por espesor
         $levelingM3 = 0.0;
@@ -75,10 +75,10 @@ final class BomCalculator
         $pieceCount = 0;
         $cutPieceCount = 0;
 
-        foreach ($models as $model) {
+        foreach ($models as $mi => $model) {
             foreach ($model->pieces() as [$course, $run, $piece]) {
                 $key = $piece->kind->value.':'.$run->t;
-                $stats[$key] ??= ['kind' => $piece->kind, 't' => $run->t, 'full' => 0, 'cuts' => [], 'lengthTicks' => 0];
+                $stats[$key] ??= ['kind' => $piece->kind, 't' => $run->t, 'full' => 0, 'cuts' => [], 'groups' => [], 'lengthTicks' => 0];
                 $len = $piece->length();
                 ++$pieceCount;
                 $stats[$key]['lengthTicks'] += $len;
@@ -86,6 +86,7 @@ final class BomCalculator
                     ++$stats[$key]['full'];
                 } else {
                     $stats[$key]['cuts'][] = $len;
+                    $stats[$key]['groups'][$mi][] = $len;
                     ++$cutPieceCount;
                 }
                 $areaByT[$run->t] = ($areaByT[$run->t] ?? 0) + $len * Hcca::BLOCK_H;
@@ -110,7 +111,8 @@ final class BomCalculator
         $scrapTicks = 0;
         $noReuse = 0;
         foreach ($stats as $key => $s) {
-            $plan = StockPacker::plan($s['cuts']);
+            // Los remanentes se reaprovechan entre niveles, pero nunca a costa de usar más bloques que por separado.
+            $plan = CutPlanner::planBest(array_values($s['groups']));
             $item = $this->blockItem($key, $s, $plan, $reservePct);
             $blocks[] = $item;
             $stock += $item['stock'];
@@ -169,7 +171,7 @@ final class BomCalculator
     }
 
     /**
-     * @param array{kind: PieceKind, t: int, full: int, cuts: list<int>, lengthTicks: int} $s
+     * @param array{kind: PieceKind, t: int, full: int, cuts: list<int>, groups: array<int, list<int>>, lengthTicks: int} $s
      *
      * @return array<string, mixed>
      */

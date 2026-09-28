@@ -14,6 +14,12 @@ final readonly class CutPlan
     {
     }
 
+    /** Une planes independientes (p. ej. uno por nivel) sin reoptimizar. @param list<self> $plans */
+    public static function merge(array $plans): self
+    {
+        return new self(array_merge(...array_map(static fn (self $p): array => $p->bins, $plans)) ?: []);
+    }
+
     /** Bloques enteros que hay que cortar. */
     public function blocks(): int
     {

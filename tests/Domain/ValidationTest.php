@@ -129,6 +129,8 @@ final class ValidationTest extends TestCase
         yield 'coordenada fuera de rango' => [['levels' => [['walls' => [[...$wall, 'x2' => 99999]]]]], 'rango'];
         yield 'ids duplicados' => [['levels' => [['walls' => [$wall, [...$wall, 'x1' => 20, 'x2' => 30]]]]], 'duplicado'];
         yield 'id con caracteres inválidos' => [['levels' => [['walls' => [[...$wall, 'id' => '<script>']]]]], 'inválido'];
+        yield 'id numérico' => [['levels' => [['walls' => [[...$wall, 'id' => '1']]]]], 'inválido'];
+        yield 'entrepiso gigante' => [['levels' => [['timber' => [['id' => 't1', 'kind' => 'joists', 'x' => 0, 'y' => 0, 'w' => 4000, 'h' => 4000]]]]], 'rango'];
         yield 'latitud inválida' => [['lat' => 120, 'levels' => []], 'lat'];
         yield 'niveles no es lista' => [['levels' => ['a' => []]], 'lista'];
     }
@@ -166,5 +168,30 @@ final class ValidationTest extends TestCase
 
         self::assertSame(5, $project->level(0)->openings[0]->h);
         self::assertSame(8, $project->level(0)->openings[0]->lintelCourse());
+    }
+
+    #[Test]
+    public function flagsWallsTooShortToBeLaidBetweenThickWalls(): void
+    {
+        // 25 cm entre dos muros de 20 cm: en las hiladas recortadas queda una pieza de 5 cm.
+        $data = ['levels' => [['walls' => [
+            ['id' => 'm', 'x1' => 0, 'y1' => 0, 'x2' => 0, 'y2' => 2, 't' => 20],
+            ['id' => 'a', 'x1' => 0, 'y1' => 0, 'x2' => 10, 'y2' => 0, 't' => 20],
+            ['id' => 'b', 'x1' => 0, 'y1' => 2, 'x2' => 10, 'y2' => 2, 't' => 20],
+        ]]]];
+
+        self::assertContains('wall.short', $this->codes($data));
+    }
+
+    #[Test]
+    public function warnsAboutTeesWhoseThroughWallsHaveDifferentThickness(): void
+    {
+        $data = ['levels' => [['walls' => [
+            ['id' => 'w', 'x1' => 0, 'y1' => 0, 'x2' => 10, 'y2' => 0, 't' => 20],
+            ['id' => 'e', 'x1' => 10, 'y1' => 0, 'x2' => 20, 'y2' => 0, 't' => 10],
+            ['id' => 's', 'x1' => 10, 'y1' => 0, 'x2' => 10, 'y2' => 10, 't' => 15],
+        ]]]];
+
+        self::assertContains('junction.thickness', $this->codes($data));
     }
 }

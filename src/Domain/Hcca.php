@@ -56,7 +56,12 @@ final class Hcca
 
     /** Límites defensivos de entrada (la API es pública y sin estado). */
     public const int MAX_WALLS_PER_LEVEL = 1500;
-    public const int MAX_COORD_UNITS = 4000;
+    /** Los lotes admitidos miden como máximo 100 m (800 unidades); las coordenadas admiten un margen alrededor. */
+    public const int MAX_COORD_UNITS = 1000;
+    public const int MAX_BBOX_UNITS = 900;
+    public const int MAX_OPENINGS_PER_LEVEL = 1500;
+    public const int MAX_UBEAMS_PER_LEVEL = 500;
+    public const int MAX_TIMBER_PER_LEVEL = 40;
     /** Presupuesto de complejidad tras normalizar (una vivienda real usa < 150 tramos por nivel). */
     public const int MAX_SEGMENTS_PER_LEVEL = 800;
 

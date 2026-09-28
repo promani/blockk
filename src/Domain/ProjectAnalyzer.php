@@ -50,11 +50,25 @@ final class ProjectAnalyzer
             if (count($r->level->walls) > Hcca::MAX_SEGMENTS_PER_LEVEL) {
                 throw new InvalidProjectException([sprintf('%s: el proyecto es demasiado complejo (más de %d tramos de muro por nivel).', Project::LEVEL_SHORT[$i] ?? 'Nivel', Hcca::MAX_SEGMENTS_PER_LEVEL)]);
             }
+            $this->assertFootprintBudget($r->level, $i);
             $levels[] = $r->level;
             array_push($notices, ...$r->notices);
         }
 
         return [$project->withLevels($levels), array_values(array_unique($notices))];
+    }
+
+    /** El análisis de ambientes usa una grilla de celdas de 12,5 cm sobre la caja envolvente: se acota su tamaño. */
+    private function assertFootprintBudget(\App\Domain\Model\Level $level, int $index): void
+    {
+        if ($level->isEmpty()) {
+            return;
+        }
+        $w = max(array_map(static fn (Wall $x): int => $x->x2, $level->walls)) - min(array_map(static fn (Wall $x): int => $x->x1, $level->walls));
+        $h = max(array_map(static fn (Wall $x): int => $x->y2, $level->walls)) - min(array_map(static fn (Wall $x): int => $x->y1, $level->walls));
+        if ($w > Hcca::MAX_BBOX_UNITS || $h > Hcca::MAX_BBOX_UNITS) {
+            throw new InvalidProjectException([sprintf('%s: la construcción ocupa una superficie demasiado grande (máx. %s m por lado).', Project::LEVEL_SHORT[$index] ?? 'Nivel', number_format(Hcca::MAX_BBOX_UNITS * Hcca::GRID_CM / 100, 1))]);
+        }
     }
 
     /**
