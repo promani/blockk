@@ -1,0 +1,64 @@
+{% extends 'base.html.twig' %}
+{% set entry = 'gallery' %}
+{% block title %}Galería de diseños{% endblock %}
+{% block body %}
+<main class="page">
+    <header class="page-head">
+        <h1>Galería de diseños y plantillas modulares</h1>
+        <p class="lead">Tipologías con dimensiones múltiplo de 62,5 cm. Las métricas (superficie, bloques, descarte) las calcula el mismo motor del editor.</p>
+    </header>
+
+    <section class="blank-card card" aria-labelledby="blank-title">
+        <div>
+            <h2 id="blank-title">Proyecto en blanco</h2>
+            <p class="muted">Definí la retícula inicial del lote y empezá a dibujar.</p>
+        </div>
+        <form id="blank-form" class="blank-form">
+            <label>Nombre<input name="name" type="text" maxlength="120" value="Proyecto sin título"></label>
+            <label>Ancho lote (m)<input name="lotW" type="number" min="6" max="100" value="24"></label>
+            <label>Fondo lote (m)<input name="lotD" type="number" min="6" max="100" value="20"></label>
+            <label>Espesor por defecto
+                <select name="t"><option value="20" selected>20 cm</option><option value="15">15 cm</option><option value="10">10 cm</option></select>
+            </label>
+            <label>Norte hacia
+                <select name="north">
+                    {% for label, deg in {'N (arriba)': 0, 'NE': 45, 'E': 90, 'SE': 135, 'S': 180, 'SO': 225, 'O': 270, 'NO': 315} %}<option value="{{ deg }}">{{ label }}</option>{% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="btn btn-primary">Crear y abrir en el editor</button>
+        </form>
+    </section>
+
+    <div class="filters" role="group" aria-label="Filtros estructurales">
+        <button type="button" class="chip" data-filter="all" aria-pressed="true">Todas</button>
+        <button type="button" class="chip" data-filter="1 planta" aria-pressed="false">1 planta</button>
+        <button type="button" class="chip" data-filter="2 plantas" aria-pressed="false">2 plantas</button>
+        <button type="button" class="chip" data-filter="Vivienda evolutiva" aria-pressed="false">Vivienda evolutiva</button>
+        <button type="button" class="chip" data-filter="Quincho" aria-pressed="false">Quinchos</button>
+        <button type="button" class="chip" data-filter="Bajo descarte" aria-pressed="false">Bajo descarte</button>
+    </div>
+
+    <div class="cards" id="cards">
+        {% for c in cards %}
+        <article class="tcard card" data-tags="{{ c.tags|join('|') }}" data-slug="{{ c.slug }}">
+            <div class="thumb">{{ c.svg|raw }}</div>
+            <div class="tcard-body">
+                <h2>{{ c.name }}</h2>
+                <p class="muted">{{ c.description }}</p>
+                <ul class="taglist">{% for tag in c.tags %}<li>{{ tag }}</li>{% endfor %}</ul>
+                <dl class="metrics">
+                    <div><dt>Sup. útil</dt><dd>{{ c.netM2|number_format(1, ',', '.') }} m²</dd></div>
+                    <div><dt>Bloques</dt><dd>{{ c.blocks|number_format(0, ',', '.') }}</dd></div>
+                    <div><dt>Pallets</dt><dd>{{ c.pallets }}</dd></div>
+                    <div><dt>Descarte</dt><dd>{{ c.scrapPct|number_format(1, ',', '.') }} %</dd></div>
+                    <div><dt>Bloques c/ corte</dt><dd>{{ c.cutBlocksPct|number_format(0, ',', '.') }} %</dd></div>
+                    <div><dt>Ref. ({{ c.currency }})</dt><dd>{{ c.cost|number_format(0, ',', '.') }}</dd></div>
+                </dl>
+                <button type="button" class="btn btn-primary" data-use="{{ c.slug }}">Usar esta plantilla</button>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    <p class="muted small">Costos de referencia con precios de ejemplo editables en el cómputo; no constituyen una cotización.</p>
+</main>
+{% endblock %}

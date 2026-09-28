@@ -1,0 +1,94 @@
+{% extends 'base.html.twig' %}
+{% set entry = 'catalog' %}
+{% block title %}Catálogo técnico{% endblock %}
+{% block body %}
+<main class="page catalog">
+    <header class="page-head">
+        <h1>Catálogo técnico y reglas de modulación HCCA</h1>
+        <p class="lead">Hormigón Celular Curado en Autoclave: piezas estándar, reglas críticas de colocación y herramientas de obra seca. Denominaciones genéricas y normativas; consulte las fichas de su distribuidor HCCA para valores garantizados.</p>
+        <nav class="toc" aria-label="Contenido"><a href="#piezas">Piezas</a><a href="#reglas">Reglas críticas</a><a href="#modulo">Módulo y niveles</a><a href="#calculadora">Calculadora</a><a href="#faq">Preguntas frecuentes</a></nav>
+    </header>
+
+    <section id="piezas" aria-labelledby="h-piezas">
+        <h2 id="h-piezas">Fichas de piezas estándar y especiales</h2>
+        <div class="cards cards-sm">
+            {% set pieces = [
+                {code: 'B20 / B15', name: 'Bloque portante macizo', dims: '62,5 × 25 × 20 cm (o 15 cm)', use: 'Muros portantes exteriores e interiores de PB y PA.', note: 'Espesor mínimo portante: 15 cm. Pallet referencial: 56 u (20 cm) · 72 u (15 cm).', cls: 'blk'},
+                {code: 'B10 / B7,5', name: 'Bloque para tabique', dims: '62,5 × 25 × 10 cm (o 7,5 cm)', use: 'Divisorios interiores no portantes.', note: 'No admite apoyo de tirantes de madera ni fachadas. Pallet referencial: 96 u (10 cm).', cls: 'blk thin'},
+                {code: 'U20 / U15 / U10', name: 'Bloque canal «U»', dims: '62,5 × 25 × espesor del muro', use: 'Dinteles de puertas y ventanas (hilada 9), encadenados intermedios y viga corona (hilada 12).', note: 'Se rellena con hormigón y armadura in situ. Referencia del editor: 2 Ø8 mm en dinteles, 2 Ø10 mm en corona; verificar con cálculo.', cls: 'blk u'},
+                {code: 'O', name: 'Pieza especial con cavidad vertical', dims: 'según distribuidor', use: 'Nudos y extremos armados (pilaretes).', note: 'Pieza especial: confirmar disponibilidad y dimensiones con su distribuidor HCCA. El editor no la despieza automáticamente.', cls: 'blk o'},
+                {code: '½ · ¼', name: 'Medio bloque y cortes', dims: '31,25 · 25 · 12,5 cm y a medida', use: 'Trabas, jambas y remates.', note: 'Se cortan con sierra widia. El motor reasigna los remanentes: el sobrante de un corte se usa como jamba o inicio de la hilada siguiente.', cls: 'blk cut'},
+                {code: 'M 3″×8″', name: 'Tirante de madera escuadrada', dims: '7,5 × 20 cm (pino tratado)', use: 'Entrepiso en seco, a 40 cm entre ejes.', note: 'Luz libre máxima referencial: 3,75 m (3″×8″) y 4,75 m (3″×10″). Apoyo ≥ 10 cm sobre viga corona con banda elástica.', cls: 'blk wood'}
+            ] %}
+            {% for p in pieces %}
+            <article class="card piece">
+                <div class="piece-fig {{ p.cls }}" aria-hidden="true"><span></span></div>
+                <h3><small>{{ p.code }}</small> {{ p.name }}</h3>
+                <p class="dims">{{ p.dims }}</p>
+                <p>{{ p.use }}</p>
+                <p class="muted small">{{ p.note }}</p>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section id="reglas" aria-labelledby="h-reglas">
+        <h2 id="h-reglas">Reglas críticas de modulación y colocación</h2>
+        <ol class="rules">
+            <li><b>Traba mínima de 12,5 cm.</b> Las juntas verticales de hiladas consecutivas deben distar al menos 12,5 cm. El editor lo garantiza pieza por pieza y avisa si no es posible.</li>
+            <li><b>Encuentro a 90°.</b> En esquinas los muros «pasan» alternadamente hilada a hilada. En encuentros en T el muro pasante es continuo y el que llega se ancla con planchuela metálica cada 2 hiladas.</li>
+            <li><b>Jambas de 25 cm.</b> Entre un vano y una esquina, un muro transversal u otro vano debe haber al menos 25 cm de mampostería; el dintel U apoya 25 cm a cada lado.</li>
+            <li><b>Apoyo de la madera.</b> Los tirantes apoyan ≥ 10 cm sobre la viga corona (bloque U relleno) de muros de ≥ 15 cm, con banda elástica. Las cargas puntuales (vigas individuales) requieren <b>placa de reparto</b>.</li>
+            <li><b>Continuidad vertical.</b> Los muros portantes de la Planta Alta descargan directamente sobre muros portantes de la Planta Baja; no apoyan sobre el entrepiso.</li>
+            <li><b>Primera hilada.</b> Se asienta sobre capa aisladora hidrófuga con mortero cementicio de nivelación (≈ 2 cm); desde la 2.ª hilada se usa mortero adhesivo de junta delgada (2–3 mm) con llana dentada calibrada.</li>
+        </ol>
+    </section>
+
+    <section id="modulo" aria-labelledby="h-modulo">
+        <h2 id="h-modulo">Módulo, hiladas y límite de niveles</h2>
+        <div class="grid-2">
+            <table class="table">
+                <caption>Módulos del sistema</caption>
+                <tbody>
+                    <tr><th scope="row">Bloque</th><td>62,5 cm de largo × 25 cm de alto</td></tr>
+                    <tr><th scope="row">Submódulos de traba</th><td>12,5 · 25 · 31,25 cm (medio bloque)</td></tr>
+                    <tr><th scope="row">Retícula del editor</th><td>12,5 cm (o módulo de 62,5 cm)</td></tr>
+                    <tr><th scope="row">Espesores</th><td>Portantes 15 y 20 cm · tabiques 10 y 7,5 cm</td></tr>
+                    <tr><th scope="row">Altura de nivel</th><td>12 hiladas = 11 de bloque + 1 de bloque U = 3,00 m</td></tr>
+                    <tr><th scope="row">Cara superior de los vanos</th><td>Hilada 9 (2,00 m), con dintel U</td></tr>
+                </tbody>
+            </table>
+            <div class="callout">
+                <h3>Máximo 2 niveles autoportantes</h3>
+                <p>PB + PA ≤ 6,00 m. Con una resistencia característica de mampostería del orden de 3,0 a 3,5 MPa, una tercera planta exige una estructura independiente de hormigón armado colado o metálica. Por eso el editor mantiene deshabilitado el tercer nivel.</p>
+                <p class="muted small">Los controles del editor son de predimensionado y coherencia geométrica; no reemplazan el cálculo estructural según CIRSOC 501 / Eurocódigo 6.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="calculadora" aria-labelledby="h-calc">
+        <h2 id="h-calc">Calculadora rápida de paño y mortero</h2>
+        <div class="grid-2">
+            <form id="calc-form" class="card formgrid" novalidate>
+                <label>Largo del paño (m)<input name="length" type="number" min="0.1" max="200" step="0.01" value="5" required></label>
+                <label>Alto (m)<input name="height" type="number" min="0.1" max="12" step="0.01" value="2.75" required></label>
+                <label>Espesor
+                    <select name="t"><option value="20" selected>20 cm</option><option value="15">15 cm</option><option value="10">10 cm</option><option value="7.5">7,5 cm</option></select>
+                </label>
+                <label>Vanos a descontar (m²)<input name="openings" type="number" min="0" step="0.01" value="0"></label>
+                <label>Reserva por rotura y cortes (%)<input name="waste" type="number" min="0" max="30" step="1" value="5"></label>
+            </form>
+            <div class="card" id="calc-result" aria-live="polite"><p class="muted">Ingresá las medidas del paño.</p></div>
+        </div>
+    </section>
+
+    <section id="faq" aria-labelledby="h-faq">
+        <h2 id="h-faq">Manual de preguntas frecuentes de obra seca</h2>
+        <details class="faq"><summary>¿Por qué la primera hilada se asienta con mortero cementicio?</summary><p>Porque debe nivelar el plano de arranque y absorber las irregularidades de la base. Además se apoya sobre una capa aisladora hidrófuga que corta la humedad ascendente. De la segunda hilada en adelante se usa adhesivo de junta delgada.</p></details>
+        <details class="faq"><summary>¿Cómo se cortan los bloques y qué se hace con los sobrantes?</summary><p>Con sierra o serrucho de widia, marcando con escuadra. Los remanentes útiles se reutilizan como jambas o como pieza inicial de la hilada siguiente; el cómputo del editor ya lo contempla al empaquetar los cortes sobre bloques enteros.</p></details>
+        <details class="faq"><summary>¿Cómo se ancla la estructura de madera?</summary><p>Los tirantes apoyan sobre la viga corona con banda elástica, sin empotrarse en el bloque. Las vigas puntuales llevan placa de reparto de carga. Las cenefas cierran los extremos de los tirantes y evitan el vuelco.</p></details>
+        <details class="faq"><summary>¿Se puede construir una tercera planta?</summary><p>No con mampostería autoportante: requiere una estructura independiente de hormigón armado o metálica, con el HCCA como cerramiento.</p></details>
+        <details class="faq"><summary>¿Qué pasa con los tabiques de la planta alta?</summary><p>Si no tienen muro debajo, apoyan sobre el entrepiso de madera y necesitan un tirante doble bajo su línea. El editor lo informa como observación.</p></details>
+    </section>
+</main>
+{% endblock %}

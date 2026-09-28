@@ -1,0 +1,92 @@
+{% extends 'base.html.twig' %}
+{% set entry = 'editor' %}
+{% block title %}Editor{% endblock %}
+{% block topbar %}
+    <div class="project-name-wrap">
+        <label class="sr-only" for="project-name">Nombre del proyecto</label>
+        <input id="project-name" class="project-name" type="text" maxlength="120" value="" autocomplete="off">
+    </div>
+    <div class="topbar-actions">
+        <button type="button" class="btn btn-ghost" id="btn-undo" title="Deshacer (Ctrl+Z)" aria-label="Deshacer">↶ <span class="hide-sm">Deshacer</span></button>
+        <button type="button" class="btn btn-ghost" id="btn-redo" title="Rehacer (Ctrl+Y)" aria-label="Rehacer">↷ <span class="hide-sm">Rehacer</span></button>
+        <button type="button" class="btn btn-ghost" id="btn-new">Nuevo</button>
+        <button type="button" class="btn btn-ghost" id="btn-save" title="Descargar el proyecto (.json)">Guardar</button>
+        <button type="button" class="btn btn-ghost" id="btn-open" title="Abrir un proyecto (.json)">Abrir</button>
+        <input type="file" id="file-open" accept="application/json,.json" hidden>
+        <a class="btn btn-primary" href="{{ path('bom') }}">Ver cómputo →</a>
+    </div>
+{% endblock %}
+{% block body %}
+<script type="application/json" id="blockk-config">{{ config|raw }}</script>
+<main class="editor" id="editor" aria-label="Editor de proyecto">
+    <aside class="toolbar" id="toolbar" aria-label="Herramientas"></aside>
+
+    <section class="stagewrap">
+        <div class="stagebar">
+            <div class="levels" id="levels" role="tablist" aria-label="Niveles estructurales"></div>
+            <div class="seg" id="view-toggle" role="group" aria-label="Vista">
+                <button type="button" data-view="iso" aria-pressed="true" title="Vista isométrica 30°/30° (Tab)">Isométrica</button>
+                <button type="button" data-view="plan" aria-pressed="false" title="Vista cenital 2D (Tab)">Planta</button>
+            </div>
+            <div class="seg" role="group" aria-label="Rotar vista">
+                <button type="button" id="rot-left" title="Rotar vista a la izquierda ([)" aria-label="Rotar a la izquierda">⟲</button>
+                <button type="button" id="rot-right" title="Rotar vista a la derecha (])" aria-label="Rotar a la derecha">⟳</button>
+            </div>
+            <label class="field-inline" title="Paso de la retícula al dibujar">Paso
+                <select id="snap">
+                    <option value="1">12,5 cm (submódulo)</option>
+                    <option value="5">62,5 cm (módulo)</option>
+                </select>
+            </label>
+            <label class="field-inline cut" title="Corta la vista a cierta altura para ver los ambientes (no afecta al cómputo)">Corte
+                <input type="range" id="cut" min="1" max="12" value="12" aria-label="Hilada visible">
+                <output id="cut-out">12/12</output>
+            </label>
+            <span class="req-status" id="req-status" role="status" aria-live="polite"></span>
+        </div>
+        <div class="tooloptions" id="tooloptions" aria-live="polite"></div>
+        <div class="stage" id="stage">
+            <canvas id="canvas" tabindex="0" aria-label="Lienzo de modelado. Use las herramientas de la izquierda."></canvas>
+            <div class="zoomctl" aria-label="Zoom">
+                <button type="button" id="zoom-in" aria-label="Acercar" title="Acercar (+)">+</button>
+                <button type="button" id="zoom-out" aria-label="Alejar" title="Alejar (−)">−</button>
+                <button type="button" id="zoom-fit" aria-label="Encuadrar" title="Encuadrar el proyecto (F)">⤢</button>
+            </div>
+            <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+            <div class="welcome" id="welcome" hidden>
+                <h2>Empecemos</h2>
+                <p>Elegí <b>Sala</b> (R) y arrastrá en diagonal: se generan las 4 paredes ajustadas al módulo de 62,5 cm.
+                   Después agregá puertas (P), ventanas (N) y, si querés, una Planta Alta.</p>
+                <p><a href="{{ path('gallery') }}">Ver plantillas modulares</a></p>
+                <button type="button" class="btn btn-primary" id="welcome-close">Entendido</button>
+            </div>
+        </div>
+        <div class="statusbar" id="statusbar"><span id="cursor-info">—</span><span id="hint-info"></span></div>
+    </section>
+
+    <aside class="sidepanel" id="sidepanel" aria-label="Panel de proyecto">
+        <details open class="card" id="card-telemetry"><summary>Telemetría en vivo</summary><div id="telemetry" class="card-body"></div></details>
+        <details open class="card" id="card-props"><summary>Propiedades</summary><div id="props" class="card-body"></div></details>
+        <details open class="card" id="card-solar"><summary>Asoleamiento y bioclima</summary><div id="solar" class="card-body"></div></details>
+        <details open class="card" id="card-issues"><summary>Validación constructiva <span class="badge" id="issues-badge">0</span></summary><div id="issues" class="card-body"></div></details>
+    </aside>
+</main>
+<dialog id="dlg-new" class="dialog">
+    <form method="dialog" id="form-new">
+        <h2>Nuevo proyecto</h2>
+        <div class="formgrid">
+            <label>Nombre<input name="name" type="text" maxlength="120" value="Proyecto sin título" required></label>
+            <label>Ancho del lote (m)<input name="lotW" type="number" min="6" max="100" value="24"></label>
+            <label>Fondo del lote (m)<input name="lotD" type="number" min="6" max="100" value="20"></label>
+            <label>Espesor de muro por defecto
+                <select name="t"><option value="20" selected>20 cm portante</option><option value="15">15 cm portante</option><option value="10">10 cm tabique</option></select>
+            </label>
+            <label>Latitud (°, sur negativa)<input name="lat" type="number" min="-66" max="66" step="0.1" value="-34.6"></label>
+        </div>
+        <div class="dialog-actions">
+            <button type="button" class="btn btn-ghost" value="cancel" id="new-cancel">Cancelar</button>
+            <button type="submit" class="btn btn-primary" value="ok">Crear</button>
+        </div>
+    </form>
+</dialog>
+{% endblock %}

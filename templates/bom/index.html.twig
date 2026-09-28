@@ -1,0 +1,20 @@
+{% extends 'base.html.twig' %}
+{% set entry = 'bom' %}
+{% block title %}Cómputo métrico{% endblock %}
+{% block topbar %}
+    <div class="topbar-actions">
+        <select id="csv-sep" aria-label="Separador de columnas del CSV" title="Separador CSV: ; para Excel en español, coma para Excel en inglés">
+            <option value=";">CSV ( ; ) Excel ES</option>
+            <option value=",">CSV ( , ) Excel EN</option>
+        </select>
+        <button type="button" class="btn btn-ghost" id="btn-csv">Descargar CSV</button>
+        <button type="button" class="btn btn-ghost" id="btn-pdf">Ficha PDF</button>
+        <a class="btn btn-primary" href="{{ path('editor') }}">← Volver al editor</a>
+    </div>
+{% endblock %}
+{% block body %}
+<script type="application/json" id="blockk-config">{{ config|raw }}</script>
+<main class="page" id="bom-root" aria-live="polite">
+    <p class="muted">Calculando el cómputo…</p>
+</main>
+{% endblock %}

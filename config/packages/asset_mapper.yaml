@@ -1,0 +1,13 @@
+framework:
+    asset_mapper:
+        # The paths to make available to the asset mapper.
+        paths:
+            - assets/
+        missing_import_mode: strict
+        # Import maps nativos (Chrome 89+, Firefox 108+, Safari 16.4+): sin polyfill desde un CDN externo.
+        importmap_polyfill: false
+
+when@prod:
+    framework:
+        asset_mapper:
+            missing_import_mode: warn
