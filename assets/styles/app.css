@@ -111,8 +111,6 @@ label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-
 .level-tab.add { border-style: dashed; color: var(--graphite-700); background: transparent; }
 .level-tab.add:hover { background: var(--green-100); }
 .level-tab.roof[aria-selected="true"] { background: #e7b9a3; border-color: #b8613f; color: var(--graphite); }
-.seg.rotate button { display: inline-flex; gap: 5px; align-items: center; }
-.seg.rotate button span { font-size: 1.15em; line-height: 1; }
 .tooloptions .seg button { padding: 4px 10px; }
 .tooloptions .w-narrow { width: 64px; }
 .nudge { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
@@ -264,7 +262,7 @@ label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-
 .roof-row .btn:first-child { flex: 1; text-align: left; }
 
 /* guía «Próximo paso» */
-.guide { position: absolute; right: 12px; top: 12px; z-index: 3; max-width: 320px; }
+.guide { position: absolute; right: 108px; top: 12px; z-index: 3; max-width: 320px; }
 .guide:empty { display: none; }
 .guide.open { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px 12px; box-shadow: 0 6px 24px rgba(30, 41, 59, .16); }
 .guide p { margin: 4px 0 10px; font-size: .88rem; color: var(--graphite-700); }
@@ -285,3 +283,11 @@ label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-
 details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--graphite-700); padding: 4px 0; }
 .suggest-list { display: flex; flex-direction: column; gap: 4px; }
 .suggest-list .btn { text-align: left; white-space: normal; line-height: 1.3; }
+/* selector de vistas isométricas (abajo a la izquierda) */
+.viewpick { position: absolute; left: 12px; bottom: 12px; width: 92px; height: 92px; z-index: 2; background: rgba(255,255,255,.88); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+.viewpick svg { position: absolute; inset: 0; }
+.vp-house { fill: #e7ebf1; stroke: #64748b; stroke-width: 1.5; }
+.vp-north { font: 700 10px system-ui, sans-serif; fill: #b42318; }
+.vp-eye { position: absolute; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel); font: 700 10px system-ui, sans-serif; color: var(--graphite-700); cursor: pointer; padding: 0; }
+.vp-eye:hover { background: var(--green-100); }
+.vp-eye.on { background: var(--graphite); color: var(--green); border-color: var(--graphite); }

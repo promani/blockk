@@ -396,13 +396,71 @@ function setView(view) {
     cam.setView(view, anchor, planeZ());
     store.setUi({ view });
     for (const b of $$('#view-toggle button')) b.setAttribute('aria-pressed', String(b.dataset.view === view));
+    renderViewPick();
     persistUi();
     app.render();
 }
 
 function rotate(steps) {
     cam.rotateBy(steps);
+    renderViewPick();
     app.render();
+}
+
+/**
+ * Selector de vistas: la planta de la casa vista desde arriba (con el norte del proyecto) y un botón en cada esquina.
+ * Cada botón es una de las 4 vistas isométricas posibles: se mira la casa desde esa esquina.
+ */
+const VIEW_CORNERS = [[1, 1], [1, -1], [-1, -1], [-1, 1]]; // giro 0..3: esquina desde la que mira la cámara (x, y en planta)
+const COMPASS8 = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+function cornerName([cx, cy]) {
+    // rumbo en planta (0 = arriba, horario) relativo al norte del proyecto
+    const bearing = (Math.atan2(cx, -cy) * 180) / Math.PI;
+    const rel = (((bearing - store.project.north) % 360) + 360) % 360;
+    return COMPASS8[Math.round(rel / 45) % 8];
+}
+function renderViewPick() {
+    const el = $('#viewpick');
+    if (!el) return;
+    clear(el);
+    const size = 92;
+    const c = size / 2;
+    const half = 14;
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+    svg.setAttribute('width', size);
+    svg.setAttribute('height', size);
+    svg.setAttribute('aria-hidden', 'true');
+    const house = document.createElementNS(svgNS, 'rect');
+    for (const [k, v] of Object.entries({ x: c - half, y: c - half, width: 2 * half, height: 2 * half, rx: 2, class: 'vp-house' })) house.setAttribute(k, v);
+    svg.append(house);
+    // norte del proyecto
+    const a = (store.project.north * Math.PI) / 180;
+    const n = document.createElementNS(svgNS, 'text');
+    for (const [k, v] of Object.entries({ x: c + Math.sin(a) * 9, y: c - Math.cos(a) * 9 + 4, class: 'vp-north', 'text-anchor': 'middle' })) n.setAttribute(k, v);
+    n.textContent = 'N';
+    svg.append(n);
+    el.append(svg);
+    VIEW_CORNERS.forEach(([cx, cy], rot) => {
+        const active = cam.view !== 'plan' && cam.rot === rot;
+        const name = cornerName([cx, cy]);
+        const btn = h('button', {
+            type: 'button',
+            class: `vp-eye${active ? ' on' : ''}`,
+            style: `left:${c + cx * 29 - 14}px;top:${c + cy * 29 - 14}px`,
+            title: `Vista isométrica desde el ${name}`,
+            'aria-label': `Vista isométrica desde el ${name}`,
+            'aria-pressed': String(active),
+            onclick: () => {
+                if (cam.view === 'plan') setView('iso');
+                cam.rotateBy((rot - cam.rot + 4) % 4);
+                renderViewPick();
+                app.render();
+            },
+        }, name);
+        el.append(btn);
+    });
 }
 
 function zoomBy(f) {
@@ -572,6 +630,7 @@ store.addEventListener('change', () => {
 });
 store.addEventListener('ui', () => {
     renderLevels();
+    renderViewPick();
     guide.render();
     panels.renderProps();
     updateHistoryButtons();
@@ -591,8 +650,6 @@ function updateHistoryButtons() {
 
 /* ------------------------------------------------------------------ controles de la barra */
 for (const b of $$('#view-toggle button')) b.addEventListener('click', () => setView(b.dataset.view));
-$('#rot-left').addEventListener('click', () => rotate(-1));
-$('#rot-right').addEventListener('click', () => rotate(1));
 $('#zoom-in').addEventListener('click', () => zoomBy(1.25));
 $('#zoom-out').addEventListener('click', () => zoomBy(0.8));
 $('#zoom-fit').addEventListener('click', fitView);
@@ -650,6 +707,7 @@ $('#form-new').addEventListener('submit', async (e) => {
     cam.view = store.ui.view;
     for (const b of $$('#view-toggle button')) b.setAttribute('aria-pressed', String(b.dataset.view === store.ui.view));
 
+    renderViewPick();
     renderLevels();
     renderToolbar();
     refreshOptions();

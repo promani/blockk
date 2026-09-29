@@ -28,10 +28,6 @@
                 <button type="button" data-view="iso" aria-pressed="true" title="Vista isométrica 30°/30° (Tab)">Isométrica</button>
                 <button type="button" data-view="plan" aria-pressed="false" title="Vista cenital 2D (Tab)">Planta</button>
             </div>
-            <div class="seg rotate" role="group" aria-label="Girar la vista isométrica">
-                <button type="button" id="rot-left" title="Ver desde otro ángulo: girar 90° a la izquierda ([)" aria-label="Girar a la izquierda"><span aria-hidden="true">⟲</span> Girar</button>
-                <button type="button" id="rot-right" title="Ver desde otro ángulo: girar 90° a la derecha (])" aria-label="Girar a la derecha">Girar <span aria-hidden="true">⟳</span></button>
-            </div>
             <label class="field-inline cut" title="Baja la altura de los muros del nivel para ver adentro (no cambia el proyecto)">Ver adentro
                 <input type="range" id="cut" min="1" max="12" value="12" aria-label="Hilada visible">
                 <output id="cut-out">todo</output>
@@ -48,6 +44,7 @@
             </div>
             <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
             <div class="guide" id="guide" aria-live="polite"></div>
+            <div class="viewpick" id="viewpick" role="group" aria-label="Elegir desde qué esquina se mira la vista isométrica"></div>
         </div>
         <div class="statusbar" id="statusbar"><span id="cursor-info">—</span><span id="hint-info"></span></div>
     </section>

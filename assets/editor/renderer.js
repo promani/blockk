@@ -872,9 +872,10 @@ export class Renderer {
         const { ctx } = this;
         const { cam, project, sun, ui } = f;
         if (!project) return;
+        // Brújula con el sol, arriba a la derecha del lienzo.
         const r = 30;
-        const cx = 52;
-        const cy = cam.h - 58;
+        const cx = cam.w - 50;
+        const cy = 50;
         const dirOf = (vx, vy) => {
             const [X, Y] = Camera.rotate(vx, vy, cam.rot);
             const [sx, sy] = cam.view === 'plan' ? [X, Y] : [(X - Y) * Math.cos(Math.PI / 6), (X + Y) * 0.5];
@@ -926,10 +927,10 @@ export class Renderer {
             ctx.stroke();
             ctx.fillStyle = '#1e293b';
             ctx.font = '600 11px system-ui, sans-serif';
-            ctx.textAlign = 'left';
+            ctx.textAlign = 'center';
             const hh = Math.floor(sun.h);
             const mm = String(Math.round((sun.h - hh) * 60)).padStart(2, '0');
-            ctx.fillText(`${String(hh).padStart(2, '0')}:${mm} · ${up ? `sol ${fmt(sun.alt, 0)}°` : 'noche'}`, cx + r + 20, cy - 2);
+            ctx.fillText(`${String(hh).padStart(2, '0')}:${mm} · ${up ? `sol ${fmt(sun.alt, 0)}°` : 'noche'}`, cx, cy + r + 18);
         }
         ctx.restore();
     }
