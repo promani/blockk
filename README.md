@@ -104,6 +104,16 @@ cobertura total de cada corrida y ausencia de piezas superpuestas en **todas** l
 cómputo (áreas exactas, pallets, mortero, hormigón/hierro, cierre de la cotización), madera, validación, solar, sugeridor,
 plantillas y la API HTTP.
 
+## Skills para Claude Code
+
+En `.claude/skills/` hay tres skills que Claude Code carga al trabajar en este repo (también se invocan con `/<nombre>`):
+
+| Skill | Para qué |
+| --- | --- |
+| `verificar` | `scripts/verificar.sh`: PHPUnit, sintaxis PHP, ESLint y prueba de humo en Chromium (todas las plantillas + dibujo con el mouse). Correrla antes de cada push. |
+| `capturas` | `scripts/capturas.cjs`: capturas del editor (niveles, techo, 4 vistas o primer plano) con Playwright, más ambientes, Revisión y totales en JSON. |
+| `nueva-plantilla` | Cómo diseñar una casa para la Galería con `TemplateBuilder`: grilla, vanos y las reglas del validador. |
+
 ## Alcance
 
 Implementado (Fase 1): editor ortogonal con vistas isométrica/cenital, piezas HCCA de 7,5/10/15/20 cm y U, entrepiso de madera,
