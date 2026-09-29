@@ -182,6 +182,7 @@ export class Renderer {
     drawRoomFloors(f, li, z) {
         const { ctx } = this;
         const { cam, analysis } = f;
+        const stairHoles = li === 1 ? (analysis.floors?.stairs ?? []).flatMap((st) => [...st.steps, ...st.landings].map((q) => ({ x0: q.x0, y0: q.y0, x1: q.x1, y1: q.y1 }))) : [];
         for (const room of analysis.levels[li]?.rooms ?? []) {
             if (!room.fill?.length) continue;
             const color = roomColor(room);
@@ -194,7 +195,12 @@ export class Renderer {
                 pts.forEach(([sx, sy], i) => (i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)));
                 ctx.closePath();
             }
-            ctx.fill();
+            // En el Nivel 2 el hueco de la escalera no lleva piso.
+            for (const hl of li === 1 ? stairHoles : []) {
+                [[hl.x0, hl.y0], [hl.x1, hl.y0], [hl.x1, hl.y1], [hl.x0, hl.y1]].map(([a, b]) => cam.project(a, b, z)).forEach(([sx, sy], i) => (i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)));
+                ctx.closePath();
+            }
+            ctx.fill('evenodd');
             ctx.stroke();
         }
     }
@@ -310,6 +316,72 @@ export class Renderer {
         ctx.stroke();
     }
 
+    /** Losa o entrepiso de una pieza: caras laterales exteriores, bordes interiores del hueco de escalera y cara superior agujereada. */
+    drawPlate(ctx, cam, b, strokeOn) {
+        const pal = PALETTE[b.kind];
+        const { x0, x1, y0, y1, z0, z1 } = b;
+        const P = (x, y, z) => cam.project(x, y, z);
+        const poly = (pts, color) => {
+            ctx.beginPath();
+            pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+            if (strokeOn) ctx.stroke();
+        };
+        const side = (spec, r, inner, color) => {
+            // afuera se ven las caras que miran a la cámara; dentro de un hueco, las opuestas
+            const max = inner ? !spec.max : spec.max;
+            const X = max ? r.x1 : r.x0;
+            const Y = max ? r.y1 : r.y0;
+            poly(spec.a === 'x' ? [P(X, r.y0, z0), P(X, r.y1, z0), P(X, r.y1, z1), P(X, r.y0, z1)] : [P(r.x0, Y, z0), P(r.x1, Y, z0), P(r.x1, Y, z1), P(r.x0, Y, z1)], color);
+        };
+        const { xp, yp } = visibleFaces(cam.rot);
+        side(yp, b, false, pal.yp);
+        side(xp, b, false, pal.xp);
+        const holes = b.holes.map((hl) => ({ x0: Math.max(hl.x0, x0), y0: Math.max(hl.y0, y0), x1: Math.min(hl.x1, x1), y1: Math.min(hl.y1, y1) })).filter((hl) => hl.x1 > hl.x0 && hl.y1 > hl.y0);
+        // Bordes del hueco: sólo el contorno de la unión (donde dos tramos de escalera se tocan no hay borde).
+        const edges = []; // [axis, at, from, to, max] — axis 'x': cara en x = at, a lo largo de y
+        for (const hl of holes) {
+            for (const [axis, at, from, to, max] of [['x', hl.x0, hl.y0, hl.y1, false], ['x', hl.x1, hl.y0, hl.y1, true], ['y', hl.y0, hl.x0, hl.x1, false], ['y', hl.y1, hl.x0, hl.x1, true]]) {
+                let segs = [[from, to]];
+                for (const o of holes) {
+                    if (o === hl) continue;
+                    const touches = axis === 'x' ? (max ? o.x0 === at : o.x1 === at) : (max ? o.y0 === at : o.y1 === at);
+                    if (!touches) continue;
+                    const [a, c] = axis === 'x' ? [o.y0, o.y1] : [o.x0, o.x1];
+                    segs = segs.flatMap(([s0, s1]) => [[s0, Math.min(s1, a)], [Math.max(s0, c), s1]]).filter(([s0, s1]) => s1 - s0 > 0.01);
+                }
+                for (const [s0, s1] of segs) edges.push([axis, at, s0, s1, max]);
+            }
+        }
+        // dentro del hueco se ven las caras opuestas a las visibles desde afuera
+        for (const [axis, at, s0, s1, max] of edges) {
+            const spec = axis === 'x' ? (xp.a === 'x' ? xp : yp) : (xp.a === 'y' ? xp : yp);
+            if (max === spec.max) continue;
+            const pts = axis === 'x' ? [P(at, s0, z0), P(at, s1, z0), P(at, s1, z1), P(at, s0, z1)] : [P(s0, at, z0), P(s1, at, z0), P(s1, at, z1), P(s0, at, z1)];
+            poly(pts, spec === xp ? pal.xp : pal.yp);
+        }
+        ctx.beginPath();
+        for (const r of [{ x0, y0, x1, y1 }, ...holes]) {
+            [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]].map(([x, y]) => P(x, y, z1)).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.closePath();
+        }
+        ctx.fillStyle = pal.top;
+        ctx.fill('evenodd');
+        if (strokeOn) {
+            ctx.beginPath();
+            [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => P(x, y, z1)).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.closePath();
+            for (const [axis, at, s0, s1] of edges) {
+                const [a, c] = axis === 'x' ? [P(at, s0, z1), P(at, s1, z1)] : [P(s0, at, z1), P(s1, at, z1)];
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(c[0], c[1]);
+            }
+            ctx.stroke();
+        }
+    }
+
     /** Hastial de bloque: polígono con las hiladas y las juntas verticales del despiece del servidor. */
     drawGable(ctx, cam, gb, poly) {
         poly(gb.pts, '#e7ebf1', 'rgba(30,41,59,.55)');
@@ -351,6 +423,10 @@ export class Renderer {
         const b = it.b;
         if (b.kind === KIND.ROOF) {
             this.drawRoofPart(this.frame, b.roof);
+            return;
+        }
+        if (b.plate) {
+            this.drawPlate(ctx, cam, b, strokeOn);
             return;
         }
         const rot = cam.rot;

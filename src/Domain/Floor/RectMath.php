@@ -57,4 +57,28 @@ final class RectMath
     {
         return $a[0] < $b[2] && $b[0] < $a[2] && $a[1] < $b[3] && $b[1] < $a[3];
     }
+
+    /**
+     * Partes de los huecos que caen dentro de `$rect`, como rectángulos {x0, y0, x1, y1}.
+     *
+     * @param array{float, float, float, float}       $rect
+     * @param list<array{float, float, float, float}> $holes
+     *
+     * @return list<array{x0: float, y0: float, x1: float, y1: float}>
+     */
+    public static function clipTo(array $rect, array $holes): array
+    {
+        $out = [];
+        foreach ($holes as $h) {
+            $x0 = max($rect[0], $h[0]);
+            $y0 = max($rect[1], $h[1]);
+            $x1 = min($rect[2], $h[2]);
+            $y1 = min($rect[3], $h[3]);
+            if ($x1 - $x0 > 0.01 && $y1 - $y0 > 0.01) {
+                $out[] = ['x0' => $x0, 'y0' => $y0, 'x1' => $x1, 'y1' => $y1];
+            }
+        }
+
+        return $out;
+    }
 }

@@ -86,7 +86,7 @@ const levelLabel = () => config.levelShort[store.ui.level] ?? 'Techo';
 
 function persistUi() {
     try {
-        localStorage.setItem(UI_KEY, JSON.stringify({ view: store.ui.view, snap: store.ui.snap }));
+        localStorage.setItem(UI_KEY, JSON.stringify({ view: store.ui.view }));
     } catch { /* sin persistencia */ }
 }
 
@@ -645,7 +645,6 @@ $('#form-new').addEventListener('submit', async (e) => {
 (async function boot() {
     try {
         const ui = JSON.parse(localStorage.getItem(UI_KEY) ?? '{}');
-        if (ui.snap) store.setUi({ snap: ui.snap }, { silent: true });
         if (ui.view) store.setUi({ view: ui.view }, { silent: true });
     } catch { /* ok */ }
     cam.view = store.ui.view;

@@ -112,7 +112,7 @@ export function mountPanels(app) {
         const pos = horizontal ? '▼' : '▶';
         const negName = horizontal ? 'norte' : 'oeste';
         const posName = horizontal ? 'sur' : 'este';
-        return [[-5, `${neg} 62,5`, negName], [-1, `${neg} 12,5`, negName], [1, `${pos} 12,5`, posName], [5, `${pos} 62,5`, posName]].map(([d, text, name]) =>
+        return [[-5, `${neg} 62,5 cm`, negName], [5, `${pos} 62,5 cm`, posName]].map(([d, text, name]) =>
             h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: `Mover ${fmt(Math.abs(d) * G, 1)} cm hacia el ${name}`, onclick: () => app.moveWallBy(w.id, d) }, text));
     }
 

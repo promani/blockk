@@ -40,6 +40,8 @@ final class SlabPlanner
                 'thickness' => $s->thickness,
                 'areaM2' => round($area, 2),
                 'parts' => array_map(static fn (array $p): array => ['x0' => $p[0], 'y0' => $p[1], 'x1' => $p[2], 'y1' => $p[3]], $parts),
+                // Huecos (escaleras) recortados a la losa: el navegador dibuja una sola placa con estos agujeros.
+                'holes' => RectMath::clipTo($rect, $holes),
             ];
             if (!$ground->isInsideRooms($s->x, $s->y, $s->w, $s->h)) {
                 $issues[] = $this->issue('error', 'slab.outside', 'La losa excede la superficie cerrada del nivel de abajo: debe ser igual o más chica y apoyar sobre los muros.', $s->id, $s->x, $s->y);

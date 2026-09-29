@@ -31,15 +31,8 @@ export function createTools(app) {
             store.setUi({ thickness: Number(v) });
         });
 
-    /** Ajuste único para todas las herramientas de dibujo: bloque entero (62,5 cm) o fino (12,5 cm). */
-    const snapOption = () => h('span', { class: 'seg', role: 'group', 'aria-label': 'Ajuste' },
-        [[5, 'Bloque 62,5'], [1, 'Fino 12,5']].map(([v, t]) => h('button', {
-            type: 'button',
-            'aria-pressed': String(store.ui.snap === v),
-            title: v === 5 ? 'Medidas en bloques enteros de 62,5 cm (menos cortes)' : 'Medidas cada 12,5 cm (medio o cuarto de bloque)',
-            onclick: () => { store.setUi({ snap: v }); app.persistUi?.(); app.refreshOptions(); },
-        }, t)));
-    const step = () => Math.max(1, store.ui.snap);
+    /** Todo se dibuja en bloques enteros de 62,5 cm; el imán y los anclajes permiten pegarse a muros existentes. */
+    const step = () => 5;
 
     /**
      * Extremo de un tramo desde `origin`: se alinea con una pared existente cercana (imán o misma recta) y, si no hay,
@@ -174,7 +167,7 @@ export function createTools(app) {
     const handleHit = (p) => handlesOf(app.cam).find((hd) => Math.hypot(p.sx - hd.sx, p.sy - hd.sy) < 14);
 
     let drag = null;
-    const stepU = () => Math.max(1, store.ui.snap);
+    const stepU = () => 5;
     const dragDelta = (p, axis) => Math.round(((axis === 'x' ? p.wx - drag.x0 : p.wy - drag.y0) / G) / stepU()) * stepU();
     const clampLot = (v, lim) => Math.min(lim, Math.max(0, v));
     /**
@@ -441,14 +434,14 @@ export function createTools(app) {
 
     // ---------------- sala ----------------
     let room = null;
-    const minRoom = () => (step() === 1 ? 4 : 10);
+    const minRoom = () => 10;
     const snapSpan = (v, origin, lines) => snapLen(v, origin, lines, minRoom());
     T.room = {
         magnet: true,
         hotkey: 'r',
         label: 'Habitación',
         hint: 'Arrastrá en diagonal: se crean las 4 paredes. Cerca de otra pared, el borde se pega a ella (habitaciones contiguas).',
-        options: () => h('span', { class: 'row' }, thicknessOption(), snapOption()),
+        options: () => h('span', { class: 'row' }, thicknessOption()),
         reset() { room = null; },
         down(p) {
             room = { a: { gx: p.gx, gy: p.gy }, rect: null };
@@ -561,7 +554,7 @@ export function createTools(app) {
             hotkey: opts.key,
             label: opts.label,
             hint: opts.hint,
-            options: () => h('span', { class: 'row' }, thicknessOption(), opts.module ? null : snapOption(), opts.module ? h('button', { class: 'btn btn-outline btn-sm', onclick: () => { axis = axis === 'x' ? 'y' : 'x'; app.refreshOptions(); } }, `Orientación: ${axis === 'x' ? '↔ horizontal' : '↕ vertical'} (X)`) : null),
+            options: () => h('span', { class: 'row' }, thicknessOption(), opts.module ? h('button', { class: 'btn btn-outline btn-sm', onclick: () => { axis = axis === 'x' ? 'y' : 'x'; app.refreshOptions(); } }, `Orientación: ${axis === 'x' ? '↔ horizontal' : '↕ vertical'} (X)`) : null),
             reset() { start = null; end = null; pressed = false; chainStart = null; },
             down(p, e) {
                 if (start && !pressed) {

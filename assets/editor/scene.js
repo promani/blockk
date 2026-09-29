@@ -119,16 +119,23 @@ function buildTimber(timber, config) {
     const dims = config.timberSections;
     for (const f of timber.fields ?? []) {
         const s = dims[f.section] ?? { b: 7.5, d: 20 };
+        // Los tirantes se dibujan hasta la cara interior de los muros (el apoyo queda dentro de la mampostería).
+        const ix0 = f.rect.x + 10;
+        const ix1 = f.rect.x + f.rect.w - 10;
+        const iy0 = f.rect.y + 10;
+        const iy1 = f.rect.y + f.rect.h - 10;
         for (const j of f.joists) {
             const horizontal = Math.abs(j.y1 - j.y2) < 0.01;
+            // los tirantes de borde quedan dentro del muro: no se ven
+            if (horizontal ? j.y1 - s.b / 2 < iy0 || j.y1 + s.b / 2 > iy1 : j.x1 - s.b / 2 < ix0 || j.x1 + s.b / 2 > ix1) continue;
             boxes.push({
-                x0: horizontal ? Math.min(j.x1, j.x2) : j.x1 - s.b / 2,
-                x1: horizontal ? Math.max(j.x1, j.x2) : j.x1 + s.b / 2,
-                y0: horizontal ? j.y1 - s.b / 2 : Math.min(j.y1, j.y2),
-                y1: horizontal ? j.y1 + s.b / 2 : Math.max(j.y1, j.y2),
-                z0: top,
-                z1: top + s.d,
-                zs: top,
+                x0: horizontal ? Math.max(ix0, Math.min(j.x1, j.x2)) : j.x1 - s.b / 2,
+                x1: horizontal ? Math.min(ix1, Math.max(j.x1, j.x2)) : j.x1 + s.b / 2,
+                y0: horizontal ? j.y1 - s.b / 2 : Math.max(iy0, Math.min(j.y1, j.y2)),
+                y1: horizontal ? j.y1 + s.b / 2 : Math.min(iy1, Math.max(j.y1, j.y2)),
+                z0: top - 2 - s.d,
+                z1: top - 2,
+                zs: top - 2 - s.d,
                 kind: KIND.JOIST,
                 axis: horizontal ? 'x' : 'y',
                 adjA: false,
@@ -138,28 +145,9 @@ function buildTimber(timber, config) {
                 field: f.id,
             });
         }
-        // Placa de entrepiso (sin los huecos de escalera), retirada del eje hasta la cara interior de los muros.
-        const inset = 10;
-        const r = f.rect;
-        for (const part of f.deckParts ?? [{ x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }]) {
-            boxes.push({
-                x0: part.x0 + (Math.abs(part.x0 - r.x) < 0.01 ? inset : 0),
-                x1: part.x1 - (Math.abs(part.x1 - (r.x + r.w)) < 0.01 ? inset : 0),
-                y0: part.y0 + (Math.abs(part.y0 - r.y) < 0.01 ? inset : 0),
-                y1: part.y1 - (Math.abs(part.y1 - (r.y + r.h)) < 0.01 ? inset : 0),
-                z0: top + s.d,
-                z1: top + s.d + 2,
-                zs: top,
-                kind: KIND.DECK,
-                axis: 'x',
-                adjA: true,
-                adjB: true,
-                top: true,
-                level: 1,
-                field: f.id,
-                deck: true,
-            });
-        }
+        // Placa de entrepiso: una sola pieza con el hueco de la escalera, retirada del eje hasta la cara interior de los muros,
+        // con su cara superior al nivel del piso de arriba (así la escalera llega justo, sin escalón).
+        boxes.push(plate(f.rect, f.deckHoles, top - 2, top, KIND.DECK, { field: f.id, deck: true }));
     }
     for (const b of timber.beams ?? []) {
         const s = dims[b.section] ?? { b: 7.5, d: 25 };
@@ -211,25 +199,20 @@ function buildFloors(floors, config) {
     }
     const top = config.levelHeight;
     for (const sl of floors?.slabs ?? []) {
-        const r = sl.rect;
-        const inset = 10;
-        for (const part of sl.parts) {
-            boxes.push(base({
-                x0: part.x0 + (Math.abs(part.x0 - r.x) < 0.01 ? inset : 0),
-                x1: part.x1 - (Math.abs(part.x1 - (r.x + r.w)) < 0.01 ? inset : 0),
-                y0: part.y0 + (Math.abs(part.y0 - r.y) < 0.01 ? inset : 0),
-                y1: part.y1 - (Math.abs(part.y1 - (r.y + r.h)) < 0.01 ? inset : 0),
-                z0: top,
-                z1: top + sl.thickness,
-                zs: top,
-                kind: KIND.SLAB,
-                level: 1,
-                slab: sl.id,
-            }));
-        }
+        // Losa: una sola placa con el hueco de la escalera; su cara superior es el piso del Nivel 2.
+        boxes.push(plate(sl.rect, sl.holes, top - sl.thickness, top, KIND.SLAB, { slab: sl.id }));
     }
 
     return boxes;
+}
+
+/** Placa horizontal (losa o entrepiso) de una pieza, retirada 10 cm hasta la cara interior de los muros, con huecos. */
+function plate(r, holes, z0, z1, kind, extra) {
+    const inset = 10;
+    return {
+        x0: r.x + inset, x1: r.x + r.w - inset, y0: r.y + inset, y1: r.y + r.h - inset, z0, z1, zs: z0,
+        kind, axis: 'x', adjA: false, adjB: false, top: true, level: 1, plate: true, holes: holes ?? [], ...extra,
+    };
 }
 
 /** Caja rotada al marco de la vista: [x0', x1', y0', y1'] tras girar `rot` × 90° alrededor del origen. */

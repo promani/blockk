@@ -184,6 +184,7 @@ final class TimberPlanner
             'lengthCm' => $joists[0]['lengthCm'] ?? 0,
             'deckParts' => array_map(static fn (array $p): array => ['x0' => $p[0], 'y0' => $p[1], 'x1' => $p[2], 'y1' => $p[3]], $deckParts),
             'deckAreaM2' => round(\App\Domain\Floor\RectMath::area($deckParts) / 10000, 2),
+            'deckHoles' => \App\Domain\Floor\RectMath::clipTo($fieldRect, $holes),
             'spacingCm' => $count > 1 ? round(Hcca::ticksToCm((int) round($step)), 1) : 0,
             'count' => $count,
             'joists' => $joists,
