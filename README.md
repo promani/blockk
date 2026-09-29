@@ -114,6 +114,13 @@ En `.claude/skills/` hay tres skills que Claude Code carga al trabajar en este r
 | `capturas` | `scripts/capturas.cjs`: capturas del editor (niveles, techo, 4 vistas o primer plano) con Playwright, más ambientes, Revisión y totales en JSON. |
 | `nueva-plantilla` | Cómo diseñar una casa para la Galería con `TemplateBuilder`: grilla, vanos y las reglas del validador. |
 
+### Servidor MCP del laboratorio
+
+`.mcp.json` declara el servidor `lab-mcp` (HTTP, `https://unab.dpdns.org/mcp`). El token se lee de la variable de entorno
+**`LAB_MCP_TOKEN`**, que nunca se guarda en el repo: en tu máquina, exportala antes de abrir Claude Code; en Claude Code
+en la web, cargala en la configuración del entorno y permití el dominio `unab.dpdns.org` en el acceso a la red.
+Claude Code pide aprobar los servidores de `.mcp.json` la primera vez.
+
 ## Alcance
 
 Implementado (Fase 1): editor ortogonal con vistas isométrica/cenital, piezas HCCA de 7,5/10/15/20 cm y U, entrepiso de madera,
