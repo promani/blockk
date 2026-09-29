@@ -6,10 +6,11 @@
  * Códigos adicionales de la escena: 4 hoja de puerta · 5 vidrio · 6 tirante · 7 placa de entrepiso · 8 viga.
  */
 
-export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8, STEP: 9, SLAB: 10, ROOF: 11 };
+export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8, STEP: 9, SLAB: 10, ROOF: 11, FRAME: 12 };
 
 const G = 12.5;
 const COURSE_H = 25;
+const EPS = 0.01;
 
 export function buildScene(project, analysis, config) {
     const levels = [];
@@ -18,7 +19,7 @@ export function buildScene(project, analysis, config) {
         const boxes = [];
         const courses = analysis.levels[li]?.courses ?? [];
         addMasonry(boxes, courses, base, li);
-        addOpenings(boxes, project.levels[li], base, li, config);
+        addOpenings(boxes, project.levels[li], base, li);
         levels.push({ index: li, boxes, base, used: (analysis.levels[li]?.used ?? false) });
     }
     const timber = buildTimber(analysis.timber, config);
@@ -80,35 +81,84 @@ function addMasonry(boxes, courses, base, li) {
     });
 }
 
-function addOpenings(boxes, level, base, li, config) {
+/**
+ * Vanos: marco (jambas, dintel y alféizar) que reviste el espesor del muro, con el vidrio o la hoja al medio. Las piezas se
+ * parten por hilada para que el pintor las ordene junto con la mampostería; las caras de extremo de los bloques que dan al
+ * vano no se dibujan (las tapa el marco).
+ */
+function addOpenings(boxes, level, base, li) {
+    const F = 5; // ancho del marco (cm)
     for (const o of level.openings ?? []) {
         const w = level.walls.find((x) => x.id === o.wall);
         if (!w) continue;
         const horizontal = w.y1 === w.y2;
+        const axis = horizontal ? 'x' : 'y';
         const from = (horizontal ? w.x1 : w.y1) * G + o.pos * G;
-        const len = o.w * G;
+        const to = from + o.w * G;
         const line = (horizontal ? w.y1 : w.x1) * G;
+        const half = (w.t ?? 20) / 2;
         const z0 = base + o.sill * COURSE_H;
         const z1 = base + (o.sill + o.h) * COURSE_H;
         const door = o.kind === 'door';
-        const half = door ? 1.75 : 0.9;
-        boxes.push({
-            x0: horizontal ? from : line - half,
-            x1: horizontal ? from + len : line + half,
-            y0: horizontal ? line - half : from,
-            y1: horizontal ? line + half : from + len,
-            z0: door ? z0 : z0 + 2,
-            z1: door ? z1 - 2 : z1 - 2,
-            zs: z0,
-            kind: door ? KIND.DOOR : KIND.GLASS,
-            axis: horizontal ? 'x' : 'y',
+        const sillF = door ? 0 : F;
+
+        for (const b of boxes) {
+            if (b.axis !== axis || b.z0 < z0 - EPS || b.z1 > z1 + EPS) continue;
+            const mid = horizontal ? (b.y0 + b.y1) / 2 : (b.x0 + b.x1) / 2;
+            if (Math.abs(mid - line) > EPS) continue;
+            const [a, c] = horizontal ? [b.x0, b.x1] : [b.y0, b.y1];
+            if (Math.abs(c - from) < EPS) b.adjB = true;
+            if (Math.abs(a - to) < EPS) b.adjA = true;
+        }
+
+        const box = (a, c, d0, d1, lo, hi, zs, kind, extra = {}) => ({
+            x0: horizontal ? a : line + d0,
+            x1: horizontal ? c : line + d1,
+            y0: horizontal ? line + d0 : a,
+            y1: horizontal ? line + d1 : c,
+            z0: lo,
+            z1: hi,
+            zs,
+            kind,
+            axis,
             adjA: false,
             adjB: false,
-            top: true,
+            top: false,
             level: li,
-            course: o.sill,
+            course: Math.floor((zs - base) / COURSE_H + EPS),
             opening: o.id,
+            flat: true,
+            ...extra,
         });
+        // Alféizar y dintel: capas propias (justo debajo y arriba de las hiladas del vano).
+        if (sillF) boxes.push(box(from, to, -half, half, z0, z0 + sillF, z0 - 0.5, KIND.FRAME, { adjA: true, adjB: true, top: true }));
+        boxes.push(box(from, to, -half, half, z1 - F, z1, z1 - F, KIND.FRAME, { adjA: true, adjB: true }));
+
+        // Hoja o vidrio: al medio del muro; las ventanas anchas llevan un parante al centro.
+        const panes = [];
+        const leaf = door ? 2 : 0.9;
+        const inner0 = from + F;
+        const inner1 = to - F;
+        const mullion = !door && inner1 - inner0 > 150 ? (inner0 + inner1) / 2 : null;
+        if (mullion === null) panes.push([inner0, inner1]);
+        else panes.push([inner0, mullion - F / 2], [mullion + F / 2, inner1]);
+        const handleZ = z0 + 100;
+
+        for (let c = o.sill; c < o.sill + o.h; c++) {
+            const zc0 = base + c * COURSE_H;
+            const lo = Math.max(zc0, z0 + sillF);
+            const top = Math.min(zc0 + COURSE_H, z1 - F);
+            if (top - lo < EPS) continue;
+            // se solapan un poco con la hilada de arriba para que no se vea la costura entre hiladas
+            const hi = top < z1 - F - EPS ? top + 0.8 : top;
+            boxes.push(box(from, from + F, -half, half, lo, hi, zc0, KIND.FRAME, { adjA: true }));
+            boxes.push(box(to - F, to, -half, half, lo, hi, zc0, KIND.FRAME, { adjB: true }));
+            if (mullion !== null) boxes.push(box(mullion - F / 2, mullion + F / 2, -3, 3, lo, hi, zc0, KIND.FRAME));
+            for (const [a, b] of panes) {
+                const handle = door && handleZ >= lo && handleZ < top ? { handle: { at: o.flip ? a + 8 : b - 8, z: handleZ } } : {};
+                boxes.push(box(a, b, -leaf, leaf, lo, hi, zc0, door ? KIND.DOOR : KIND.GLASS, handle));
+            }
+        }
     }
 }
 
@@ -257,7 +307,6 @@ export function sortedItems(scene, boxes, rot, cacheKey) {
     return items;
 }
 
-const EPS = 0.01;
 /** ¿P queda detrás de Q (la cámara mira desde +x' +y')? Sólo para cajas de una misma capa que no se superponen. */
 function behind(P, Q) {
     const ox = P.x0 < Q.x1 - EPS && Q.x0 < P.x1 - EPS;

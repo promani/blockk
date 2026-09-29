@@ -21,6 +21,8 @@ const BASE = {
     [KIND.U]: '#9fd15c',
     [KIND.UCUT]: '#c2df95',
     [KIND.DOOR]: '#b9834f',
+    [KIND.GLASS]: '#a9d3ef',
+    [KIND.FRAME]: '#f7f8fa',
     [KIND.JOIST]: '#d9a05b',
     [KIND.DECK]: '#ecd2a0',
     [KIND.BEAM]: '#c48a45',
@@ -170,7 +172,7 @@ export class Renderer {
             const reach = (Math.max(b.x1 - b.x0, b.y1 - b.y0) + (b.z1 - b.z0)) * cam.zoom;
             if (px + reach < -margin || px - reach > cam.w + margin || py + reach < -margin || py - reach > cam.h + margin) continue;
             if (b.level === activeLevel && b.course !== undefined && b.kind <= KIND.UCUT && ui.cut < 12 && b.course >= ui.cut) continue;
-            if (b.kind === KIND.DOOR || b.kind === KIND.GLASS) {
+            if (b.opening) {
                 if (b.level === activeLevel && ui.cut < 12 && b.course >= ui.cut) continue;
             }
             this.drawBox(ctx, cam, it, strokeOn);
@@ -419,6 +421,25 @@ export class Renderer {
         ctx.restore();
     }
 
+    /** Picaporte: una barrita oscura sobre la cara visible de la hoja. */
+    drawHandle(ctx, cam, b, spec) {
+        const { at, z } = b.handle;
+        const horizontal = b.axis === 'x';
+        const plane = spec.a === 'x' ? (spec.max ? b.x1 : b.x0) : (spec.max ? b.y1 : b.y0);
+        const pt = (u, zz) => (horizontal ? cam.project(u, plane, zz) : cam.project(plane, u, zz));
+        const [ax, ay] = pt(at - 7, z);
+        const [bx, by] = pt(at + 7, z);
+        ctx.save();
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = Math.max(2, 3.5 * cam.zoom);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+        ctx.restore();
+    }
+
     drawBox(ctx, cam, it, strokeOn) {
         const b = it.b;
         if (b.kind === KIND.ROOF) {
@@ -455,17 +476,26 @@ export class Renderer {
             const pts = spec.a === 'x'
                 ? [P(X, y0, z0), P(X, y1, z0), P(X, y1, z1), P(X, y0, z1)]
                 : [P(x0, Y, z0), P(x1, Y, z0), P(x1, Y, z1), P(x0, Y, z1)];
-            drawFace(pts, glass ? 'rgba(96,165,220,.42)' : isXp ? pal.xp : pal.yp);
+            drawFace(pts, isXp ? pal.xp : pal.yp);
         };
 
         if (glass) {
-            const save = ctx.strokeStyle;
-            ctx.strokeStyle = 'rgba(30,41,59,.65)';
-            ctx.lineWidth = 1;
+            // sólo la cara larga, sin contorno: las hiladas no se notan en el vidrio
             const long = xpFace.a !== b.axis ? xpFace : ypFace;
+            const on = strokeOn;
+            strokeOn = false;
             face(long, long === xpFace);
-            ctx.lineWidth = 0.6;
-            ctx.strokeStyle = save;
+            strokeOn = on;
+            return;
+        }
+        if (b.flat) {
+            const on = strokeOn;
+            strokeOn = false;
+            if (b.top) drawFace([P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)], pal.top);
+            face(ypFace, false);
+            face(xpFace, true);
+            strokeOn = on;
+            if (b.handle) this.drawHandle(ctx, cam, b, xpFace.a !== b.axis ? xpFace : ypFace);
             return;
         }
         if (b.top) {
