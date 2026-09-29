@@ -257,3 +257,5 @@ label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-
 .statusbar #cursor-info { flex: none; }
 .statusbar #hint-info { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; border: 1px solid rgba(30,41,59,.35); vertical-align: -1px; }
+.roof-row { display: flex; gap: 4px; margin: 3px 0; }
+.roof-row .btn:first-child { flex: 1; text-align: left; }

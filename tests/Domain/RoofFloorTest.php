@@ -263,4 +263,13 @@ final class RoofFloorTest extends TestCase
         self::assertCount(6, $r['corners']);
         self::assertSame(40 * 15 + 20 * 15, array_sum(array_map(static fn (array $f): int => $f[2] * $f[3], $r['fill'])));
     }
+
+    #[Test]
+    public function aRoofUnderUpperWallsIsFlagged(): void
+    {
+        $b = Fixtures::room(40, 30)->room(1, 0, 0, 40, 30)->roofPart(0, 0, 0, 40, 30);
+        self::assertContains('roof.covered', $this->codes($this->analyze($b)));
+        $ok = Fixtures::room(40, 30)->room(1, 0, 0, 40, 30)->roofPart(1, 0, 0, 40, 30);
+        self::assertNotContains('roof.covered', $this->codes($this->analyze($ok)));
+    }
 }

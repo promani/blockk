@@ -309,7 +309,10 @@ export function mountPanels(app) {
         const roofs = store.project.roofs ?? [];
         add(el.props,
             roofs.length
-                ? h('div', {}, h('div', { class: 'kv-title' }, 'Techos del proyecto'), roofs.map((r) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', style: 'margin:2px', onclick: () => store.setUi({ selection: { type: 'roof', id: r.id } }) }, `${r.id} · ${r.type === 'gable' ? '2 aguas' : '1 agua'} · ${fmt((r.w * G) / 100, 1)}×${fmt((r.h * G) / 100, 1)} m`)))
+                ? h('div', {}, h('div', { class: 'kv-title' }, 'Techos del proyecto'), roofs.map((r) => h('div', { class: 'roof-row' },
+                    h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'roof', id: r.id } }) }, `${r.id} · ${r.type === 'gable' ? '2 aguas' : '1 agua'} · ${fmt((r.w * G) / 100, 1)}×${fmt((r.h * G) / 100, 1)} m · Nivel ${r.level + 1}`),
+                    h('button', { class: 'btn btn-danger btn-sm', type: 'button', title: `Quitar el techo ${r.id}`, 'aria-label': `Quitar el techo ${r.id}`, onclick: () => store.commit('Quitar techo', (d) => { d.roofs = d.roofs.filter((x) => x.id !== r.id); }) }, '✕'))),
+                    roofs.length > 1 ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.commit('Quitar todos los techos', (d) => { d.roofs = []; }) }, 'Quitar todos') : null)
                 : h('p', { class: 'empty-note' }, 'Sin techos. Con la herramienta Techo (H) arrastrá un rectángulo sobre los muros, o hacé clic dentro de una habitación.'),
             h('p', { class: 'small muted' }, 'Cada techo es un rectángulo independiente: podés cubrir la planta alta y, aparte, la parte baja de la planta baja. Los precios de cubierta, cabios y correas se editan en Cómputo.'));
     }

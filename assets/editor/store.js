@@ -57,7 +57,11 @@ export class Store extends EventTarget {
         if (this.project.upper) return;
         this.ui.level = 1;
         this.ui.selection = null;
-        await this.commit('Agregar nivel', (d) => { d.upper = true; });
+        await this.commit('Agregar nivel', (d) => {
+            d.upper = true;
+            // El techo pasa a ser el nivel superior: los techos existentes apoyan ahora sobre el Nivel 2.
+            for (const r of d.roofs ?? []) r.level = 1;
+        });
     }
 
     /** Si el Nivel 2 dejó de existir (deshacer), vuelve a la Planta Baja. */

@@ -29,11 +29,26 @@ final class RoofPlanner
         $issues = [];
         foreach ($project->roofs as $part) {
             $built = $this->planPart($part, $levels[$part->level]->level->walls);
+            if (0 === $part->level && $project->level(1)->walls !== [] && $this->coversUpperWalls($part, $project->level(1)->walls)) {
+                $built['issues'][] = $this->issue($part, 'warn', 'roof.covered', sprintf('El techo %s queda debajo de muros del Nivel 2: cambialo a «Sobre el Nivel 2» o achicá su rectángulo.', $part->id));
+            }
             $parts[] = $built;
             array_push($issues, ...$built['issues']);
         }
 
         return new RoofPlan($parts, $issues);
+    }
+
+    /** ¿El centro del techo cae dentro de la planta del Nivel 2 (caja envolvente de sus muros)? Entonces tiene muros encima. @param list<Wall> $upper */
+    private function coversUpperWalls(RoofPart $p, array $upper): bool
+    {
+        $cx = $p->x + $p->w / 2;
+        $cy = $p->y + $p->h / 2;
+
+        return $cx >= min(array_map(static fn (Wall $w): int => $w->x1, $upper))
+            && $cx <= max(array_map(static fn (Wall $w): int => $w->x2, $upper))
+            && $cy >= min(array_map(static fn (Wall $w): int => $w->y1, $upper))
+            && $cy <= max(array_map(static fn (Wall $w): int => $w->y2, $upper));
     }
 
     /**

@@ -926,11 +926,25 @@ export function createTools(app) {
         return store.project.roofs?.find((r) => r.id === (sel.type === 'roof' ? sel.id : String(sel.id).split(':')[0])) ?? null;
     };
     let roofDraw = null;
+    /** Nivel de apoyo: el elegido, salvo que haya muros del Nivel 2 sobre el rectángulo (entonces apoya sobre ellos). */
+    const levelFor = (d, r) => {
+        const upper = d.levels[1].walls;
+        if (roofLevel() === 0 && d.upper && upper.length) {
+            const cx = r.x + r.w / 2;
+            const cy = r.y + r.h / 2;
+            const x0 = Math.min(...upper.map((w) => w.x1));
+            const x1 = Math.max(...upper.map((w) => w.x2));
+            const y0 = Math.min(...upper.map((w) => w.y1));
+            const y1 = Math.max(...upper.map((w) => w.y2));
+            if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) return 1;
+        }
+        return roofLevel();
+    };
     const newRoof = (d, r) => {
         const spec = { ...roofDefaults };
         if (spec.type === 'gable') spec.dir = r.w >= r.h ? 'x' : 'y';
         else if (!FALL_SIDES.some(([v]) => v === spec.dir)) spec.dir = 'S';
-        d.roofs.push({ id: nextId(d, 'r'), level: roofLevel(), x: r.x, y: r.y, w: r.w, h: r.h, type: spec.type, dir: spec.dir, slope: spec.slope, overhang: spec.overhang, section: spec.section, spacing: spec.spacing, gableA: true, gableB: true, gableT: spec.gableT });
+        d.roofs.push({ id: nextId(d, 'r'), level: levelFor(d, r), x: r.x, y: r.y, w: r.w, h: r.h, type: spec.type, dir: spec.dir, slope: spec.slope, overhang: spec.overhang, section: spec.section, spacing: spec.spacing, gableA: true, gableB: true, gableT: spec.gableT });
     };
     const roofRoomAt = (a) => {
         const rooms = store.analysis?.levels?.[roofLevel()]?.rooms ?? [];
@@ -960,7 +974,7 @@ export function createTools(app) {
             }, t)));
         const levels = store.project.upper ? [[0, 'Sobre el Nivel 1'], [1, 'Sobre el Nivel 2']] : null;
 
-        return h('span', { class: 'row' }, target ? h('span', { class: 'tag' }, `Techo ${target.id}`) : null, types,
+        return h('span', { class: 'row' }, target ? h('span', { class: 'tag' }, `Techo ${target.id}`) : null, target ? h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: () => app.deleteSelection() }, 'Quitar techo') : null, types,
             cur.type === 'gable'
                 ? selectT('Cumbrera', cur.dir, [['x', '↔ horizontal'], ['y', '↕ vertical']], (v) => set('Dirección de cumbrera', { dir: v }))
                 : selectT('Cae hacia', cur.dir, FALL_SIDES, (v) => set('Caída del techo', { dir: v })),
@@ -993,8 +1007,15 @@ export function createTools(app) {
             if (!roofDraw) return;
             let r = roofDraw.rect;
             const a = roofDraw.a;
+            const at = roofDraw.at;
             roofDraw = null;
             if (!r) {
+                // Un clic sobre un techo existente lo elige (para editarlo o quitarlo) en lugar de dibujar otro encima.
+                const hit = pickAt(app, at.x, at.y);
+                if (hit) {
+                    store.setUi({ selection: hit });
+                    return;
+                }
                 const room = roofRoomAt(a);
                 if (!room) {
                     app.toast('Clic dentro de una habitación cerrada del nivel, o arrastrá un rectángulo sobre los muros.', 'error');
