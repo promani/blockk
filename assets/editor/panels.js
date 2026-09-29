@@ -5,9 +5,9 @@ import { nextId } from '../lib/storage.js';
 import { roomColor } from './renderer.js';
 import { anchorLines } from './snap.js';
 import { collinearChain } from './wallmove.js';
+import { contextOf, CONTEXT_TITLE, roomWalls, facing, openingM2, issueMatches } from './context.js';
 
 const G = 12.5;
-const COMPASS = [['NO', 315], ['N', 0], ['NE', 45], ['O', 270], null, ['E', 90], ['SO', 225], ['S', 180], ['SE', 135]];
 const CITIES = [['Buenos Aires', -34.6], ['Córdoba', -31.4], ['Rosario', -32.9], ['Mendoza', -32.9], ['Mar del Plata', -38.0], ['Neuquén', -38.9], ['Tucumán', -26.8], ['Salta', -24.8], ['Bariloche', -41.1], ['Ushuaia', -54.8], ['Madrid', 40.4], ['Ciudad de México', 19.4]];
 const SEASONS = [['winter', 'Invierno'], ['summer', 'Verano'], ['equinox', 'Equinoccio']];
 
@@ -16,17 +16,150 @@ const wallLen = (w) => Math.abs(w.x2 - w.x1) + Math.abs(w.y2 - w.y1);
 export function mountPanels(app) {
     const { store } = app;
     const cfg = store.config;
-    const el = { tele: $('#telemetry'), props: $('#props'), solar: $('#solar'), issues: $('#issues'), badge: $('#issues-badge') };
+    const el = { tele: $('#telemetry'), props: $('#props'), solar: h('div', { class: 'solar-box' }), issues: $('#issues'), badge: $('#issues-badge') };
 
     // ------------------------------------------------------------------ telemetría
+    const kpi = (label, value, title) => h('div', { class: 'kpi-mini', title }, h('b', {}, value), h('span', {}, label));
+    const setTitle = (sel, base, ctx) => {
+        const t = document.querySelector(sel);
+        if (t?.firstChild) t.firstChild.textContent = CONTEXT_TITLE[ctx.kind] ? `${base} · ${CONTEXT_TITLE[ctx.kind]} ` : `${base} `;
+    };
+
+    /** Resumen según lo que el usuario está haciendo (herramienta o elemento elegido). */
     function renderTelemetry() {
         const a = store.analysis;
         clear(el.tele);
+        const ctx = contextOf(store);
+        setTitle('#card-telemetry > summary', 'Resumen', ctx);
         if (!a) {
             add(el.tele, h('p', { class: 'empty-note' }, 'Calculando…'));
             return;
         }
+        if (ctx.kind === 'openings') return renderOpeningsSummary(a);
+        if (ctx.kind === 'wall') return renderWallSummary(a, ctx.id);
+        if (ctx.kind === 'room') return renderRoomSummary(a, ctx.id);
+        if (ctx.kind === 'floor') return renderFloorSummary(a);
+        return renderGeneralSummary(a);
+    }
+
+    /** Luz natural por habitación: m² de ventanas / m² útiles (referencia ≥ 1/8 del piso). */
+    const LIGHT_REF = 12.5;
+    function roomLight(li, room) {
+        const lv = store.project.levels[li];
+        const walls = new Set(roomWalls(room, lv.walls).map((w) => w.id));
+        const wins = lv.openings.filter((o) => o.kind === 'window' && walls.has(o.wall));
+        const area = wins.reduce((acc, o) => acc + openingM2(o), 0);
+        return { wins, area, pct: room.netM2 > 0 ? (100 * area) / room.netM2 : 0 };
+    }
+    const lightTag = (pctV) => h('span', { class: `light ${pctV >= LIGHT_REF ? 'ok' : pctV > 0 ? 'low' : 'none'}`, title: `Referencia: ventanas ≥ ${fmt(LIGHT_REF, 1)} % del piso` }, `${fmt(pctV, 0)} %`);
+
+    function renderOpeningsSummary(a) {
+        const li = Math.min(store.ui.level, 1);
+        const lv = store.project.levels[li];
+        const wins = lv.openings.filter((o) => o.kind === 'window');
+        const doors = lv.openings.filter((o) => o.kind === 'door');
+        const glass = wins.reduce((acc, o) => acc + openingM2(o), 0);
+        const rooms = a.levels[li]?.rooms ?? [];
+        const floor = rooms.reduce((acc, r) => acc + r.netM2, 0);
+        const byFace = { N: 0, E: 0, S: 0, O: 0 };
+        for (const o of wins) {
+            const f = facing(a.levels[li]?.walls?.[o.wall]?.ext, store.project.north);
+            if (f) byFace[f] += openingM2(o);
+        }
+        const sunny = store.project.lat < 0 ? 'N' : 'S'; // fachada con sol de invierno
+        el.sugBox = h('div', { class: 'suggest' });
+        add(el.tele,
+            h('div', { class: 'kpi-grid' },
+                kpi('ventanas', int(wins.length)),
+                kpi('puertas', int(doors.length)),
+                kpi('m² de vidrio', fmt(glass, 1)),
+                kpi('luz / piso', floor > 0 ? `${fmt((100 * glass) / floor, 0)} %` : '—', `Ventanas / superficie útil del nivel. Referencia ≥ ${fmt(LIGHT_REF, 1)} %`)),
+            rooms.length ? h('div', {}, h('div', { class: 'kv-title' }, 'Luz natural por habitación'),
+                h('dl', { class: 'dl' }, rooms.flatMap((r) => {
+                    const L = roomLight(li, r);
+                    return [h('dt', {}, h('span', { class: 'swatch', style: `background:${roomColor(r)}` }), r.name), h('dd', {}, `${int(L.wins.length)} vent. · `, lightTag(L.pct))];
+                }))) : null,
+            h('div', { class: 'kv-title' }, 'Vidrio por orientación'),
+            h('div', { class: 'faces' }, Object.entries(byFace).map(([k, v]) => h('div', { class: `face${k === sunny ? ' sunny' : ''}`, title: k === sunny ? 'Recibe sol en invierno' : '' }, h('b', {}, k), h('span', {}, `${fmt(v, 1)} m²`)))),
+            h('div', { class: 'actions-row' }, h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: () => runSuggest(el.sugBox) }, 'Sugerir ventanas según el sol')),
+            el.sugBox);
+    }
+
+    /** Piezas de un muro: las de sus corridas cuyo centro cae dentro del muro. */
+    function wallBlocks(a, li, w) {
+        const horizontal = w.y1 === w.y2;
+        const axis = horizontal ? 'x' : 'y';
+        const line = (horizontal ? w.y1 : w.x1) * G;
+        const lo = (horizontal ? w.x1 : w.y1) * G - w.t / 2;
+        const hi = (horizontal ? w.x2 : w.y2) * G + w.t / 2;
+        let n = 0;
+        let cut = 0;
+        let u = 0;
+        for (const course of a.levels[li]?.courses ?? []) {
+            for (const r of course) {
+                if (r.axis !== axis || Math.abs(r.line - line) > 0.01) continue;
+                for (const [p0, p1, k] of r.pieces) {
+                    const m = (p0 + p1) / 2;
+                    if (m < lo || m > hi) continue;
+                    n++;
+                    if (k === 1 || k === 3) cut++;
+                    if (k >= 2) u++;
+                }
+            }
+        }
+        return { n, cut, u };
+    }
+
+    function renderWallSummary(a, id) {
+        const li = Math.min(store.ui.level, 1);
+        const w = store.project.levels[li].walls.find((x) => x.id === id);
+        if (!w) return renderGeneralSummary(a);
+        const b = wallBlocks(a, li, w);
+        const lenM = (wallLen(w) * G) / 100;
+        const hM = ((w.h ?? 12) * 25) / 100;
+        const ops = store.project.levels[li].openings.filter((o) => o.wall === id);
+        const f = facing(a.levels[li]?.walls?.[id]?.ext, store.project.north);
+        add(el.tele,
+            h('div', { class: 'kpi-grid' },
+                kpi('piezas', int(b.n), 'Piezas de bloque de este muro (enteras y cortadas)'),
+                kpi('con corte', int(b.cut)),
+                kpi('bloques U', int(b.u)),
+                kpi('m² de muro', fmt(lenM * hM - ops.reduce((acc, o) => acc + openingM2(o), 0), 1))),
+            h('dl', { class: 'dl' },
+                h('dt', {}, 'Medidas'), h('dd', {}, `${fmt(lenM, 2)} × ${fmt(hM, 2)} m`),
+                h('dt', {}, 'Fachada'), h('dd', {}, f ? `exterior, mira al ${f}` : 'interior'),
+                h('dt', {}, 'Vanos'), h('dd', {}, int(ops.length))));
+    }
+
+    function renderRoomSummary(a, id) {
+        const li = Math.min(store.ui.level, 1);
+        const room = a.levels[li]?.rooms?.find((r) => r.id === id);
+        if (!room) return renderGeneralSummary(a);
+        const L = roomLight(li, room);
+        add(el.tele,
+            h('div', { class: 'kpi-grid' },
+                kpi('m² útiles', fmt(room.netM2, 1)),
+                kpi('perímetro (m)', fmt(room.perimeterM, 1)),
+                kpi('ventanas', int(L.wins.length)),
+                h('div', { class: 'kpi-mini', title: `Ventanas / piso. Referencia ≥ ${fmt(LIGHT_REF, 1)} %` }, h('b', {}, lightTag(L.pct)), h('span', {}, 'luz natural'))));
+    }
+
+    function renderFloorSummary(a) {
         const t = a.telemetry;
+        const fields = a.timber?.fields ?? [];
+        const stairs = a.floors?.stairs ?? [];
+        add(el.tele,
+            h('div', { class: 'kpi-grid' },
+                kpi('m² de losa', fmt(t.slabM2 ?? 0, 1)),
+                kpi('m² de madera', fmt(fields.reduce((acc, f) => acc + (f.deckAreaM2 ?? 0), 0), 1)),
+                kpi('tirantes', int(fields.reduce((acc, f) => acc + f.count, 0))),
+                kpi('escaleras', int(stairs.length))),
+            stairs.length ? h('dl', { class: 'dl' }, stairs.flatMap((st) => [h('dt', {}, `Escalera ${st.shape === 'straight' ? 'recta' : `en ${st.shape}`}`), h('dd', {}, `${int(st.steps.length)} peldaños de ${fmt(st.riseCm, 1)} cm`)])) : null);
+    }
+
+    function renderGeneralSummary(a) {
+        const t = a.telemetry;
+
         const lv = t.levels[Math.min(store.ui.level, 1)];
         const tot = t.total;
         const roofBom = a.roof?.bom;
@@ -44,7 +177,6 @@ export function mountPanels(app) {
                     : h('p', { class: 'empty-note' }, 'Sin techos.'))
             : null;
         const full = tot.heightM >= tot.maxHeightM;
-        const kpi = (label, value, title) => h('div', { class: 'kpi-mini', title }, h('b', {}, value), h('span', {}, label));
         add(el.tele,
             h('div', { class: 'kpi-grid' },
                 kpi('m² útiles', fmt(tot.netM2, 1), 'Superficie útil de todos los niveles'),
@@ -154,6 +286,18 @@ export function mountPanels(app) {
         // Título del panel: lo elegido o, si no hay nada, las configuraciones generales del proyecto.
         const title = document.querySelector('#card-props > summary');
         if (title) title.textContent = store.ui.selection ? 'Selección' : store.ui.level === 2 ? 'Techos' : 'Configuraciones generales';
+        // Mientras se dibuja con una herramienta, las configuraciones generales se pliegan y el Resumen queda a la vista.
+        const card = document.getElementById('card-props');
+        if (card && !store.ui.selection && store.ui.level !== 2) {
+            const drawing = store.ui.tool !== 'select';
+            if (card.dataset.auto !== String(drawing)) {
+                card.open = !drawing;
+                card.dataset.auto = String(drawing);
+            }
+        } else if (card && !card.open) {
+            card.open = true;
+            card.dataset.auto = '';
+        }
         if (store.ui.level === 2) {
             renderRoofProps();
             return;
@@ -363,6 +507,8 @@ export function mountPanels(app) {
                 h('label', {}, 'Ancho (m)', num(store.project.lot.w, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, w: v }; }))),
                 h('label', {}, 'Fondo (m)', num(store.project.lot.d, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, d: v }; })))),
             field('El norte queda hacia', sel(store.project.north, [[0, '↑ arriba del plano'], [45, '↗ arriba a la derecha'], [90, '→ la derecha'], [135, '↘ abajo a la derecha'], [180, '↓ abajo'], [225, '↙ abajo a la izquierda'], [270, '← la izquierda'], [315, '↖ arriba a la izquierda']], (v) => { store.patchProject({ north: Number(v) }); app.syncSolar?.(); })),
+            h('div', { class: 'kv-title' }, 'Sol y orientación'),
+            el.solar,
             h('div', { class: 'kv-title' }, 'Ajustes del proyecto'),
             field('Espesor por defecto', sel(store.ui.thickness, cfg.thicknesses.map((t) => [t, `${cm(t)} cm`]), (v) => { store.setUi({ thickness: Number(v) }); store.patchProject({ settings: { ...store.project.settings, defaultT: Number(v) } }); })),
             field('Reserva por rotura (%)', num(store.project.settings?.reservePct ?? 3, 0, 30, (v) => { store.patchProject({ settings: { ...store.project.settings, reservePct: v } }); store.refresh(); })),
@@ -382,14 +528,25 @@ export function mountPanels(app) {
     }
 
     // ------------------------------------------------------------------ validación
+    let showAllIssues = false;
+    let lastCtxKey = '';
+    /** Revisión: primero lo que corresponde a lo que el usuario está haciendo; el resto queda a un clic. */
     function renderIssues() {
         clear(el.issues);
-        const issues = store.analysis?.issues ?? [];
+        const ctx = contextOf(store);
+        const ctxKey = `${ctx.kind}:${ctx.id ?? ''}`;
+        if (ctxKey !== lastCtxKey) showAllIssues = false;
+        lastCtxKey = ctxKey;
+        setTitle('#card-issues > summary', 'Revisión', ctx);
+        const every = store.analysis?.issues ?? [];
+        const issues = showAllIssues || ctx.kind === 'general' ? every : every.filter((i) => issueMatches(i, ctx, store));
+        const hidden = every.filter((i) => i.severity !== 'info').length - issues.filter((i) => i.severity !== 'info').length;
+        const more = () => (hidden > 0 ? h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: () => { showAllIssues = true; renderIssues(); } }, `Ver ${hidden} más del proyecto`) : null);
         const errors = issues.filter((i) => i.severity === 'error').length;
         el.badge.textContent = String(issues.filter((i) => i.severity !== 'info').length);
         el.badge.classList.toggle('has-error', errors > 0);
         if (!issues.length) {
-            add(el.issues, h('p', { class: 'empty-note' }, store.analysis ? 'Sin observaciones: el modelo cumple los controles de predimensionado.' : 'Calculando…'));
+            add(el.issues, h('p', { class: 'empty-note' }, store.analysis ? 'Nada para corregir.' : 'Calculando…'), more());
             return;
         }
         const ico = { error: '✕', warn: '!', info: 'i' };
@@ -400,14 +557,13 @@ export function mountPanels(app) {
         if (!main.length) add(el.issues, h('p', { class: 'empty-note' }, 'Nada para corregir.'));
         for (const i of main) add(el.issues, item(i));
         if (notes.length) add(el.issues, h('details', { class: 'more' }, h('summary', {}, `${notes.length} nota${notes.length > 1 ? 's' : ''} técnica${notes.length > 1 ? 's' : ''}`), notes.map(item)));
+        add(el.issues, more());
     }
 
     // ------------------------------------------------------------------ asoleamiento (se construye una sola vez)
     const solarUi = {};
     function buildSolar() {
         const sol = store.ui.solar;
-        solarUi.rose = h('div', { class: 'rose', role: 'group', 'aria-label': 'Hacia dónde apunta el norte en el plano' },
-            COMPASS.map((c) => (c ? h('button', { type: 'button', dataset: { deg: c[1] }, title: `El norte apunta hacia ${c[0]} en el plano`, onclick: () => { store.patchProject({ north: c[1] }); syncSolar(); } }, c[0]) : h('button', { type: 'button', class: 'center', tabindex: '-1', 'aria-hidden': 'true' }, '☀'))));
         solarUi.season = sel(sol.season, SEASONS, (v) => { store.setUi({ solar: { season: v } }); store.ensureSolar(); });
         solarUi.lat = h('input', { type: 'number', min: -66, max: 66, step: 0.1, value: store.project.lat, 'aria-label': 'Latitud', onchange: (e) => { const v = Math.max(-66, Math.min(66, Number(e.target.value) || 0)); store.patchProject({ lat: v }); store.ensureSolar(); syncSolar(); } });
         solarUi.city = sel('', [['', 'Ciudad…'], ...CITIES.map(([n, l]) => [l, n])], (v) => { if (v === '') return; store.patchProject({ lat: Number(v) }); store.ensureSolar(); syncSolar(); });
@@ -416,17 +572,12 @@ export function mountPanels(app) {
         solarUi.play = h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: togglePlay }, '▶');
         solarUi.show = h('input', { type: 'checkbox', checked: sol.show, onchange: (e) => { store.setUi({ solar: { show: e.target.checked } }); } });
         solarUi.info = h('p', { class: 'small muted' });
-        solarUi.suggestBtn = h('button', { type: 'button', class: 'btn btn-primary', onclick: runSuggest }, 'Sugerir aberturas');
-        solarUi.suggestions = h('div', { class: 'suggest' });
-        add(el.solar, 
-            h('div', { class: 'kv-title' }, 'Orientación del norte'), solarUi.rose,
+        add(el.solar,
             h('div', { class: 'solar-row' }, h('label', { class: 'field-inline' }, 'Época', solarUi.season)),
             h('div', { class: 'solar-row' }, h('label', { class: 'field-inline' }, 'Latitud', solarUi.lat), solarUi.city),
             h('div', { class: 'solar-row' }, solarUi.play, solarUi.hour, solarUi.out),
             h('div', { class: 'solar-row' }, h('label', { class: 'field-inline' }, solarUi.show, 'Mostrar sombras y sol')),
             solarUi.info,
-            solarUi.suggestBtn,
-            solarUi.suggestions,
         );
         syncSolar();
     }
@@ -451,7 +602,6 @@ export function mountPanels(app) {
 
     function syncSolar() {
         const sol = store.ui.solar;
-        for (const b of solarUi.rose.querySelectorAll('button[data-deg]')) b.setAttribute('aria-pressed', String(Number(b.dataset.deg) === store.project.north));
         const hh = Math.floor(sol.hour);
         const mm = String(Math.round((sol.hour - hh) * 60)).padStart(2, '0');
         solarUi.out.textContent = `${String(hh).padStart(2, '0')}:${mm}`;
@@ -461,37 +611,37 @@ export function mountPanels(app) {
     }
     app.syncSolar = syncSolar;
 
-    async function runSuggest() {
-        solarUi.suggestBtn.disabled = true;
-        clear(solarUi.suggestions);
+    /** Sugerencias de ventanas según el sol (se muestran en el Resumen de ventanas). */
+    async function runSuggest(box) {
+        if (!box) return;
+        clear(box);
+        add(box, h('p', { class: 'empty-note' }, 'Calculando…'));
         try {
             const { suggestions } = await suggest(store.project);
-            renderSuggestions(suggestions);
+            renderSuggestions(box, suggestions);
         } catch (e) {
-            add(solarUi.suggestions, h('p', { class: 'empty-note' }, `No se pudo calcular: ${e.message}`));
-        } finally {
-            solarUi.suggestBtn.disabled = false;
+            clear(box);
+            add(box, h('p', { class: 'empty-note' }, `No se pudo calcular: ${e.message}`));
         }
     }
 
-    function renderSuggestions(list) {
-        clear(solarUi.suggestions);
+    function renderSuggestions(box, list) {
+        clear(box);
         if (!list.length) {
-            add(solarUi.suggestions, h('p', { class: 'empty-note' }, 'No hay sugerencias: dibujá ambientes cerrados con muros exteriores primero.'));
+            add(box, h('p', { class: 'empty-note' }, 'Sin sugerencias: primero cerrá habitaciones con muros exteriores.'));
             return;
         }
-        const applicable = list.filter((s) => s.apply);
+        const applicable = list.filter((x) => x.apply);
         const checks = new Map();
         const typeLabel = { solar: 'Sol de invierno', cross: 'Ventilación cruzada', shade: 'Protección solar', info: 'Aviso' };
-        for (const s of list) {
-            const cb = s.apply ? h('input', { type: 'checkbox', checked: true, 'aria-label': 'Aplicar sugerencia' }) : null;
-            if (cb) checks.set(s.id, cb);
-            add(solarUi.suggestions, h('label', { class: 'suggest-item', style: 'flex-direction:row;font-weight:500' }, cb, h('span', {}, h('span', { class: 'tag' }, `${s.level === 1 ? 'PA · ' : ''}${typeLabel[s.type] ?? s.type}`), s.reason, s.apply ? ` (${cm(s.w * G)} cm)` : '')));
+        for (const x of list) {
+            const cb = x.apply ? h('input', { type: 'checkbox', checked: true, 'aria-label': 'Aplicar sugerencia' }) : null;
+            if (cb) checks.set(x.id, cb);
+            add(box, h('label', { class: 'suggest-item', style: 'flex-direction:row;font-weight:500' }, cb, h('span', {}, h('span', { class: 'tag' }, `${x.level === 1 ? 'Nivel 2 · ' : ''}${typeLabel[x.type] ?? x.type}`), x.reason, x.apply ? ` (${cm(x.w * G)} cm)` : '')));
         }
         if (applicable.length) {
-            add(solarUi.suggestions, h('div', { class: 'actions-row' },
-                h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: () => applySuggestions(applicable.filter((s) => checks.get(s.id)?.checked)) }, 'Aplicar seleccionadas'),
-                h('span', { class: 'small muted' }, 'Las jambas y apoyos de dintel U quedan a ≥ 25 cm.')));
+            add(box, h('div', { class: 'actions-row' },
+                h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: () => applySuggestions(applicable.filter((x) => checks.get(x.id)?.checked)) }, 'Aplicar seleccionadas')));
         }
     }
 
@@ -503,8 +653,7 @@ export function mountPanels(app) {
                 d.levels[s.level].openings.push({ id: nextId(d, 'o'), wall: s.wall, pos: s.pos, w: s.w, sill: p.sill, h: p.h, kind: 'window', preset: s.preset, flip: false });
             }
         });
-        clear(solarUi.suggestions);
-        add(solarUi.suggestions, h('p', { class: 'small' }, `${items.length} ventana(s) aplicada(s). Podés deshacer con Ctrl+Z.`));
+        app.toast(`${items.length} ventana(s) agregada(s). Ctrl+Z deshace.`);
     }
 
     buildSolar();
@@ -517,12 +666,15 @@ export function mountPanels(app) {
         },
         renderProps,
         syncSolar,
-        /** Abre «Sol y orientación» y pide sugerencias de ventanas. */
+        /** Pide sugerencias de ventanas en el Resumen (contexto Ventanas). */
         openSuggest() {
-            const card = document.getElementById('card-solar');
-            card.open = true;
-            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            runSuggest();
+            renderTelemetry();
+            runSuggest(el.sugBox);
+        },
+        /** Resumen y Revisión según la herramienta o el elemento elegido. */
+        renderContext() {
+            renderTelemetry();
+            renderIssues();
         },
         openIssues() {
             const card = document.getElementById('card-issues');

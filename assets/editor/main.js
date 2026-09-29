@@ -63,7 +63,7 @@ const guide = mountGuide(app, {
         setTool(tool);
         canvas.focus({ preventScroll: true });
     },
-    suggest: () => panels.openSuggest(),
+    suggest: () => { setTool('window'); panels.openSuggest(); },
     issues: () => panels.openIssues(),
     addLevel: () => addLevel(),
 });
@@ -619,11 +619,24 @@ store.addEventListener('change', () => {
     if (store.ui.tool !== 'select' || store.ui.level === ROOF_LEVEL) refreshOptions();
     app.render();
 });
-store.addEventListener('ui', () => {
+let contextKey = '';
+store.addEventListener('ui', (e) => {
+    // La hora y la época del sol sólo cambian el dibujo: no se redibujan los paneles (cortaría el arrastre del deslizador).
+    const keys = Object.keys(e.detail ?? {});
+    if (keys.length && keys.every((k) => k === 'solar')) {
+        app.render();
+        return;
+    }
     renderLevels();
     renderViewPick();
     guide.render();
     panels.renderProps();
+    // El Resumen y la Revisión cambian con la herramienta o lo elegido (no con cada cambio de la hora del sol).
+    const k = `${store.ui.tool}|${JSON.stringify(store.ui.selection)}|${store.ui.level}`;
+    if (k !== contextKey) {
+        contextKey = k;
+        panels.renderContext();
+    }
     updateHistoryButtons();
     renderToolbar();
     app.render();
