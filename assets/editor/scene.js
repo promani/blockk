@@ -234,18 +234,116 @@ export function visibleFaces(rot) {
 }
 
 /**
- * Orden de pintado: primero lo más bajo, luego lo más lejano de la cámara (menor x'+y' tras girar).
- * Para cajas alineadas a una retícula esto reproduce la oclusión correcta de un modelo de muros.
+ * Orden de pintado: primero lo más bajo (por capas de igual cota) y, dentro de cada capa, lo que está detrás antes que lo que
+ * está delante. «Detrás» se decide pieza contra pieza (orden topológico): ordenar sólo por la esquina mínima falla cuando una
+ * pieza larga toca a una corta en una esquina, y la de atrás tapaba a la de adelante (faltaba una cara en las esquinas).
  */
 export function sortedItems(scene, boxes, rot, cacheKey) {
     const key = `${cacheKey}:${rot}`;
     if (scene.sorted.has(key)) return scene.sorted.get(key);
-    const items = boxes.map((b) => {
+    const all = boxes.map((b) => {
         const [x0, x1, y0, y1] = rotatedBounds(b, rot);
         return { b, x0, x1, y0, y1 };
     });
-    items.sort((p, q) => (p.b.zs !== q.b.zs ? p.b.zs - q.b.zs : p.x0 + p.y0 - (q.x0 + q.y0) || p.x0 - q.x0));
+    all.sort((p, q) => p.b.zs - q.b.zs || p.x0 + p.y0 - (q.x0 + q.y0) || p.x0 - q.x0);
+    const items = [];
+    for (let i = 0; i < all.length;) {
+        let j = i + 1;
+        while (j < all.length && Math.abs(all[j].b.zs - all[i].b.zs) < 0.01) j++;
+        for (const it of layerOrder(all.slice(i, j))) items.push(it);
+        i = j;
+    }
     scene.sorted.set(key, items);
     return items;
+}
+
+const EPS = 0.01;
+/** ¿P queda detrás de Q (la cámara mira desde +x' +y')? Sólo para cajas de una misma capa que no se superponen. */
+function behind(P, Q) {
+    const ox = P.x0 < Q.x1 - EPS && Q.x0 < P.x1 - EPS;
+    const oy = P.y0 < Q.y1 - EPS && Q.y0 < P.y1 - EPS;
+    if (P.x1 <= Q.x0 + EPS && (oy || P.y1 <= Q.y0 + EPS)) return true;
+    return P.y1 <= Q.y0 + EPS && (ox || P.x1 <= Q.x0 + EPS);
+}
+
+/** Orden topológico de una capa (vecinos por grilla), desempatando por la esquina mínima. */
+function layerOrder(items) {
+    const n = items.length;
+    if (n < 2) return items;
+    let tall = 0;
+    for (const it of items) tall = Math.max(tall, it.b.z1 - it.b.z0);
+    const margin = 2 * tall + 20; // sólo se pueden tapar en pantalla cajas cercanas
+    const cell = Math.max(100, margin);
+    const grid = new Map();
+    const cellsOf = (it, m) => {
+        const out = [];
+        for (let gx = Math.floor((it.x0 - m) / cell); gx <= Math.floor((it.x1 + m) / cell); gx++) {
+            for (let gy = Math.floor((it.y0 - m) / cell); gy <= Math.floor((it.y1 + m) / cell); gy++) out.push(`${gx},${gy}`);
+        }
+        return out;
+    };
+    items.forEach((it, idx) => {
+        for (const c of cellsOf(it, 0)) {
+            const list = grid.get(c);
+            if (list) list.push(idx);
+            else grid.set(c, [idx]);
+        }
+    });
+    const indeg = new Int32Array(n);
+    const next = Array.from({ length: n }, () => []);
+    const seen = new Int32Array(n).fill(-1);
+    for (let p = 0; p < n; p++) {
+        const P = items[p];
+        for (const c of cellsOf(P, margin)) {
+            for (const q of grid.get(c) ?? []) {
+                if (q <= p || seen[q] === p) continue;
+                seen[q] = p;
+                const Q = items[q];
+                if (behind(P, Q)) { next[p].push(q); indeg[q]++; } else if (behind(Q, P)) { next[q].push(p); indeg[p]++; }
+            }
+        }
+    }
+    // Kahn con montículo: entre las cajas libres sale primero la de menor esquina (orden anterior = índice).
+    const heap = [];
+    const push = (v) => {
+        heap.push(v);
+        let i = heap.length - 1;
+        while (i > 0) {
+            const up = (i - 1) >> 1;
+            if (heap[up] <= heap[i]) break;
+            [heap[up], heap[i]] = [heap[i], heap[up]];
+            i = up;
+        }
+    };
+    const pop = () => {
+        const top = heap[0];
+        const last = heap.pop();
+        if (heap.length) {
+            heap[0] = last;
+            let i = 0;
+            for (;;) {
+                const l = 2 * i + 1;
+                const r = l + 1;
+                let m = i;
+                if (l < heap.length && heap[l] < heap[m]) m = l;
+                if (r < heap.length && heap[r] < heap[m]) m = r;
+                if (m === i) break;
+                [heap[m], heap[i]] = [heap[i], heap[m]];
+                i = m;
+            }
+        }
+        return top;
+    };
+    for (let i = 0; i < n; i++) if (!indeg[i]) push(i);
+    const out = [];
+    const done = new Uint8Array(n);
+    while (heap.length) {
+        const v = pop();
+        done[v] = 1;
+        out.push(items[v]);
+        for (const w of next[v]) if (--indeg[w] === 0) push(w);
+    }
+    if (out.length < n) for (let i = 0; i < n; i++) if (!done[i]) out.push(items[i]); // ciclo (no debería ocurrir)
+    return out;
 }
 

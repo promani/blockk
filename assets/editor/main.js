@@ -48,7 +48,7 @@ const app = {
     persistUi: () => persistUi(),
     toast,
     focusIssue,
-    setHint: (t) => { $('#hint-info').textContent = t; },
+    setHint: () => {}, // la ayuda de la herramienta ya está en la barra de opciones
 };
 window.blockk = app; // útil para depurar y para pruebas end-to-end
 app.renderer = renderer;
@@ -415,37 +415,29 @@ function rotate(steps) {
 }
 
 /**
- * Selector de vistas: la planta de la casa vista desde arriba (con el norte del proyecto) y un botón en cada esquina.
- * Cada botón es una de las 4 vistas isométricas posibles: se mira la casa desde esa esquina.
+ * Selector de vistas: un cuadrado dividido en 4; cada cuarto es una de las 4 vistas isométricas (se mira la casa desde esa
+ * esquina, en la dirección de la flecha). El ojo del centro sólo indica que es el selector de vista.
  */
 const VIEW_CORNERS = [[1, 1], [1, -1], [-1, -1], [-1, 1]]; // giro 0..3: esquina desde la que mira la cámara (x, y en planta)
 const CORNER_NAMES = ['abajo a la derecha', 'arriba a la derecha', 'arriba a la izquierda', 'abajo a la izquierda'];
+const ARROW = (cx, cy) => {
+    // flecha diagonal que apunta al centro de la casa desde la esquina
+    const deg = (Math.atan2(-cy, -cx) * 180) / Math.PI;
+    return `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" style="transform:rotate(${deg}deg)"><path d="M4 12h15M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+};
 function renderViewPick() {
     const el = $('#viewpick');
     if (!el) return;
     clear(el);
-    const size = 92;
-    const c = size / 2;
-    const half = 14;
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
-    svg.setAttribute('width', size);
-    svg.setAttribute('height', size);
-    svg.setAttribute('aria-hidden', 'true');
-    const house = document.createElementNS(svgNS, 'rect');
-    for (const [k, v] of Object.entries({ x: c - half, y: c - half, width: 2 * half, height: 2 * half, rx: 2, class: 'vp-house' })) house.setAttribute(k, v);
-    svg.append(house);
-    el.append(svg);
-    VIEW_CORNERS.forEach(([cx, cy], rot) => {
+    // orden de la grilla 2×2: arriba-izq, arriba-der, abajo-izq, abajo-der
+    for (const rot of [2, 1, 3, 0]) {
+        const [cx, cy] = VIEW_CORNERS[rot];
         const active = cam.view !== 'plan' && cam.rot === rot;
-        const name = CORNER_NAMES[rot];
         const btn = h('button', {
             type: 'button',
-            class: `vp-eye${active ? ' on' : ''}`,
-            style: `left:${c + cx * 29 - 14}px;top:${c + cy * 29 - 14}px`,
-            title: `Mirar la casa desde la esquina ${name}`,
-            'aria-label': `Vista isométrica desde la esquina ${name}`,
+            class: `vp-q${active ? ' on' : ''}`,
+            title: `Mirar la casa desde la esquina ${CORNER_NAMES[rot]}`,
+            'aria-label': `Vista isométrica desde la esquina ${CORNER_NAMES[rot]}`,
             'aria-pressed': String(active),
             onclick: () => {
                 if (cam.view === 'plan') setView('iso');
@@ -454,10 +446,12 @@ function renderViewPick() {
                 app.render();
             },
         });
-        // ojo que mira hacia la casa
-        btn.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="transform:rotate(${Math.atan2(-cy, -cx)}rad)"><path d="M3 12c3-5 15-5 18 0-3 5-15 5-18 0z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="14" cy="12" r="3" fill="currentColor"/></svg>`);
+        btn.insertAdjacentHTML('afterbegin', ARROW(cx, cy));
         el.append(btn);
-    });
+    }
+    const eye = h('span', { class: 'vp-eye', 'aria-hidden': 'true' });
+    eye.insertAdjacentHTML('afterbegin', '<svg viewBox="0 0 24 24" width="16" height="16"><path d="M2 12c3-5.5 17-5.5 20 0-3 5.5-17 5.5-20 0z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></svg>');
+    el.append(eye);
 }
 
 function zoomBy(f) {

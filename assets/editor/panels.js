@@ -41,7 +41,7 @@ export function mountPanels(app) {
                         h('dt', {}, 'Cabios'), h('dd', {}, int(roofBom.raftersCount)),
                         h('dt', {}, 'Cumbrera / correas'), h('dd', {}, `${fmt(roofBom.ridgeMl, 1)} m / ${fmt(roofBom.battenMl, 0)} m`),
                         h('dt', {}, 'Hastiales de bloque'), h('dd', { title: 'Sus bloques están sumados en «Bloques a comprar».' }, m2(roofBom.gableMasonryM2)))
-                    : h('p', { class: 'empty-note' }, 'Todavía no hay techos. Arrastrá un rectángulo sobre los muros (herramienta Techo).'))
+                    : h('p', { class: 'empty-note' }, 'Sin techos.'))
             : null;
         const full = tot.heightM >= tot.maxHeightM;
         const kpi = (label, value, title) => h('div', { class: 'kpi-mini', title }, h('b', {}, value), h('span', {}, label));
@@ -68,8 +68,7 @@ export function mountPanels(app) {
                     h('dt', {}, 'Altura autoportante'), h('dd', {}, `${fmt(tot.heightM, 2)} / ${fmt(tot.maxHeightM, 2)} m`),
                     h('dt', {}, 'Mortero adhesivo'), h('dd', {}, `${int(tot.adhesiveBags)} bolsas`),
                     h('dt', {}, 'Descarte de material'), h('dd', { title: 'Objetivo del sistema: < 4 %' }, pct(tot.scrapPct)),
-                    h('dt', {}, 'Bloques con corte'), h('dd', {}, pct(tot.cutBlocksPct))),
-                h('p', { class: 'small muted' }, 'Precios de ejemplo: se editan en Cómputo.')),
+                    h('dt', {}, 'Bloques con corte'), h('dd', {}, pct(tot.cutBlocksPct)))),
         );
     }
 
@@ -152,6 +151,9 @@ export function mountPanels(app) {
 
     function renderProps() {
         clear(el.props);
+        // Título del panel: lo elegido o, si no hay nada, las configuraciones generales del proyecto.
+        const title = document.querySelector('#card-props > summary');
+        if (title) title.textContent = store.ui.selection ? 'Selección' : store.ui.level === 2 ? 'Techos' : 'Configuraciones generales';
         if (store.ui.level === 2) {
             renderRoofProps();
             return;
@@ -192,7 +194,6 @@ export function mountPanels(app) {
                     return rooms.length ? h('div', { class: 'actions-row' }, rooms.map((r) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'room', id: r.id } }) }, h('span', { class: 'swatch', style: `background:${roomColor(r)}` }), `Elegir ${r.name}`))) : null;
                 })(),
                 h('div', { class: 'kv-title' }, 'Agrandar / achicar la habitación'),
-                h('p', { class: 'small muted' }, 'También podés arrastrar la manija azul del muro. Los muros que llegan a él se estiran solos.'),
                 h('div', { class: 'nudge', role: 'group', 'aria-label': 'Mover el muro' }, moveButtons(w)),
                 ops.length ? h('div', {}, h('div', { class: 'kv-title' }, 'Vanos'), ops.map((o) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', style: 'margin:2px', onclick: () => store.setUi({ selection: { type: 'opening', id: o.id, wall: w.id } }) }, cfg.presets[o.preset]?.label ?? `${o.kind === 'door' ? 'Puerta' : 'Ventana'} ${cm(o.w * G)} cm`))) : null,
                 beams.length ? h('div', {}, h('div', { class: 'kv-title' }, 'Vigas U'), beams.map((u) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', style: 'margin:2px', onclick: () => store.setUi({ selection: { type: 'ubeam', id: u.id, wall: w.id } }) }, `Hilada ${u.course + 1} · ${cm(u.len * G)} cm`))) : null,
@@ -230,7 +231,6 @@ export function mountPanels(app) {
                 field('Hilada', sel(u.course, Array.from({ length: cfg.crownCourse }, (_, i) => [i, `${i + 1}`]), (v) => upd((x) => { x.course = Number(v); }))),
                 field('Posición (× 12,5 cm)', num(u.pos, 0, Math.max(0, (wall ? wallLen(wall) : 40) - u.len), (v) => upd((x) => { x.pos = v; }))),
                 field('Largo (× 12,5 cm)', num(u.len, 1, 200, (v) => upd((x) => { x.len = v; }))),
-                h('p', { class: 'small muted' }, 'Se rellena con hormigón y armadura in situ.'),
                 h('div', { class: 'actions-row' }, delBtn),
             );
             return;
@@ -246,7 +246,6 @@ export function mountPanels(app) {
                     h('dt', {}, 'Superficie a ejes'), h('dd', {}, m2(room.grossM2)),
                     h('dt', {}, 'Perímetro'), h('dd', {}, `${fmt(room.perimeterM, 2)} m`),
                     h('dt', {}, 'Medidas'), h('dd', {}, `${fmt((room.bbox.w * G) / 100, 2)} × ${fmt((room.bbox.h * G) / 100, 2)} m${room.rect ? '' : ' (en L / irregular)'}`)),
-                h('p', { class: 'small muted' }, 'Arrastrá las esquinas azules para agrandar o achicar la habitación: se corren los dos muros de la esquina y los que llegan a ellos se estiran. Al acercarte a un muro de abajo o a otra pared, se alinea sola.'),
                 (() => {
                     const sug = roomSuggestions(room);
                     return sug.length
@@ -278,7 +277,6 @@ export function mountPanels(app) {
                     h('dt', {}, 'Largo de cabio'), h('dd', {}, `${fmt(part.geometry.rafterLenCm / 100, 2)} m`),
                     h('dt', {}, 'Cabios'), h('dd', {}, `${int(part.bom.raftersCount)} de ${fmt(part.bom.raftersCommercialCm / 100, 2)} m`),
                     h('dt', {}, 'Bloques de hastiales'), h('dd', {}, int(part.geometry.gables.reduce((a, g) => a + g.blocks, 0)))) : null,
-                h('p', { class: 'small muted' }, 'Tipo, pendiente, alero y cabios se cambian en la barra de arriba. Arrastrá las esquinas azules para cambiar el tamaño; clic en un hastial para editarlo.'),
                 h('div', { class: 'actions-row' }, delBtn));
             return;
         }
@@ -293,7 +291,6 @@ export function mountPanels(app) {
                 h('div', { class: 'kv-title' }, side === 'H' ? 'Muro alto del techo' : `Hastial ${side} del techo ${rid}`),
                 field('Espesor', sel(r.gableT, [10, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.gableT = Number(v); }))),
                 h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2(gb.areaM2)), h('dt', {}, 'Hiladas'), h('dd', {}, int(gb.courses?.length ?? 0)), h('dt', {}, 'Piezas'), h('dd', {}, `${int(gb.fullBlocks)} enteras + ${int(gb.cutPieces)} cortadas`)),
-                h('p', { class: 'small muted' }, 'Bloques de 62,5 × 25 cm con traba de medio bloque; los extremos se cortan siguiendo la pendiente. Están sumados en «Bloques a comprar».'),
                 h('div', { class: 'actions-row' },
                     side === 'H' ? null : h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: deleteSelection }, 'Quitar hastial (Supr)'),
                     h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'roof', id: rid } }) }, 'Ver techo')));
@@ -313,7 +310,6 @@ export function mountPanels(app) {
                 field('Posición X (× 12,5 cm)', num(sl.x, 0, 1000, (v) => upd((x) => { x.x = v; }))),
                 field('Posición Y (× 12,5 cm)', num(sl.y, 0, 1000, (v) => upd((x) => { x.y = v; }))),
                 plan ? h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2(plan.areaM2)), h('dt', {}, 'Hormigón'), h('dd', {}, `${fmt((plan.areaM2 * sl.thickness) / 100, 2)} m³`)) : null,
-                h('p', { class: 'small muted' }, 'La losa apoya sobre los muros de la Planta Baja; el hueco de las escaleras se descuenta solo.'),
                 h('div', { class: 'actions-row' }, delBtn),
             );
             return;
@@ -362,13 +358,11 @@ export function mountPanels(app) {
         }
 
         add(el.props, 
-            h('p', { class: 'empty-note' }, 'Nada elegido. Con «Elegir» hacé clic en un muro, una puerta o el piso de una habitación para verlo y cambiarlo.'),
             h('div', { class: 'kv-title' }, 'Terreno'),
             h('div', { class: 'lot-row' },
                 h('label', {}, 'Ancho (m)', num(store.project.lot.w, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, w: v }; }))),
                 h('label', {}, 'Fondo (m)', num(store.project.lot.d, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, d: v }; })))),
             field('El norte queda hacia', sel(store.project.north, [[0, '↑ arriba del plano'], [45, '↗ arriba a la derecha'], [90, '→ la derecha'], [135, '↘ abajo a la derecha'], [180, '↓ abajo'], [225, '↙ abajo a la izquierda'], [270, '← la izquierda'], [315, '↖ arriba a la izquierda']], (v) => { store.patchProject({ north: Number(v) }); app.syncSolar?.(); })),
-            h('p', { class: 'small muted' }, 'El terreno y la casa siempre se dibujan igual; el norte sólo indica de dónde viene el sol.'),
             h('div', { class: 'kv-title' }, 'Ajustes del proyecto'),
             field('Espesor por defecto', sel(store.ui.thickness, cfg.thicknesses.map((t) => [t, `${cm(t)} cm`]), (v) => { store.setUi({ thickness: Number(v) }); store.patchProject({ settings: { ...store.project.settings, defaultT: Number(v) } }); })),
             field('Reserva por rotura (%)', num(store.project.settings?.reservePct ?? 3, 0, 30, (v) => { store.patchProject({ settings: { ...store.project.settings, reservePct: v } }); store.refresh(); })),
@@ -384,8 +378,7 @@ export function mountPanels(app) {
                     h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'roof', id: r.id } }) }, `${r.id} · ${r.type === 'gable' ? '2 aguas' : '1 agua'} · ${fmt((r.w * G) / 100, 1)}×${fmt((r.h * G) / 100, 1)} m · Nivel ${r.level + 1}`),
                     h('button', { class: 'btn btn-danger btn-sm', type: 'button', title: `Quitar el techo ${r.id}`, 'aria-label': `Quitar el techo ${r.id}`, onclick: () => store.commit('Quitar techo', (d) => { d.roofs = d.roofs.filter((x) => x.id !== r.id); }) }, '✕'))),
                     roofs.length > 1 ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.commit('Quitar todos los techos', (d) => { d.roofs = []; }) }, 'Quitar todos') : null)
-                : h('p', { class: 'empty-note' }, 'Sin techos. Con la herramienta Techo (H) arrastrá un rectángulo sobre los muros, o hacé clic dentro de una habitación.'),
-            h('p', { class: 'small muted' }, 'Cada techo es un rectángulo independiente: podés cubrir la planta alta y, aparte, la parte baja de la planta baja. Los precios de cubierta, cabios y correas se editan en Cómputo.'));
+                : h('p', { class: 'empty-note' }, 'Sin techos.'));
     }
 
     // ------------------------------------------------------------------ validación
