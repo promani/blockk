@@ -88,6 +88,8 @@ final class ProjectFactory
                 $this->coord($w['x2'] ?? null, "$path.walls[$i].x2"),
                 $this->coord($w['y2'] ?? null, "$path.walls[$i].y2"),
                 $t,
+                $this->intInRange($w['h'] ?? Hcca::COURSES, 1, Hcca::MAX_WALL_COURSES, "$path.walls[$i].h"),
+                isset($w['crown']) ? (bool) $w['crown'] : null,
             );
             if (!$wall->isValid()) {
                 $this->errors[] = "$path.walls[$i]: el muro debe ser recto, ortogonal y con longitud > 0";

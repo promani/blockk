@@ -75,7 +75,8 @@ export function mountPanels(app) {
 
     // ------------------------------------------------------------------ propiedades
     const field = (labelText, control) => h('div', { class: 'proprow' }, h('label', {}, labelText, control));
-    const num = (value, min, max, onChange, step = 1) => h('input', { type: 'number', value, min, max, step, onchange: (e) => { const v = Number(e.target.value); if (Number.isFinite(v)) onChange(Math.min(max, Math.max(min, v))); } });
+    // El cambio se aplica después del evento: el panel se redibuja y el campo con foco no se borra en medio de su propio «change».
+    const num = (value, min, max, onChange, step = 1) => h('input', { type: 'number', value, min, max, step, onchange: (e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v !== Number(value)) setTimeout(() => onChange(Math.min(max, Math.max(min, v)))); } });
     const sel = (value, items, onChange) => h('select', { onchange: (e) => onChange(e.target.value) }, items.map(([v, text]) => h('option', { value: v, selected: String(v) === String(value) }, text)));
     const modify = (label, fn) => store.commit(label, (d) => fn(d.levels[store.ui.level], d));
 
@@ -170,6 +171,17 @@ export function mountPanels(app) {
                 h('div', { class: 'kv-title' }, bearing ? 'Muro portante' : 'Tabique no portante'),
                 h('dl', { class: 'dl' }, h('dt', {}, 'Longitud'), h('dd', {}, `${fmt(len / 100)} m`), h('dt', {}, 'Bloques a lo largo'), h('dd', {}, fmt(len / 62.5, 2)), h('dt', {}, 'Eje'), h('dd', {}, w.y1 === w.y2 ? 'horizontal' : 'vertical')),
                 field('Espesor', sel(w.t, cfg.thicknesses.map((t) => [t, `${cm(t)} cm`]), (v) => modify('Cambiar espesor', (l) => { l.walls.find((x) => x.id === w.id).t = Number(v); }))),
+                (() => {
+                    // Alto en hiladas de 25 cm: más bajo que el nivel (medianeras, parapetos) o, sin nada arriba, hasta 4,00 m.
+                    const maxH = store.ui.level === 0 && !store.project.upper ? 16 : 12;
+                    const hNow = w.h ?? 12;
+                    const opts = [];
+                    for (let n = maxH; n >= 2; n--) opts.push([n, `${fmt((n * 25) / 100)} m${n === 12 ? ' (nivel completo)' : ''} · ${n} hiladas`]);
+                    return field('Alto', sel(hNow, opts, (v) => modify('Cambiar alto', (l) => { l.walls.find((x) => x.id === w.id).h = Number(v); })));
+                })(),
+                h('div', { class: 'proprow' }, h('label', { title: 'Última hilada de bloques U rellenos con hormigón y hierro (encadenado). Sacala en paredes que son sólo mampostería.' },
+                    'Corona de bloques U (encadenado)',
+                    h('input', { type: 'checkbox', checked: w.crown ?? w.t >= cfg.loadBearingMin, onchange: (e) => modify('Corona U', (l) => { l.walls.find((x) => x.id === w.id).crown = e.target.checked; }) }))),
                 (() => {
                     // Habitaciones que forma este muro (para elegirlas y estirarlas desde las esquinas).
                     const horizontal = w.y1 === w.y2;
@@ -351,6 +363,12 @@ export function mountPanels(app) {
 
         add(el.props, 
             h('p', { class: 'empty-note' }, 'Nada elegido. Con «Elegir» hacé clic en un muro, una puerta o el piso de una habitación para verlo y cambiarlo.'),
+            h('div', { class: 'kv-title' }, 'Terreno'),
+            h('div', { class: 'lot-row' },
+                h('label', {}, 'Ancho (m)', num(store.project.lot.w, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, w: v }; }))),
+                h('label', {}, 'Fondo (m)', num(store.project.lot.d, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, d: v }; })))),
+            field('El norte queda hacia', sel(store.project.north, [[0, '↑ arriba del plano'], [45, '↗ arriba a la derecha'], [90, '→ la derecha'], [135, '↘ abajo a la derecha'], [180, '↓ abajo'], [225, '↙ abajo a la izquierda'], [270, '← la izquierda'], [315, '↖ arriba a la izquierda']], (v) => { store.patchProject({ north: Number(v) }); app.syncSolar?.(); })),
+            h('p', { class: 'small muted' }, 'El terreno y la casa siempre se dibujan igual; el norte sólo indica de dónde viene el sol.'),
             h('div', { class: 'kv-title' }, 'Ajustes del proyecto'),
             field('Espesor por defecto', sel(store.ui.thickness, cfg.thicknesses.map((t) => [t, `${cm(t)} cm`]), (v) => { store.setUi({ thickness: Number(v) }); store.patchProject({ settings: { ...store.project.settings, defaultT: Number(v) } }); })),
             field('Reserva por rotura (%)', num(store.project.settings?.reservePct ?? 3, 0, 30, (v) => { store.patchProject({ settings: { ...store.project.settings, reservePct: v } }); store.refresh(); })),

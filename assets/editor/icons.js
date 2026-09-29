@@ -3,6 +3,7 @@ const svg = (body) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 
 export const ICONS = {
     select: svg('<path d="M5 3l14 8-6 2-2 6z"/>'),
+    move: svg('<path d="M12 3v18M3 12h18"/><path d="M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>'),
     room: svg('<rect x="4" y="5" width="16" height="14" rx="1"/><path d="M4 9h4M16 15h4M8 5v4M16 15v4" stroke-width="1.4"/>'),
     wall: svg('<path d="M4 18L20 6"/><rect x="2.5" y="16.5" width="3" height="3"/><rect x="18.5" y="4.5" width="3" height="3"/>'),
     block: svg('<path d="M4 9l8-4 8 4v7l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v7"/>'),

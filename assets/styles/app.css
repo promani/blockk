@@ -291,3 +291,6 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 .vp-eye { position: absolute; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel); font: 700 10px system-ui, sans-serif; color: var(--graphite-700); cursor: pointer; padding: 0; }
 .vp-eye:hover { background: var(--green-100); }
 .vp-eye.on { background: var(--graphite); color: var(--green); border-color: var(--graphite); }
+.lot-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
+.lot-row input { width: 100%; }
+.vp-eye { display: grid; place-items: center; }

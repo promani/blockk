@@ -42,6 +42,8 @@ final class Hcca
     public const int REGULAR_COURSES = 11;
     public const int CROWN_COURSE = 11;
     public const int LEVEL_HEIGHT_CM = 300;
+    /** Un muro puede ser más bajo que el nivel (medianeras, parapetos) o, sin nada encima, llegar hasta 4,00 m (16 hiladas). */
+    public const int MAX_WALL_COURSES = 16;
 
     /** Límite estructural: mampostería autoportante de 2 niveles (PB + PA <= 6,00 m). */
     public const int MAX_LEVELS = 2;

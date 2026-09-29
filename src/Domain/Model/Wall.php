@@ -10,6 +10,8 @@ use App\Domain\Hcca;
  * Muro recto entre dos nodos de la retícula (unidades de 12,5 cm).
  * Invariante: x1 <= x2, y1 <= y2 y el muro tiene extensión en un solo eje.
  * El espesor $t está en ticks (0,5 mm): 15 cm = 300.
+ * $h: alto en hiladas de 25 cm (12 = 3,00 m, el nivel completo). $crown: si la última hilada es de bloque U (encadenado);
+ * null = automático (sí en muros portantes, no en tabiques).
  */
 final readonly class Wall
 {
@@ -20,13 +22,26 @@ final readonly class Wall
         public int $x2,
         public int $y2,
         public int $t,
+        public int $h = Hcca::COURSES,
+        public ?bool $crown = null,
     ) {
     }
 
-    /** Construye un muro normalizando el sentido (de menor a mayor coordenada). */
-    public static function between(string $id, int $xa, int $ya, int $xb, int $yb, int $t): self
+    public function hasCrown(): bool
     {
-        return new self($id, min($xa, $xb), min($ya, $yb), max($xa, $xb), max($ya, $yb), $t);
+        return $this->crown ?? $this->isLoadBearing();
+    }
+
+    /** ¿Tiene el mismo alto y la misma corona? (dos tramos colineales sólo se unen si coinciden). */
+    public function sameSection(self $o): bool
+    {
+        return $this->t === $o->t && $this->h === $o->h && $this->hasCrown() === $o->hasCrown();
+    }
+
+    /** Construye un muro normalizando el sentido (de menor a mayor coordenada). */
+    public static function between(string $id, int $xa, int $ya, int $xb, int $yb, int $t, int $h = Hcca::COURSES, ?bool $crown = null): self
+    {
+        return new self($id, min($xa, $xb), min($ya, $yb), max($xa, $xb), max($ya, $yb), $t, $h, $crown);
     }
 
     public function isValid(): bool
@@ -76,32 +91,34 @@ final readonly class Wall
 
     public function withId(string $id): self
     {
-        return new self($id, $this->x1, $this->y1, $this->x2, $this->y2, $this->t);
+        return new self($id, $this->x1, $this->y1, $this->x2, $this->y2, $this->t, $this->h, $this->crown);
     }
 
     /** Recorta/desplaza el muro al rango [startU, endU] sobre su propio eje. */
     public function withRange(int $startU, int $endU): self
     {
         return Axis::X === $this->axis()
-            ? new self($this->id, $startU, $this->y1, $endU, $this->y2, $this->t)
-            : new self($this->id, $this->x1, $startU, $this->x2, $endU, $this->t);
+            ? new self($this->id, $startU, $this->y1, $endU, $this->y2, $this->t, $this->h, $this->crown)
+            : new self($this->id, $this->x1, $startU, $this->x2, $endU, $this->t, $this->h, $this->crown);
     }
 
     public function withThickness(int $t): self
     {
-        return new self($this->id, $this->x1, $this->y1, $this->x2, $this->y2, $t);
+        return new self($this->id, $this->x1, $this->y1, $this->x2, $this->y2, $t, $this->h, $this->crown);
     }
 
-    /** @return array{id: string, x1: int, y1: int, x2: int, y2: int, t: float} */
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return [
+        return array_filter([
             'id' => $this->id,
             'x1' => $this->x1,
             'y1' => $this->y1,
             'x2' => $this->x2,
             'y2' => $this->y2,
             't' => Hcca::ticksToCm($this->t),
-        ];
+            'h' => $this->h,
+            'crown' => $this->crown,
+        ], static fn ($v): bool => null !== $v);
     }
 }

@@ -24,9 +24,9 @@ const UI_KEY = 'blockk.ui.v2';
 const ROOF_LEVEL = 2;
 /** Herramientas de cada pestaña: las principales con nombre y, bajo «Más», las de uso avanzado. */
 const TOOLSETS = {
-    0: { main: ['select', 'room', 'wall', 'door', 'window', 'stair'], more: ['block', 'ubeam'] },
-    1: { main: ['select', 'room', 'wall', 'door', 'window', 'piso'], more: ['block', 'ubeam', 'beam'] },
-    2: { main: ['select', 'roof'], more: [] },
+    0: { main: ['select', 'move', 'room', 'wall', 'door', 'window', 'stair'], more: ['block', 'ubeam'] },
+    1: { main: ['select', 'move', 'room', 'wall', 'door', 'window', 'piso'], more: ['block', 'ubeam', 'beam'] },
+    2: { main: ['select', 'move', 'roof'], more: [] },
 };
 let showMore = false;
 
@@ -240,6 +240,13 @@ document.addEventListener('keydown', (e) => {
         e.shiftKey ? store.redo() : store.undo();
         return;
     }
+    if (mod && e.key.toLowerCase() === 'a') {
+        // Ctrl+A: elegir toda la casa con la herramienta Mover
+        e.preventDefault();
+        setTool('move');
+        app.selectAll();
+        return;
+    }
     if (mod && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         store.redo();
@@ -297,7 +304,7 @@ function setTool(id) {
 /** Motivo por el que una herramienta no está disponible ahora (null si lo está). */
 function toolDisabled(tool) {
     if (tool.id === 'roof') return null;
-    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select') return 'En la pestaña Techo solo se dibujan y editan techos: volvé a un nivel para dibujar muros, losas o escaleras.';
+    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select' && tool.id !== 'move') return 'En la pestaña Techo solo se dibujan y editan techos: volvé a un nivel para dibujar muros, losas o escaleras.';
     return tool.disabled?.() ?? null;
 }
 
@@ -412,13 +419,7 @@ function rotate(steps) {
  * Cada botón es una de las 4 vistas isométricas posibles: se mira la casa desde esa esquina.
  */
 const VIEW_CORNERS = [[1, 1], [1, -1], [-1, -1], [-1, 1]]; // giro 0..3: esquina desde la que mira la cámara (x, y en planta)
-const COMPASS8 = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
-function cornerName([cx, cy]) {
-    // rumbo en planta (0 = arriba, horario) relativo al norte del proyecto
-    const bearing = (Math.atan2(cx, -cy) * 180) / Math.PI;
-    const rel = (((bearing - store.project.north) % 360) + 360) % 360;
-    return COMPASS8[Math.round(rel / 45) % 8];
-}
+const CORNER_NAMES = ['abajo a la derecha', 'arriba a la derecha', 'arriba a la izquierda', 'abajo a la izquierda'];
 function renderViewPick() {
     const el = $('#viewpick');
     if (!el) return;
@@ -435,22 +436,16 @@ function renderViewPick() {
     const house = document.createElementNS(svgNS, 'rect');
     for (const [k, v] of Object.entries({ x: c - half, y: c - half, width: 2 * half, height: 2 * half, rx: 2, class: 'vp-house' })) house.setAttribute(k, v);
     svg.append(house);
-    // norte del proyecto
-    const a = (store.project.north * Math.PI) / 180;
-    const n = document.createElementNS(svgNS, 'text');
-    for (const [k, v] of Object.entries({ x: c + Math.sin(a) * 9, y: c - Math.cos(a) * 9 + 4, class: 'vp-north', 'text-anchor': 'middle' })) n.setAttribute(k, v);
-    n.textContent = 'N';
-    svg.append(n);
     el.append(svg);
     VIEW_CORNERS.forEach(([cx, cy], rot) => {
         const active = cam.view !== 'plan' && cam.rot === rot;
-        const name = cornerName([cx, cy]);
+        const name = CORNER_NAMES[rot];
         const btn = h('button', {
             type: 'button',
             class: `vp-eye${active ? ' on' : ''}`,
             style: `left:${c + cx * 29 - 14}px;top:${c + cy * 29 - 14}px`,
-            title: `Vista isométrica desde el ${name}`,
-            'aria-label': `Vista isométrica desde el ${name}`,
+            title: `Mirar la casa desde la esquina ${name}`,
+            'aria-label': `Vista isométrica desde la esquina ${name}`,
             'aria-pressed': String(active),
             onclick: () => {
                 if (cam.view === 'plan') setView('iso');
@@ -458,7 +453,9 @@ function renderViewPick() {
                 renderViewPick();
                 app.render();
             },
-        }, name);
+        });
+        // ojo que mira hacia la casa
+        btn.insertAdjacentHTML('afterbegin', `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="transform:rotate(${Math.atan2(-cy, -cx)}rad)"><path d="M3 12c3-5 15-5 18 0-3 5-15 5-18 0z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="14" cy="12" r="3" fill="currentColor"/></svg>`);
         el.append(btn);
     });
 }
@@ -495,7 +492,7 @@ function selectionBox(sel) {
         const w = lv.walls.find((x) => x.id === sel.id);
         if (!w) return null;
         const [x0, y0, x1, y1] = wallRect(w);
-        return { x0, y0, x1, y1, z0: base, z1: base + config.levelHeight };
+        return { x0, y0, x1, y1, z0: base, z1: base + (w.h ?? config.courses) * config.blockH };
     }
     if (sel.type === 'opening') {
         const o = lv.openings.find((x) => x.id === sel.id);

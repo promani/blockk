@@ -45,10 +45,17 @@ final class CourseBuilder
             $beams[$u->wallId][] = $u;
         }
 
-        for ($c = 0; $c < Hcca::COURSES; ++$c) {
+        // Cada muro tiene su alto: en las hiladas donde algún muro ya terminó se usa la topología de los muros que siguen
+        // (una esquina con un muro más bajo pasa a ser un extremo libre, una T pasa a ser esquina, etc.).
+        $top = array_reduce($level->walls, static fn (int $m, $w): int => max($m, $w->h), 0);
+        $topologies = [];
+        for ($c = 0; $c < $top; ++$c) {
+            $active = array_values(array_filter($level->walls, static fn ($w): bool => $w->h > $c));
+            $key = count($active) === count($level->walls) ? '*' : implode(',', array_map(static fn ($w): string => $w->id, $active));
+            $topo = $topologies[$key] ??= ('*' === $key ? $topology : new Topology(new Level($active)));
             $runs = [];
             $joints = [];
-            foreach ($this->seeds($topology, $c) as $seed) {
+            foreach ($this->seeds($topo, $c) as $seed) {
                 $run = $this->fillRun($openings, $beams, $seed, $c, $previousJoints, $packer, $warnings);
                 $runs[] = $run;
                 foreach ($run->pieces as $i => $piece) {
@@ -166,8 +173,16 @@ final class CourseBuilder
                 }
             }
         }
-        if (Hcca::CROWN_COURSE === $course && $t >= Hcca::LOAD_BEARING_MIN_T) {
+        // Corona de bloques U en la última hilada de cada muro que la lleva.
+        $crowned = array_values(array_filter($walls, static fn (Wall $w): bool => $w->hasCrown() && $course === $w->h - 1));
+        if (count($crowned) === count($walls)) {
             $uSpans[] = [$a, $b, 'crown'];
+        } else {
+            foreach ($crowned as $w) {
+                $s0 = $w->startU() * Hcca::GRID;
+                $s1 = $w->endU() * Hcca::GRID;
+                $uSpans[] = [abs($s0 - $a) <= 400 ? $a : max($a, $s0), abs($s1 - $b) <= 400 ? $b : min($b, $s1), 'crown'];
+            }
         }
 
         $voids = array_values(array_filter($voids, static fn (array $v): bool => $v[1] > $v[0]));

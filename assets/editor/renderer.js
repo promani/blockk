@@ -169,9 +169,9 @@ export class Renderer {
             const [px, py] = cam.project((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
             const reach = (Math.max(b.x1 - b.x0, b.y1 - b.y0) + (b.z1 - b.z0)) * cam.zoom;
             if (px + reach < -margin || px - reach > cam.w + margin || py + reach < -margin || py - reach > cam.h + margin) continue;
-            if (b.level === activeLevel && b.course !== undefined && b.kind <= KIND.UCUT && b.course >= ui.cut) continue;
+            if (b.level === activeLevel && b.course !== undefined && b.kind <= KIND.UCUT && ui.cut < 12 && b.course >= ui.cut) continue;
             if (b.kind === KIND.DOOR || b.kind === KIND.GLASS) {
-                if (b.level === activeLevel && b.course >= ui.cut) continue;
+                if (b.level === activeLevel && ui.cut < 12 && b.course >= ui.cut) continue;
             }
             this.drawBox(ctx, cam, it, strokeOn);
         }

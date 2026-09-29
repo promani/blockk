@@ -480,7 +480,7 @@ final class RoofPlanner
     {
         $spans = [];
         foreach ($walls as $w) {
-            if ($w->axis() === $axis && $w->lineU() === $lineUnits && $w->isLoadBearing()) {
+            if ($w->axis() === $axis && $w->lineU() === $lineUnits && $w->isLoadBearing() && $w->h === Hcca::COURSES) {
                 $s = max($w->startU() * Hcca::GRID_CM, $a0);
                 $e = min($w->endU() * Hcca::GRID_CM, $a1);
                 if ($e > $s) {

@@ -53,7 +53,7 @@ export function pickWall(app, sx, sy) {
     let best = null;
     for (const w of level.walls) {
         const rect = wallRect(w);
-        const hull = boxHull(cam, rect, base, store.config.levelHeight);
+        const hull = boxHull(cam, rect, base, (w.h ?? 12) * 25);
         if (!inHull(hull, sx, sy)) continue;
         const depth = depthOf(cam, rect, wx, wy);
         if (!best || depth > best.depth) best = { wall: w, depth };

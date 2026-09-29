@@ -179,7 +179,7 @@ final class WallNormalizer
                 continue;
             }
             [$a, $b] = $pair;
-            if ($a->id === $b->id || $a->axis() !== $b->axis() || $a->lineU() !== $b->lineU() || $a->t !== $b->t) {
+            if ($a->id === $b->id || $a->axis() !== $b->axis() || $a->lineU() !== $b->lineU() || !$a->sameSection($b)) {
                 continue;
             }
             [$first, $second] = $a->startU() <= $b->startU() ? [$a, $b] : [$b, $a];

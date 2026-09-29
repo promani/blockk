@@ -47,6 +47,10 @@ final class ProjectValidator
         foreach ($levels as $index => $analysis) {
             foreach ($analysis->level->walls as $wall) {
                 $this->wall($issues, $index, $wall, $analysis);
+                // Más de 3,00 m sólo si no hay otro nivel encima (y nunca por encima del límite autoportante de 6,00 m).
+                if ($wall->h > Hcca::COURSES && (1 === $index || $project->upperEnabled())) {
+                    $issues[] = new Issue(Issue::ERROR, 'wall.height', sprintf('Muro de %s m de alto: %s', $this->cm($wall->h * 25 / 100), 1 === $index ? 'la Planta Alta no puede pasar de 3,00 m (límite autoportante total 6,00 m).' : 'con Nivel 2 encima, los muros de la Planta Baja miden 3,00 m.'), $index, $wall->id, $wall->x1, $wall->y1);
+                }
             }
             $this->openings($issues, $index, $analysis);
             $this->junctions($issues, $index, $analysis);
@@ -100,7 +104,7 @@ final class ProjectValidator
                 break;
             }
         }
-        $slenderness = Hcca::LEVEL_HEIGHT_CM / $tCm;
+        $slenderness = $wall->h * Hcca::BLOCK_H / Hcca::TICKS_PER_CM / $tCm;
         $limit = $wall->isLoadBearing() ? self::MAX_SLENDERNESS_BEARING : self::MAX_SLENDERNESS_PARTITION;
         if ($slenderness > $limit) {
             $issues[] = new Issue(Issue::WARN, 'wall.slender', sprintf('Esbeltez h/t = %.0f en %s de %s cm (referencia ≤ %.0f): use mayor espesor o arriostre.', $slenderness, $label, $this->cm($tCm), $limit), $index, $wall->id, $x, $y);
@@ -157,6 +161,9 @@ final class ProjectValidator
                     $issues[] = new Issue(Issue::ERROR, 'opening.gap', 'Dos vanos separados por menos de 25 cm: la jamba intermedia no puede apoyar los dinteles.', $index, $o->id, $x, $y);
                 }
                 $prevEnd = $to;
+                if ($o->lintelCourse() >= $wall->h) {
+                    $issues[] = new Issue(Issue::ERROR, 'opening.height', sprintf('El vano no entra en el muro de %s m: necesita %s m más el dintel U. Subí el muro o elegí un vano más bajo.', $this->cm($wall->h * 25 / 100), $this->cm(($o->sill + $o->h) * 25 / 100)), $index, $o->id, $x, $y);
+                }
                 if ($o->w > self::MAX_LINTEL_SPAN_U) {
                     $issues[] = new Issue(Issue::WARN, 'opening.span', sprintf('Vano de %s cm: la luz del dintel U supera los 2,00 m de referencia; verificar con cálculo.', $this->cm($o->w * Hcca::GRID_CM)), $index, $o->id, $x, $y);
                 }
@@ -198,7 +205,7 @@ final class ProjectValidator
     {
         $spans = [];
         foreach ($ground->level->walls as $g) {
-            if ($g->axis() === $wall->axis() && $g->lineU() === $wall->lineU() && $g->isLoadBearing()) {
+            if ($g->axis() === $wall->axis() && $g->lineU() === $wall->lineU() && $g->isLoadBearing() && $g->h >= Hcca::COURSES) {
                 $s = max($g->startU(), $wall->startU());
                 $e = min($g->endU(), $wall->endU());
                 if ($e > $s) {
