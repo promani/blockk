@@ -126,6 +126,37 @@ final class TemplateCatalog
                     ->roof('gable', 'x')
                     ->build(),
             ],
+            'casa-en-l' => [
+                'name' => 'Casa en L 3 dormitorios (~75 m²)',
+                'description' => 'Cuerpo principal de 11,25 × 5,63 m con estar-comedor-cocina abierto al norte, dos dormitorios y baño, más un ala de 3,75 × 4,38 m con el dormitorio principal. Dos techos a dos aguas que se cruzan.',
+                'tags' => ['1 planta', 'Vivienda en L', '3 dormitorios'],
+                'build' => fn (): array => (new TemplateBuilder('Casa en L'))
+                    ->room(0, 0, 0, 90, 45)
+                    ->wall(0, 60, 45, 60, 80, 20)
+                    ->wall(0, 60, 80, 90, 80, 20)
+                    ->wall(0, 90, 45, 90, 80, 20)
+                    ->wall(0, 30, 0, 30, 45, 10)
+                    ->wall(0, 0, 25, 30, 25, 10)
+                    ->wall(0, 45, 0, 45, 13, 10)
+                    ->wall(0, 30, 13, 45, 13, 10)
+                    ->opening(0, 'P100', 'x', 45, 40)
+                    ->opening(0, 'P87', 'x', 45, 66)
+                    ->opening(0, 'P75', 'y', 30, 16)
+                    ->opening(0, 'P75', 'y', 30, 33)
+                    ->opening(0, 'P75', 'x', 13, 36)
+                    ->opening(0, 'V125', 'x', 0, 10)
+                    ->opening(0, 'VT62', 'x', 0, 35)
+                    ->opening(0, 'VG150', 'x', 0, 55)
+                    ->opening(0, 'V125', 'x', 0, 72)
+                    ->opening(0, 'V125', 'y', 0, 30)
+                    ->opening(0, 'V150', 'y', 90, 16)
+                    ->opening(0, 'V125', 'y', 90, 58)
+                    ->opening(0, 'V125', 'x', 80, 70)
+                    ->opening(0, 'V100', 'y', 60, 58)
+                    ->roofPart(0, 0, 0, 90, 45, 'gable', 'x')
+                    ->roofPart(0, 60, 45, 30, 35, 'gable', 'y')
+                    ->build(),
+            ],
             'duplex-2-plantas' => [
                 'name' => 'Dúplex 2 plantas',
                 'description' => 'PB + PA de 7,50 × 5,00 m con muro portante central y entrepiso de tirantes de 3,75 m de luz. Hueco de escalera previsto.',
