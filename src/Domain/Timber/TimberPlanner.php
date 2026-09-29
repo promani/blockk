@@ -21,13 +21,14 @@ final class TimberPlanner
     /** Separación de los tirantes extremos respecto de la cara del muro paralelo (ticks = 2 cm). */
     private const int EDGE_GAP = 40;
 
-    public function plan(Level $ground): TimberPlan
+    /** @param list<array{float, float, float, float}> $holes huecos de escalera (cm) que no llevan tirantes ni placa */
+    public function plan(Level $ground, array $holes = []): TimberPlan
     {
         $fields = [];
         $beams = [];
         $issues = [];
         $pieces = []; // sección => [largo comercial cm => cantidad]
-        $extraMl = ['3x8' => 0.0, '3x10' => 0.0];
+        $extraMl = array_fill_keys(array_keys(Hcca::timberSections()), 0.0);
         $osbM2 = 0.0;
         $bandMl = 0.0;
         $plates = 0;
@@ -41,7 +42,7 @@ final class TimberPlanner
                     }
                 }
                 $fieldsSeen[] = $element;
-                $field = $this->joistField($element, $ground, $issues);
+                $field = $this->joistField($element, $ground, $issues, $holes);
                 $fields[] = $field;
                 foreach ($field['joists'] as $j) {
                     $this->commercial($pieces, $element->section, $j['lengthCm'], $element->id, $issues);
@@ -49,7 +50,7 @@ final class TimberPlanner
                 $perp = Axis::X === $element->dir ? $element->h : $element->w;
                 $extraMl[$element->section] += 2 * $perp * Hcca::GRID_CM / 100; // cenefas de cierre
                 $bandMl += 2 * $perp * Hcca::GRID_CM / 100;
-                $osbM2 += $element->w * $element->h * (Hcca::GRID_CM / 100) ** 2;
+                $osbM2 += $field['deckAreaM2'];
             } elseif ($element instanceof TimberBeam) {
                 $beam = $this->beam($element, $ground, $issues);
                 $beams[] = $beam;
@@ -73,10 +74,11 @@ final class TimberPlanner
 
     /**
      * @param list<array<string, mixed>> $issues
+     * @param list<array{float, float, float, float}> $holes
      *
      * @return array<string, mixed>
      */
-    private function joistField(JoistField $f, Level $ground, array &$issues): array
+    private function joistField(JoistField $f, Level $ground, array &$issues, array $holes): array
     {
         $G = Hcca::GRID;
         $alongX = Axis::X === $f->dir;
@@ -144,6 +146,21 @@ final class TimberPlanner
             ];
         }
 
+        // Los tirantes que cruzan un hueco de escalera no se colocan; la placa descuenta los huecos.
+        $joists = array_values(array_filter($joists, static function (array $j) use ($holes): bool {
+            $seg = [min($j['x1'], $j['x2']) - 3.75, min($j['y1'], $j['y2']) - 3.75, max($j['x1'], $j['x2']) + 3.75, max($j['y1'], $j['y2']) + 3.75];
+            foreach ($holes as $h) {
+                if (\App\Domain\Floor\RectMath::intersects($seg, $h)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
+        $count = count($joists);
+        $fieldRect = [$f->x * Hcca::GRID_CM, $f->y * Hcca::GRID_CM, ($f->x + $f->w) * Hcca::GRID_CM, ($f->y + $f->h) * Hcca::GRID_CM];
+        $deckParts = \App\Domain\Floor\RectMath::subtract($fieldRect, $holes);
+
         foreach (['A', 'B'] as $end) {
             if (0 === $unsupported[$end]) {
                 continue;
@@ -164,7 +181,9 @@ final class TimberPlanner
             'section' => $f->section,
             'rect' => ['x' => $f->x * Hcca::GRID_CM, 'y' => $f->y * Hcca::GRID_CM, 'w' => $f->w * Hcca::GRID_CM, 'h' => $f->h * Hcca::GRID_CM],
             'clearSpanCm' => $clearCm,
-            'lengthCm' => $joists[0]['lengthCm'],
+            'lengthCm' => $joists[0]['lengthCm'] ?? 0,
+            'deckParts' => array_map(static fn (array $p): array => ['x0' => $p[0], 'y0' => $p[1], 'x1' => $p[2], 'y1' => $p[3]], $deckParts),
+            'deckAreaM2' => round(\App\Domain\Floor\RectMath::area($deckParts) / 10000, 2),
             'spacingCm' => $count > 1 ? round(Hcca::ticksToCm((int) round($step)), 1) : 0,
             'count' => $count,
             'joists' => $joists,

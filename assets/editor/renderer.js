@@ -19,6 +19,8 @@ const BASE = {
     [KIND.JOIST]: '#d9a05b',
     [KIND.DECK]: '#ecd2a0',
     [KIND.BEAM]: '#c48a45',
+    [KIND.STEP]: '#d2d8e0',
+    [KIND.SLAB]: '#aab3bf',
 };
 
 function shade(hex, k) {
@@ -91,7 +93,7 @@ export class Renderer {
     // ---------- suelo, retícula ----------
     drawGround(f) {
         const { ctx } = this;
-        const { cam, project, ui } = f;
+        const { cam, project } = f;
         const W = (project?.lot?.w ?? 24) * 100;
         const D = (project?.lot?.d ?? 20) * 100;
         const z = 0;
@@ -102,20 +104,20 @@ export class Renderer {
         ctx.fillStyle = '#e1e9d6';
         ctx.fill();
 
-        const step = ui.snap === 5 ? 62.5 : 62.5;
-        const px = step * cam.zoom * (cam.view === 'plan' ? 1 : 0.87);
+        // Retícula simple: una línea por metro (tenue) y una más marcada cada 5 m. El ajuste real (12,5 o 62,5 cm) se ve como
+        // puntos alrededor del cursor cuando se dibuja.
         ctx.lineWidth = 1;
-        if (px >= 7) {
-            ctx.strokeStyle = 'rgba(30,41,59,.09)';
+        if (100 * cam.zoom * (cam.view === 'plan' ? 1 : 0.87) >= 8) {
+            ctx.strokeStyle = 'rgba(30,41,59,.10)';
             ctx.beginPath();
-            for (let x = 0; x <= W + 0.1; x += step) this.seg(cam, x, 0, x, D, z);
-            for (let y = 0; y <= D + 0.1; y += step) this.seg(cam, 0, y, W, y, z);
+            for (let x = 0; x <= W + 0.1; x += 100) if (x % 500) this.seg(cam, x, 0, x, D, z);
+            for (let y = 0; y <= D + 0.1; y += 100) if (y % 500) this.seg(cam, 0, y, W, y, z);
             ctx.stroke();
         }
-        ctx.strokeStyle = 'rgba(30,41,59,.2)';
+        ctx.strokeStyle = 'rgba(30,41,59,.26)';
         ctx.beginPath();
-        for (let x = 0; x <= W + 0.1; x += 100) this.seg(cam, x, 0, x, D, z);
-        for (let y = 0; y <= D + 0.1; y += 100) this.seg(cam, 0, y, W, y, z);
+        for (let x = 0; x <= W + 0.1; x += 500) this.seg(cam, x, 0, x, D, z);
+        for (let y = 0; y <= D + 0.1; y += 500) this.seg(cam, 0, y, W, y, z);
         ctx.stroke();
         ctx.strokeStyle = 'rgba(30,41,59,.55)';
         ctx.lineWidth = 1.5;
@@ -163,6 +165,50 @@ export class Renderer {
             if (ghostDeck) ctx.globalAlpha = 0.32;
             this.drawBox(ctx, cam, it, strokeOn);
             if (ghostDeck) ctx.globalAlpha = 1;
+        }
+        if (activeLevel === 2) this.drawRoofIso(f);
+    }
+
+    drawRoofIso(f) {
+        const { ctx } = this;
+        const { cam, analysis } = f;
+        const g = analysis.roof?.geometry;
+        if (!g?.planes) return;
+        const P = (pt) => cam.project(pt[0], pt[1], pt[2]);
+        const poly = (pts, fill, stroke) => {
+            ctx.beginPath();
+            pts.map(P).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.closePath();
+            ctx.fillStyle = fill;
+            ctx.fill();
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        };
+        for (const gb of g.gables ?? []) poly(gb.pts, '#dde3eb', 'rgba(30,41,59,.5)');
+        // Faldones del más lejano al más cercano (según el giro de la vista).
+        const depth = (pl) => pl.pts.reduce((a, p) => { const [X, Y] = Camera.rotate(p[0], p[1], cam.rot); return a + X + Y; }, 0);
+        const planes = [...g.planes].sort((a, b) => depth(a) - depth(b));
+        for (const pl of planes) poly(pl.pts, 'rgba(196,99,63,.93)', '#7a3b25');
+        ctx.strokeStyle = 'rgba(90,40,20,.55)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        for (const r of g.rafters ?? []) {
+            const a = P(r.from);
+            const b = P(r.to);
+            ctx.moveTo(a[0], a[1]);
+            ctx.lineTo(b[0], b[1]);
+        }
+        ctx.stroke();
+        if (g.ridge) {
+            const a = P(g.ridge.from);
+            const b = P(g.ridge.to);
+            ctx.strokeStyle = '#4a2110';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(a[0], a[1]);
+            ctx.lineTo(b[0], b[1]);
+            ctx.stroke();
         }
     }
 
@@ -268,7 +314,8 @@ export class Renderer {
     drawPlan(f) {
         const { ctx } = this;
         const { cam, project, analysis, ui } = f;
-        const active = ui.level;
+        // En la pestaña Techo se ve la planta del último nivel con muros y, encima, el techo.
+        const active = ui.level === 2 ? (project.upper ? 1 : 0) : ui.level;
 
         for (let li = 0; li <= active; li++) {
             const ghost = li < active;
@@ -293,7 +340,166 @@ export class Renderer {
             if (!ghost) this.drawPlanRooms(f, li);
             this.drawPlanOpenings(f, project.levels[li], ghost);
             if (li === 0) this.drawPlanTimber(f, ghost);
+            if (li === 0) this.drawPlanStairs(f, ghost);
+            if (li === 1) this.drawPlanSlabs(f);
         }
+        if (ui.level === 2) this.drawPlanRoof(f);
+    }
+
+    /** Escaleras en planta: peldaños como líneas, descansos rellenos y flecha de subida. */
+    drawPlanStairs(f, ghost) {
+        const { ctx } = this;
+        const { cam, analysis } = f;
+        const P = (x, y) => cam.project(x, y, 0);
+        ctx.save();
+        ctx.globalAlpha = ghost ? 0.6 : 1;
+        for (const st of analysis.floors?.stairs ?? []) {
+            for (const l of st.landings) {
+                ctx.fillStyle = 'rgba(148,163,184,.55)';
+                this.fillRectPlan(cam, l.x0, l.y0, l.x1, l.y1);
+                ctx.strokeStyle = '#475569';
+                ctx.lineWidth = 1.4;
+                this.strokeRectPlan(cam, l.x0, l.y0, l.x1, l.y1);
+            }
+            ctx.fillStyle = 'rgba(255,255,255,.55)';
+            for (const s of st.steps) this.fillRectPlan(cam, s.x0, s.y0, s.x1, s.y1);
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 1;
+            for (const s of st.steps) this.strokeRectPlan(cam, s.x0, s.y0, s.x1, s.y1);
+            // flecha: del primer al último peldaño
+            const first = st.steps[0];
+            const last = st.steps[st.steps.length - 1];
+            if (first && last) {
+                const [ax, ay] = P((first.x0 + first.x1) / 2, (first.y0 + first.y1) / 2);
+                const [bx, by] = P((last.x0 + last.x1) / 2, (last.y0 + last.y1) / 2);
+                ctx.strokeStyle = '#3f6212';
+                ctx.fillStyle = '#3f6212';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(bx, by);
+                ctx.stroke();
+                const ang = Math.atan2(by - ay, bx - ax);
+                ctx.beginPath();
+                ctx.moveTo(bx, by);
+                ctx.lineTo(bx - 9 * Math.cos(ang - 0.45), by - 9 * Math.sin(ang - 0.45));
+                ctx.lineTo(bx - 9 * Math.cos(ang + 0.45), by - 9 * Math.sin(ang + 0.45));
+                ctx.closePath();
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(ax, ay, 3.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+
+    drawPlanSlabs(f) {
+        const { ctx } = this;
+        const { cam, analysis } = f;
+        ctx.save();
+        for (const sl of analysis.floors?.slabs ?? []) {
+            ctx.fillStyle = 'rgba(100,116,139,.32)';
+            for (const p of sl.parts) this.fillRectPlan(cam, p.x0, p.y0, p.x1, p.y1);
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([7, 4]);
+            this.strokeRectPlan(cam, sl.rect.x, sl.rect.y, sl.rect.x + sl.rect.w, sl.rect.y + sl.rect.h);
+            ctx.setLineDash([]);
+            if (cam.zoom > 0.06) {
+                ctx.font = '600 11px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#334155';
+                const [sx, sy] = cam.project(sl.rect.x + sl.rect.w / 2, sl.rect.y + sl.rect.h / 2, 0);
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`Losa ${sl.thickness} cm · ${fmt(sl.areaM2, 1)} m²`, sx, sy);
+            }
+        }
+        ctx.restore();
+    }
+
+    /** Techo en planta: faldones, cumbrera (o caída) y pendiente. */
+    drawPlanRoof(f) {
+        const { ctx } = this;
+        const { cam, analysis } = f;
+        const g = analysis.roof?.geometry;
+        if (!g?.planes) return;
+        ctx.save();
+        ctx.lineJoin = 'round';
+        for (const pl of g.planes) {
+            ctx.beginPath();
+            pl.pts.forEach((pt, i) => {
+                const [x, y] = cam.project(pt[0], pt[1], 0);
+                if (i) ctx.lineTo(x, y);
+                else ctx.moveTo(x, y);
+            });
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(196,99,63,.28)';
+            ctx.fill();
+            ctx.strokeStyle = '#7a3b25';
+            ctx.lineWidth = 1.6;
+            ctx.stroke();
+        }
+        if (g.ridge) {
+            const a = cam.project(g.ridge.from[0], g.ridge.from[1], 0);
+            const b = cam.project(g.ridge.to[0], g.ridge.to[1], 0);
+            ctx.strokeStyle = '#4a2110';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(a[0], a[1]);
+            ctx.lineTo(b[0], b[1]);
+            ctx.stroke();
+        }
+        // flechas de caída, una por faldón (del punto medio del alero hacia el interior)
+        ctx.strokeStyle = '#7a3b25';
+        ctx.fillStyle = '#7a3b25';
+        ctx.lineWidth = 1.5;
+        for (const pl of g.planes) {
+            const xs = pl.pts.map((p) => p[0]);
+            const ys = pl.pts.map((p) => p[1]);
+            const zs = pl.pts.map((p) => p[2]);
+            const zMax = Math.max(...zs);
+            const zMin = Math.min(...zs);
+            const hi = pl.pts.filter((p) => p[2] > zMax - 0.5);
+            const lo = pl.pts.filter((p) => p[2] < zMin + 0.5);
+            if (!hi.length || !lo.length || zMax - zMin < 1) continue;
+            const mid = (list) => [list.reduce((a, p) => a + p[0], 0) / list.length, list.reduce((a, p) => a + p[1], 0) / list.length];
+            const [hx, hy] = mid(hi);
+            const [lx, ly] = mid(lo);
+            const [ax, ay] = cam.project(hx, hy, 0);
+            const [bx, by] = cam.project(lx, ly, 0);
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(bx, by);
+            ctx.stroke();
+            const ang = Math.atan2(by - ay, bx - ax);
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.lineTo(bx - 9 * Math.cos(ang - 0.45), by - 9 * Math.sin(ang - 0.45));
+            ctx.lineTo(bx - 9 * Math.cos(ang + 0.45), by - 9 * Math.sin(ang + 0.45));
+            ctx.closePath();
+            ctx.fill();
+            if (cam.zoom > 0.05 && xs.length) {
+                ctx.font = '600 11px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                const [mx, my] = cam.project((Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2, 0);
+                ctx.fillText(`${fmt(pl.areaM2, 1)} m²`, mx, my - 8);
+            }
+        }
+        ctx.restore();
+    }
+
+    strokeRectPlan(cam, x0, y0, x1, y1) {
+        const { ctx } = this;
+        ctx.beginPath();
+        [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].forEach(([x, y], i) => {
+            const [sx, sy] = cam.project(x, y, 0);
+            if (i) ctx.lineTo(sx, sy);
+            else ctx.moveTo(sx, sy);
+        });
+        ctx.closePath();
+        ctx.stroke();
     }
 
     fillRectPlan(cam, x0, y0, x1, y1) {
@@ -397,20 +603,37 @@ export class Renderer {
         const { cam, analysis } = f;
         const timber = analysis.timber;
         if (!timber) return;
-        ctx.strokeStyle = ghost ? 'rgba(176,120,50,.55)' : '#b07832';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 3]);
-        ctx.beginPath();
         for (const fld of timber.fields ?? []) {
-            for (const j of fld.joists) {
+            // Sombreado suave del paño y tirantes como líneas finas continuas (sin guiones que ensucian la planta).
+            ctx.fillStyle = ghost ? 'rgba(217,160,91,.10)' : 'rgba(217,160,91,.16)';
+            this.fillRectPlan(cam, fld.rect.x, fld.rect.y, fld.rect.x + fld.rect.w, fld.rect.y + fld.rect.h);
+            ctx.strokeStyle = ghost ? 'rgba(176,120,50,.45)' : 'rgba(176,120,50,.8)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            const pxGap = fld.spacingCm * cam.zoom;
+            const skip = pxGap < 3 ? Math.ceil(3 / pxGap) : 1; // no dibujar tirantes a menos de 3 px entre sí
+            fld.joists.forEach((j, i) => {
+                if (i % skip) return;
                 const a = cam.project(j.x1, j.y1, 0);
                 const b = cam.project(j.x2, j.y2, 0);
                 ctx.moveTo(a[0], a[1]);
                 ctx.lineTo(b[0], b[1]);
+            });
+            ctx.stroke();
+            if (!ghost && cam.zoom > 0.05) {
+                ctx.font = '600 11px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const [sx, sy] = cam.project(fld.rect.x + fld.rect.w / 2, fld.rect.y + fld.rect.h / 2, 0);
+                const label = `${fld.count} tirantes ${fld.section.replace('x', '″×')}″ c/${fmt(fld.spacingCm, 0)} cm`;
+                const w = ctx.measureText(label).width + 10;
+                ctx.fillStyle = 'rgba(255,255,255,.85)';
+                roundRect(ctx, sx - w / 2, sy - 9, w, 18, 5);
+                ctx.fill();
+                ctx.fillStyle = '#7a4a12';
+                ctx.fillText(label, sx, sy);
             }
         }
-        ctx.stroke();
-        ctx.setLineDash([]);
         ctx.strokeStyle = '#8a5a1f';
         ctx.lineWidth = 3;
         ctx.beginPath();

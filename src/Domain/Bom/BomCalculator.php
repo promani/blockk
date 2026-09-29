@@ -31,7 +31,7 @@ final class BomCalculator
      *
      * @return array<string, mixed>
      */
-    public function calculate(Project $project, array $models, array $topologies, TimberPlan $timber): array
+    public function calculate(Project $project, array $models, array $topologies, TimberPlan $timber, array $extras = []): array
     {
         $pct = $project->settings->reservePct;
         $levels = [];
@@ -42,7 +42,7 @@ final class BomCalculator
         $usedTopo = array_values(array_filter($topologies, static fn (Topology $t, int $i): bool => !$project->level($i)->isEmpty(), ARRAY_FILTER_USE_BOTH));
         $total = $this->scope($used, $usedTopo, $pct, [] !== $used);
 
-        $lines = $this->lines($total, $timber, $project);
+        $lines = $this->lines($total, $timber, $project, $extras);
         $cost = array_sum(array_map(static fn (array $l): float => $l['subtotal'], $lines));
 
         return [
@@ -217,10 +217,11 @@ final class BomCalculator
      * Líneas comerciales valorizadas (precios editables de referencia).
      *
      * @param array<string, mixed> $total
+     * @param array<string, array<string, mixed>> $extras cantidades de escaleras, losas y techo
      *
      * @return list<array<string, mixed>>
      */
-    private function lines(array $total, TimberPlan $timber, Project $project): array
+    private function lines(array $total, TimberPlan $timber, Project $project, array $extras = []): array
     {
         $prices = $project->settings->effectivePrices();
         $lines = [];
@@ -279,6 +280,35 @@ final class BomCalculator
         }
         if (($timber->bom['plates'] ?? 0) > 0) {
             $add('Estructura de madera', 'PLR', 'Placa de reparto de carga bajo apoyo de viga', 'u', $timber->bom['plates'], $prices['plate_u']);
+        }
+
+        $st = $extras['stairs'] ?? [];
+        if (($st['steps'] ?? 0) > 0) {
+            $add('Escaleras', 'ESC', 'Peldaños de escalera (hormigón/madera, ref.)', 'u', $st['steps'], $prices['stair_step_u'], 'altura 3,00 m entre pisos');
+        }
+        if (($st['landingM2'] ?? 0) > 0) {
+            $add('Escaleras', 'DES', 'Descansos de escalera', 'm²', $st['landingM2'], $prices['stair_landing_m2']);
+        }
+        $sl = $extras['slabs'] ?? [];
+        if (($sl['areaM2'] ?? 0) > 0) {
+            $add('Losa de piso', 'LHO', 'Hormigón de losa', 'm³', max(0.01, $sl['concreteM3']), $prices['concrete_m3'], $this->fmt($sl['areaM2']).' m²');
+            $add('Losa de piso', 'LML', 'Malla electrosoldada (+10 % solape)', 'm²', $sl['meshM2'], $prices['mesh_m2']);
+            $add('Losa de piso', 'LEN', 'Encofrado de losa', 'm²', $sl['formworkM2'], $prices['formwork_m2']);
+        }
+        $rf = $extras['roof'] ?? [];
+        if (($rf['raftersCount'] ?? 0) > 0) {
+            $section = $rf['section'];
+            $len = $rf['raftersCommercialCm'];
+            $add('Techo', 'CAB', 'Cabios '.Hcca::timberSections()[$section]['label'].' de '.$this->fmt($len / 100).' m', 'u', $rf['raftersCount'], $prices['timber_'.$section.'_m'] * $len / 100);
+            if ($rf['ridgeMl'] > 0) {
+                $add('Techo', 'CUM', 'Cumbrera '.Hcca::timberSections()[$section]['label'], 'm', (float) ceil($rf['ridgeMl']), $prices['timber_'.$section.'_m']);
+            }
+            $add('Techo', 'CLA', 'Clavaderas / correas (40 cm)', 'm', (float) ceil($rf['battenMl']), $prices['batten_m']);
+            $add('Techo', 'CUB', 'Cubierta (chapa o teja, ref.)', 'm²', $rf['coverM2'], $prices['roof_cover_m2']);
+            if ($rf['gableMasonryM2'] > 0) {
+                $b20 = 0.625 * 0.25 * 0.20 * $prices['block_m3'];
+                $add('Techo', 'HAS', 'Hastiales: bloques 62,5×25×20 (estimado por superficie, +10 %)', 'u', (int) ceil($rf['gableMasonryM2'] / (0.625 * 0.25) * 1.10), $b20, $this->fmt($rf['gableMasonryM2']).' m²');
+            }
         }
 
         return $lines;

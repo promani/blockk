@@ -57,8 +57,8 @@ final class ProjectValidator
 
         if (null !== $upper && !$upper->level->isEmpty()) {
             $this->upperSupport($issues, $ground, $upper, $project);
-            if ([] === $ground->level->timber) {
-                $issues[] = new Issue(Issue::WARN, 'timber.missing', 'La Planta Alta no tiene entrepiso: dibuje el entrepiso de madera sobre la Planta Baja (herramienta Entrepiso).', 0);
+            if ([] === $ground->level->timber && [] === $upper->level->slabs) {
+                $issues[] = new Issue(Issue::WARN, 'timber.missing', 'La Planta Alta no tiene piso: dibuje el entrepiso de madera sobre la Planta Baja (Entrepiso) o una losa en el Nivel 2 (Losa).', 0);
             }
         }
 

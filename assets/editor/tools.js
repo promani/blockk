@@ -8,6 +8,8 @@ import { pickAt, pickWall, alongPosition, G } from './pick.js';
 import { outlineRect, ghostBox, label, nodeMarker } from './overlay.js';
 import { nextId } from '../lib/storage.js';
 import { ICONS } from './icons.js';
+import { moveWallLine, collinearChain, mirrorMove } from './wallmove.js';
+import { wallLines, nearestLine } from './snap.js';
 
 const DRAG_PX = 6;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -47,12 +49,68 @@ export function createTools(app) {
 
     const T = {};
 
+    // ---------------- mover un muro (agrandar / achicar la habitación) ----------------
+    const wallMoveCommit = (wallId, newLine) => {
+        const li = store.ui.level;
+        const probe = structuredClone(store.level());
+        const wall = probe.walls.find((w) => w.id === wallId);
+        if (!wall) return false;
+        const maxLine = wall.y1 === wall.y2 ? lot().d : lot().w;
+        const test = moveWallLine(probe, wallId, newLine, { maxLine });
+        if (!test.ok) {
+            app.toast(test.reason, 'error');
+            return false;
+        }
+        const before = structuredClone(wall);
+        store.commit('Mover muro', (d) => {
+            moveWallLine(d.levels[li], wallId, newLine, { maxLine });
+            // Un muro de Planta Baja arrastra al muro que tiene encima (misma recta) para que sigan alineados.
+            if (li === 0 && d.upper) mirrorMove(d.levels[1], before, newLine, { maxLine });
+        });
+        if (test.dropped) app.toast(`${test.dropped} vano(s) o viga(s) quedaron fuera del muro estirado y se quitaron.`);
+        return true;
+    };
+    /** Desplaza el muro `delta` unidades (12,5 cm) en sentido perpendicular: + hacia el sur / este. */
+    app.moveWallBy = (wallId, delta) => {
+        const w = store.level().walls.find((x) => x.id === wallId);
+        if (!w) return;
+        wallMoveCommit(wallId, (w.y1 === w.y2 ? w.y1 : w.x1) + delta);
+    };
+
     // ---------------- seleccionar ----------------
+    let drag = null;
+    const handleAt = (cam) => {
+        const sel = store.ui.selection;
+        if (sel?.type !== 'wall' || store.ui.level > 1) return null;
+        const w = store.level().walls.find((x) => x.id === sel.id);
+        if (!w) return null;
+        const [sx, sy] = cam.project(((w.x1 + w.x2) / 2) * G, ((w.y1 + w.y2) / 2) * G, base() + cfg.levelHeight);
+        return { w, sx, sy };
+    };
+    const dragLine = (p) => {
+        const horizontal = drag.w.y1 === drag.w.y2;
+        const step = Math.max(1, store.ui.snap);
+        const d = Math.round(((horizontal ? p.wy - drag.y0 : p.wx - drag.x0) / G) / step) * step;
+        let line = drag.line0 + d;
+        const lines = wallLines(store);
+        const near = nearestLine(horizontal ? lines.ys : lines.xs, line, 1);
+        if (near !== null && near !== drag.line0) line = near;
+        const lim = horizontal ? lot().d : lot().w;
+        return Math.min(lim, Math.max(0, line));
+    };
     T.select = {
         hotkey: 'v',
         label: 'Seleccionar',
-        hint: 'Clic en un muro, vano o entrepiso para ver sus propiedades. Supr elimina lo seleccionado.',
+        hint: 'Clic en un muro, vano, losa o escalera. Con un muro elegido, arrastrá su manija para agrandar o achicar la habitación.',
+        reset() { drag = null; },
         move(p) {
+            if (drag) {
+                drag.line = dragLine(p);
+                app.render();
+                return;
+            }
+            const hd = handleAt(app.cam);
+            app.canvas.style.cursor = hd && Math.hypot(p.sx - hd.sx, p.sy - hd.sy) < 16 ? 'grab' : '';
             const hit = pickAt(app, p.sx, p.sy);
             if (JSON.stringify(hit) !== JSON.stringify(app.hover)) {
                 app.hover = hit;
@@ -60,17 +118,102 @@ export function createTools(app) {
             }
         },
         down(p) {
+            const hd = handleAt(app.cam);
+            if (hd && Math.hypot(p.sx - hd.sx, p.sy - hd.sy) < 16) {
+                const horizontal = hd.w.y1 === hd.w.y2;
+                drag = { w: hd.w, line0: horizontal ? hd.w.y1 : hd.w.x1, line: horizontal ? hd.w.y1 : hd.w.x1, x0: p.wx, y0: p.wy };
+                app.canvas.style.cursor = 'grabbing';
+                return;
+            }
             app.hover = pickAt(app, p.sx, p.sy);
             store.setUi({ selection: app.hover });
+        },
+        up() {
+            if (!drag) return;
+            const d = drag;
+            drag = null;
+            app.canvas.style.cursor = '';
+            if (d.line !== d.line0) wallMoveCommit(d.w.id, d.line);
+        },
+        keyDown(e) {
+            if (e.key === 'Escape' && drag) {
+                drag = null;
+                app.canvas.style.cursor = '';
+                app.render();
+                return true;
+            }
+            return false;
+        },
+        draw(ctx, cam) {
+            if (drag) {
+                const horizontal = drag.w.y1 === drag.w.y2;
+                const delta = drag.line - drag.line0;
+                const z = base();
+                const chain = collinearChain(store.level().walls, drag.w);
+                for (const w of chain) {
+                    const t = w.t / 2;
+                    const box = horizontal
+                        ? { x0: w.x1 * G, x1: w.x2 * G, y0: drag.line * G - t, y1: drag.line * G + t, z0: z, z1: z + cfg.levelHeight }
+                        : { x0: drag.line * G - t, x1: drag.line * G + t, y0: w.y1 * G, y1: w.y2 * G, z0: z, z1: z + cfg.levelHeight };
+                    ghostBox(ctx, cam, box, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
+                }
+                const mid = chain[Math.floor(chain.length / 2)];
+                const [sx, sy] = cam.project(horizontal ? ((mid.x1 + mid.x2) / 2) * G : drag.line * G, horizontal ? drag.line * G : ((mid.y1 + mid.y2) / 2) * G, z + cfg.levelHeight);
+                label(ctx, `${delta >= 0 ? '+' : '−'}${fmt(Math.abs(delta) * G, 1)} cm · ${horizontal ? 'y' : 'x'} = ${fmt((drag.line * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
+                return;
+            }
+            const hd = handleAt(cam);
+            if (!hd) return;
+            const horizontal = hd.w.y1 === hd.w.y2;
+            ctx.save();
+            ctx.fillStyle = '#2563eb';
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(hd.sx, hd.sy, 11, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            // flechas ↔ perpendiculares al muro (en pantalla, según la proyección)
+            const a = cam.project(((hd.w.x1 + hd.w.x2) / 2) * G, ((hd.w.y1 + hd.w.y2) / 2) * G - (horizontal ? 30 : 0), base() + cfg.levelHeight);
+            const b = cam.project(((hd.w.x1 + hd.w.x2) / 2) * G - (horizontal ? 0 : 30), ((hd.w.y1 + hd.w.y2) / 2) * G, base() + cfg.levelHeight);
+            const dir = horizontal ? [a[0] - hd.sx, a[1] - hd.sy] : [b[0] - hd.sx, b[1] - hd.sy];
+            const len = Math.hypot(dir[0], dir[1]) || 1;
+            const ux = dir[0] / len;
+            const uy = dir[1] / len;
+            ctx.strokeStyle = '#fff';
+            ctx.fillStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(hd.sx - ux * 6, hd.sy - uy * 6);
+            ctx.lineTo(hd.sx + ux * 6, hd.sy + uy * 6);
+            ctx.stroke();
+            for (const k of [-1, 1]) {
+                const tx = hd.sx + ux * 7 * k;
+                const ty = hd.sy + uy * 7 * k;
+                ctx.beginPath();
+                ctx.moveTo(tx + ux * 3 * k, ty + uy * 3 * k);
+                ctx.lineTo(tx - ux * 2 * k - uy * 3, ty - uy * 2 * k + ux * 3);
+                ctx.lineTo(tx - ux * 2 * k + uy * 3, ty - uy * 2 * k - ux * 3);
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.restore();
         },
     };
 
     // ---------------- sala ----------------
     let room = null;
+    const snapSpan = (v, origin, lines) => {
+        const near = nearestLine(lines, v, 2);
+        if (near !== null && Math.abs(near - origin) >= 10) return near;
+        const d = v - origin;
+        return origin + (d < 0 ? -1 : 1) * Math.max(10, Math.round(Math.abs(d) / 5) * 5);
+    };
     T.room = {
+        magnet: true,
         hotkey: 'r',
         label: 'Crear sala',
-        hint: 'Arrastrá en diagonal: se crean las 4 paredes ortogonales con medidas múltiplo del módulo de 62,5 cm.',
+        hint: 'Arrastrá en diagonal: se crean las 4 paredes. Cerca de una pared existente el borde se pega a ella (habitación contigua).',
         options: () => h('span', { class: 'row' }, thicknessOption()),
         reset() { room = null; },
         down(p) {
@@ -80,12 +223,14 @@ export function createTools(app) {
             if (!room) return;
             const dx = p.gx - room.a.gx;
             const dy = p.gy - room.a.gy;
-            const sx = dx < 0 ? -1 : 1;
-            const sy = dy < 0 ? -1 : 1;
-            const w = Math.max(10, Math.round(Math.abs(dx) / 5) * 5);
-            const hh = Math.max(10, Math.round(Math.abs(dy) / 5) * 5);
-            const x = sx > 0 ? room.a.gx : room.a.gx - w;
-            const y = sy > 0 ? room.a.gy : room.a.gy - hh;
+            // El lado se ajusta a la pared vecina más cercana (habitación contigua) o, si no hay, a múltiplos de 62,5 cm.
+            const lines = wallLines(store);
+            const ex = snapSpan(p.gx, room.a.gx, lines.xs);
+            const ey = snapSpan(p.gy, room.a.gy, lines.ys);
+            const w = Math.abs(ex - room.a.gx);
+            const hh = Math.abs(ey - room.a.gy);
+            const x = Math.min(room.a.gx, ex);
+            const y = Math.min(room.a.gy, ey);
             const moved = Math.abs(dx) + Math.abs(dy) >= 3;
             room.rect = moved && inLot(x, y) && inLot(x + w, y + hh) ? { x, y, w, h: hh } : null;
             room.moved = moved;
@@ -117,7 +262,7 @@ export function createTools(app) {
                 const { x, y, w, h: hh } = room.rect;
                 outlineRect(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, { stroke: '#3f6212', fill: 'rgba(139,197,63,.28)', width: 2.5 });
                 const area = ((w * G) / 100) * ((hh * G) / 100);
-                dimLabel(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, `${fmt((w * G) / 100)} × ${fmt((hh * G) / 100)} m · ${w / 5} × ${hh / 5} módulos · ${fmt(area)} m²`);
+                dimLabel(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, `${fmt((w * G) / 100)} × ${fmt((hh * G) / 100)} m · ${fmt(area)} m²`);
             } else if (app.pointer && inLot(app.pointer.gx, app.pointer.gy)) {
                 nodeMarker(ctx, cam, app.pointer.gx * G, app.pointer.gy * G, z);
             }
@@ -158,6 +303,7 @@ export function createTools(app) {
             return true;
         };
         return {
+            magnet: true,
             hotkey: opts.key,
             label: opts.label,
             hint: opts.hint,
@@ -360,6 +506,7 @@ export function createTools(app) {
         return { x, y, w: Math.abs(p.gx - a.gx), h: Math.abs(p.gy - a.gy) };
     };
     T.floor = {
+        magnet: true,
         hotkey: 'e',
         label: 'Entrepiso de madera',
         hint: 'Clic dentro de un ambiente rectangular, o arrastre un rectángulo a ejes de muros. Los tirantes cruzan la luz menor.',
@@ -427,6 +574,7 @@ export function createTools(app) {
     let beamA = null;
     let beamEnd = null;
     T.beam = {
+        magnet: true,
         hotkey: 't',
         label: 'Viga de madera',
         hint: 'Clic en dos nodos alineados: viga apoyada sobre muros portantes (lleva placa de reparto).',
@@ -476,6 +624,165 @@ export function createTools(app) {
                 nodeMarker(ctx, cam, app.pointer.gx * G, app.pointer.gy * G, z, '#8a5a1f');
             }
             if (beamA) nodeMarker(ctx, cam, beamA.gx * G, beamA.gy * G, z, '#8a5a1f');
+        },
+    };
+
+    // ---------------- losa (piso del Nivel 2) ----------------
+    let slabThickness = 12;
+    let slabShrink = 0;
+    let slab = null;
+    const needUpper = () => (!store.project.upper ? 'Primero agregá el Nivel 2 con «+ Agregar nivel».' : store.ui.level === 1 ? null : 'La losa es el piso del Nivel 2: elegí la pestaña «Nivel 2».');
+    T.slab = {
+        magnet: true,
+        hotkey: 'l',
+        label: 'Losa de piso',
+        hint: 'Clic dentro de una habitación de abajo: losa del mismo tamaño (o un módulo más chica). O arrastrá un rectángulo. Debe apoyar sobre muros.',
+        disabled: needUpper,
+        planeZ: () => cfg.levelHeight,
+        options: () => h('span', { class: 'row' },
+            selectT('Espesor', slabThickness, [10, 12, 15, 20].map((v) => [v, `${v} cm`]), (v) => { slabThickness = Number(v); }),
+            selectT('Tamaño', slabShrink, [[0, 'Igual a la habitación'], [1, 'Más chica (−12,5 cm por lado)'], [2, 'Más chica (−25 cm por lado)']], (v) => { slabShrink = Number(v); })),
+        reset() { slab = null; },
+        down(p) {
+            slab = { a: { gx: p.gx, gy: p.gy }, rect: null, dragged: false, at: { x: p.sx, y: p.sy } };
+        },
+        move(p) {
+            if (!slab) return;
+            if (Math.hypot(p.sx - slab.at.x, p.sy - slab.at.y) > DRAG_PX) slab.dragged = true;
+            slab.rect = slab.dragged ? floorRect(slab.a, p) : null;
+            app.render();
+        },
+        up() {
+            if (!slab) return;
+            let r = slab.rect;
+            const a = slab.a;
+            slab = null;
+            if (!r) {
+                const rooms = store.analysis?.levels?.[0]?.rooms ?? [];
+                const room = rooms.find((rm) => rm.rect && a.gx >= rm.bbox.x && a.gx < rm.bbox.x + rm.bbox.w && a.gy >= rm.bbox.y && a.gy < rm.bbox.y + rm.bbox.h);
+                if (!room) {
+                    app.toast('Clic dentro de una habitación cerrada de la planta baja (o arrastrá un rectángulo).', 'error');
+                    return;
+                }
+                const k = slabShrink;
+                r = { x: room.bbox.x + k, y: room.bbox.y + k, w: room.bbox.w - 2 * k, h: room.bbox.h - 2 * k };
+            }
+            if (r.w < 4 || r.h < 4) {
+                app.toast('La losa debe medir al menos 50 × 50 cm.', 'error');
+                return;
+            }
+            const t = slabThickness;
+            store.commit('Agregar losa', (d) => {
+                d.levels[1].slabs.push({ id: nextId(d, 'l'), x: r.x, y: r.y, w: r.w, h: r.h, thickness: t });
+            });
+        },
+        keyDown(e) {
+            if (e.key === 'Escape' && slab) {
+                slab = null;
+                app.render();
+                return true;
+            }
+            return false;
+        },
+        draw(ctx, cam) {
+            const z = cfg.levelHeight;
+            if (slab?.rect) {
+                const { x, y, w, h: hh } = slab.rect;
+                outlineRect(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, { stroke: '#475569', fill: 'rgba(100,116,139,.35)', width: 2.5, dash: [6, 4] });
+                dimLabel(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, `${fmt((w * G) / 100)} × ${fmt((hh * G) / 100)} m · ${fmt(((w * G) / 100) * ((hh * G) / 100))} m²`);
+                return;
+            }
+            const p = app.pointer;
+            if (!p) return;
+            const rooms = store.analysis?.levels?.[0]?.rooms ?? [];
+            const room = rooms.find((rm) => rm.rect && p.gx >= rm.bbox.x && p.gx < rm.bbox.x + rm.bbox.w && p.gy >= rm.bbox.y && p.gy < rm.bbox.y + rm.bbox.h);
+            if (room) {
+                const k = slabShrink;
+                outlineRect(ctx, cam, (room.bbox.x + k) * G, (room.bbox.y + k) * G, (room.bbox.x + room.bbox.w - k) * G, (room.bbox.y + room.bbox.h - k) * G, z, { stroke: '#475569', fill: 'rgba(100,116,139,.3)', width: 2 });
+            } else if (inLot(p.gx, p.gy)) {
+                nodeMarker(ctx, cam, p.gx * G, p.gy * G, z, '#475569');
+            }
+        },
+    };
+
+    // ---------------- escalera (con descanso) ----------------
+    const stairState = { shape: 'straight', dir: 'E', turn: 'right', w: 8, tread: 28 };
+    const DIRS = ['E', 'S', 'W', 'N'];
+    const DIR_NAME = { N: '↑ Norte', E: '→ Este', S: '↓ Sur', W: '← Oeste' };
+    /** Huellas de la escalera (cm, en planta), con la misma geometría que calcula el servidor. */
+    const stairGeometry = (st, gx, gy) => {
+        const n = Math.ceil(cfg.levelHeight / 18);
+        const W = st.w * G;
+        const tread = st.tread;
+        const k1 = st.shape === 'straight' ? n : Math.ceil(n / 2);
+        const sgn = st.turn === 'left' ? -1 : 1;
+        const l1 = (k1 - 1) * tread;
+        const steps = [];
+        const landings = [];
+        for (let i = 1; i < k1; i++) steps.push([(i - 1) * tread, i * tread, 0, W]);
+        if (st.shape !== 'straight') {
+            const second = n - k1 - 1;
+            if (st.shape === 'L') {
+                landings.push([l1, l1 + W, 0, W]);
+                for (let j = 1; j <= second; j++) steps.push([l1, l1 + W, W + (j - 1) * tread, W + j * tread]);
+            } else {
+                landings.push([l1, l1 + W, 0, 2 * W]);
+                for (let j = 1; j <= second; j++) steps.push([l1 - j * tread, l1 - (j - 1) * tread, W, 2 * W]);
+            }
+        }
+        const toPlan = ([u0, u1, v0, v1]) => {
+            const pts = [[u0, v0 * sgn], [u1, v1 * sgn]].map(([u, v]) => (st.dir === 'N' ? [v, -u] : st.dir === 'E' ? [u, v] : st.dir === 'S' ? [-v, u] : [-u, -v]));
+            return [Math.min(pts[0][0], pts[1][0]), Math.min(pts[0][1], pts[1][1]), Math.max(pts[0][0], pts[1][0]), Math.max(pts[0][1], pts[1][1])];
+        };
+        const all = [...steps, ...landings].map(toPlan);
+        const minX = Math.min(...all.map((r) => r[0]));
+        const minY = Math.min(...all.map((r) => r[1]));
+        const maxX = Math.max(...all.map((r) => r[2]));
+        const maxY = Math.max(...all.map((r) => r[3]));
+        const sh = (r) => [r[0] - minX + gx * G, r[1] - minY + gy * G, r[2] - minX + gx * G, r[3] - minY + gy * G];
+        return { steps: steps.map((r) => sh(toPlan(r))), landings: landings.map((r) => sh(toPlan(r))), w: maxX - minX, h: maxY - minY, n, rise: cfg.levelHeight / n };
+    };
+    const cycleDir = () => { stairState.dir = DIRS[(DIRS.indexOf(stairState.dir) + 1) % 4]; app.refreshOptions(); app.render(); };
+    T.stair = {
+        magnet: true,
+        hotkey: 's',
+        label: 'Escalera',
+        hint: 'Clic dentro de una habitación de la planta baja. Recta, en L o en U (con descanso). X gira la dirección de subida. Abre el hueco en el piso de arriba.',
+        disabled: () => (!store.project.upper ? 'Primero agregá el Nivel 2 con «+ Agregar nivel».' : store.ui.level === 0 ? null : 'Las escaleras se dibujan en la Planta Baja: elegí «Nivel 1».'),
+        options: () => h('span', { class: 'row' },
+            selectT('Forma', stairState.shape, [['straight', 'Recta'], ['L', 'En L con descanso'], ['U', 'En U con descanso']], (v) => { stairState.shape = v; app.refreshOptions(); app.render(); }),
+            selectT('Ancho', stairState.w, [7, 8, 9, 10, 12].map((v) => [v, `${fmt(v * G, 1)} cm`]), (v) => { stairState.w = Number(v); app.render(); }),
+            selectT('Huella', stairState.tread, [25, 26, 28, 30, 32].map((v) => [v, `${v} cm`]), (v) => { stairState.tread = Number(v); app.render(); }),
+            h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: cycleDir }, `Sube hacia ${DIR_NAME[stairState.dir]} (X)`),
+            stairState.shape === 'straight' ? null : selectT('Gira a', stairState.turn, [['right', 'la derecha'], ['left', 'la izquierda']], (v) => { stairState.turn = v; app.render(); })),
+        down(p) {
+            if (!inLot(p.gx, p.gy)) return;
+            const st = { ...stairState };
+            const { w, h: hh } = stairGeometry(st, p.gx, p.gy);
+            store.commit('Agregar escalera', (d) => {
+                d.levels[0].stairs.push({ id: nextId(d, 'e'), x: p.gx, y: p.gy, dir: st.dir, shape: st.shape, w: st.w, tread: st.tread, turn: st.turn });
+            });
+            app.setHint(`Escalera de ${fmt(w / 100)} × ${fmt(hh / 100)} m agregada.`);
+        },
+        keyDown(e) {
+            if (e.key === 'x' || e.key === 'X') {
+                cycleDir();
+                return true;
+            }
+            return false;
+        },
+        draw(ctx, cam) {
+            const p = app.pointer;
+            if (!p || !inLot(p.gx, p.gy)) return;
+            const g = stairGeometry(stairState, p.gx, p.gy);
+            const rooms = store.analysis?.levels?.[0]?.rooms ?? [];
+            const inside = rooms.some((rm) => rm.rect && p.gx * G >= rm.bbox.x * G - 1 && p.gy * G >= rm.bbox.y * G - 1 && p.gx * G + g.w <= (rm.bbox.x + rm.bbox.w) * G + 1 && p.gy * G + g.h <= (rm.bbox.y + rm.bbox.h) * G + 1);
+            const ok = { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' };
+            const bad = { fill: 'rgba(217,119,6,.4)', stroke: '#b45309' };
+            for (const r of g.steps) ghostBox(ctx, cam, { x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: 0, z1: 12 }, inside ? ok : bad);
+            for (const r of g.landings) ghostBox(ctx, cam, { x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: 0, z1: 14 }, inside ? ok : bad);
+            const [sx, sy] = cam.project(p.gx * G + g.w / 2, p.gy * G + g.h / 2, 30);
+            label(ctx, `${g.n} contrahuellas de ${fmt(g.rise, 1)} cm · ${fmt(g.w / 100)} × ${fmt(g.h / 100)} m${inside ? '' : ' · fuera de la habitación'}`, sx, sy - 18);
         },
     };
 

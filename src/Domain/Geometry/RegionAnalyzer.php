@@ -62,7 +62,7 @@ final class RegionAnalyzer
 
         [$faces, $exterior, $free] = $this->wallFaces($level);
 
-        return new RegionMap($rooms, $faces, $exterior, $free);
+        return new RegionMap($rooms, $faces, $exterior, $free, $this->roomOf, $this->i0, $this->j0, $this->cols, $this->rows);
     }
 
     private function vIdx(int $i, int $j): int

@@ -9,7 +9,7 @@ use App\Domain\Hcca;
 /** Proyecto completo: dos niveles estructurales como máximo (PB + PA). */
 final readonly class Project
 {
-    public const array LEVEL_NAMES = ['Nivel 1: Planta Baja', 'Nivel 2: Planta Alta'];
+    public const array LEVEL_NAMES = ['Nivel 1: Planta Baja', 'Nivel 2: Planta Alta', 'Techo'];
     public const array LEVEL_SHORT = ['Planta Baja', 'Planta Alta'];
 
     /**
@@ -24,6 +24,8 @@ final readonly class Project
         public float $latitude = -34.6,
         public int $lotW = 24,
         public int $lotD = 20,
+        public bool $upper = false,
+        public Roof $roof = new Roof(),
     ) {
         if (count($levels) > Hcca::MAX_LEVELS) {
             throw new \InvalidArgumentException('La mampostería autoportante HCCA admite como máximo 2 niveles (PB + PA).');
@@ -35,9 +37,26 @@ final readonly class Project
         return $this->levels[$index] ?? new Level();
     }
 
+    /** ¿Existe el Nivel 2? Es opcional: la casa empieza con un nivel y el techo. */
+    public function upperEnabled(): bool
+    {
+        return $this->upper || !$this->level(1)->isEmpty();
+    }
+
+    /** Índice del nivel más alto con muros (donde apoya el techo), o -1. */
+    public function topLevelIndex(): int
+    {
+        return match (true) {
+            !$this->level(1)->isEmpty() => 1,
+            !$this->level(0)->isEmpty() => 0,
+            default => -1,
+        };
+    }
+
+    /** @param list<Level> $levels */
     public function withLevels(array $levels): self
     {
-        return new self($this->name, $levels, $this->settings, $this->north, $this->latitude, $this->lotW, $this->lotD);
+        return new self($this->name, $levels, $this->settings, $this->north, $this->latitude, $this->lotW, $this->lotD, $this->upper, $this->roof);
     }
 
     public function withLevel(int $index, Level $level): self
@@ -57,6 +76,8 @@ final readonly class Project
             'north' => $this->north,
             'lat' => $this->latitude,
             'lot' => ['w' => $this->lotW, 'd' => $this->lotD],
+            'upper' => $this->upperEnabled(),
+            'roof' => $this->roof->toArray(),
             'settings' => $this->settings->toArray(),
             'levels' => array_map(static fn (Level $l): array => $l->toArray(), $this->levels),
         ];

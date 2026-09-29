@@ -15,9 +15,12 @@ final class TemplateBuilder
 {
     /** @var array<int, array{walls: list<array<string, mixed>>, openings: list<array<string, mixed>>, timber: list<array<string, mixed>>}> */
     private array $levels = [
-        0 => ['walls' => [], 'openings' => [], 'timber' => []],
-        1 => ['walls' => [], 'openings' => [], 'timber' => []],
+        0 => ['walls' => [], 'openings' => [], 'timber' => [], 'slabs' => [], 'stairs' => []],
+        1 => ['walls' => [], 'openings' => [], 'timber' => [], 'slabs' => [], 'stairs' => []],
     ];
+    /** @var array<string, mixed> */
+    private array $roof = ['type' => 'none'];
+    private bool $upper = false;
     private int $seq = 0;
 
     public function __construct(private readonly string $name, private readonly int $north = 0, private readonly float $latitude = -34.6)
@@ -66,6 +69,35 @@ final class TemplateBuilder
         return $this;
     }
 
+    /** Techo: $type 'gable' | 'shed'; $dir eje de la cumbrera ('x'|'y') o hacia dónde cae el agua ('N'|'S'|'E'|'W'). */
+    public function roof(string $type, string $dir = 'x', int $slope = 30, string $section = '3x8', int $spacing = 50): self
+    {
+        $this->roof = ['type' => $type, 'dir' => $dir, 'slope' => $slope, 'section' => $section, 'spacing' => $spacing, 'overhang' => 40];
+
+        return $this;
+    }
+
+    public function slab(int $level, int $x, int $y, int $w, int $h): self
+    {
+        $this->levels[$level]['slabs'][] = ['id' => 'l'.(++$this->seq), 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h, 'thickness' => 12];
+
+        return $this;
+    }
+
+    public function stair(int $level, int $x, int $y, string $dir = 'N', string $shape = 'straight', int $w = 8): self
+    {
+        $this->levels[$level]['stairs'][] = ['id' => 's'.(++$this->seq), 'x' => $x, 'y' => $y, 'dir' => $dir, 'shape' => $shape, 'w' => $w, 'tread' => 28, 'turn' => 'right'];
+
+        return $this;
+    }
+
+    public function upper(): self
+    {
+        $this->upper = true;
+
+        return $this;
+    }
+
     /** @return array<string, mixed> */
     public function build(): array
     {
@@ -76,6 +108,8 @@ final class TemplateBuilder
             'lat' => $this->latitude,
             'lot' => ['w' => 24, 'd' => 20],
             'settings' => ['defaultT' => 20, 'reservePct' => 3, 'currency' => 'USD'],
+            'upper' => $this->upper,
+            'roof' => $this->roof,
             'levels' => [$this->levels[0], $this->levels[1]],
         ];
     }

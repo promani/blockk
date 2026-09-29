@@ -24,11 +24,27 @@ export function mountPanels(app) {
             return;
         }
         const t = a.telemetry;
-        const lv = t.levels[store.ui.level];
+        const lv = t.levels[Math.min(store.ui.level, 1)];
         const tot = t.total;
+        const roofBom = a.roof?.bom;
+        const roofBlock = store.ui.level === 2
+            ? h('div', {},
+                h('div', { class: 'kv-title' }, 'Techo'),
+                a.roof?.type && a.roof.type !== 'none' && roofBom
+                    ? h('dl', { class: 'dl' },
+                        h('dt', {}, 'Tipo'), h('dd', {}, a.roof.type === 'gable' ? 'A dos aguas' : 'A un agua'),
+                        h('dt', {}, 'Superficie de cubierta'), h('dd', {}, m2(roofBom.coverM2)),
+                        h('dt', {}, 'Altura de la cumbrera'), h('dd', {}, `${fmt(a.roof.geometry.riseCm / 100, 2)} m sobre el muro`),
+                        h('dt', {}, 'Largo de cabio'), h('dd', {}, `${fmt(a.roof.geometry.rafterLenCm / 100, 2)} m`),
+                        h('dt', {}, 'Cabios'), h('dd', {}, `${int(roofBom.raftersCount)} × ${roofBom.section.replace('x', '″×')}″ de ${fmt(roofBom.raftersCommercialCm / 100, 2)} m`),
+                        h('dt', {}, 'Cumbrera / correas'), h('dd', {}, `${fmt(roofBom.ridgeMl, 1)} m / ${fmt(roofBom.battenMl, 0)} m`),
+                        h('dt', {}, 'Mampostería de hastiales'), h('dd', { title: 'Se computa por superficie; no está en el despiece de bloques.' }, m2(roofBom.gableMasonryM2)))
+                    : h('p', { class: 'empty-note' }, 'Sin techo o sin muros para apoyarlo. Elegí «A un agua» o «A dos aguas» en la barra de arriba.'))
+            : null;
         const full = tot.heightM >= tot.maxHeightM;
         add(el.tele, 
-            h('div', { class: 'kv-title' }, cfg.levelNames[store.ui.level]),
+            roofBlock,
+            h('div', { class: 'kv-title' }, cfg.levelNames[Math.min(store.ui.level, 1)]),
             h('dl', { class: 'dl' },
                 h('dt', {}, 'Superficie útil'), h('dd', {}, m2(lv.netM2)),
                 h('dt', {}, 'Superficie a ejes'), h('dd', {}, m2(lv.grossM2)),
@@ -36,6 +52,7 @@ export function mountPanels(app) {
                 h('dt', {}, 'Ambientes cerrados'), h('dd', {}, int(lv.rooms)),
                 h('dt', {}, 'Hiladas'), h('dd', { title: '11 hiladas de bloque + 1 hilada de bloque U (corona)' }, `${lv.courses.regular} + 1 U = ${lv.courses.total}/${lv.courses.total}`),
                 h('dt', {}, 'Bloques HCCA del nivel'), h('dd', {}, int(lv.blocks))),
+            t.slabM2 > 0 || t.stairs > 0 ? h('dl', { class: 'dl' }, t.slabM2 > 0 ? [h('dt', {}, 'Losa de piso'), h('dd', {}, m2(t.slabM2))] : null, t.stairs > 0 ? [h('dt', {}, 'Escaleras'), h('dd', {}, int(t.stairs))] : null) : null,
             h('div', { class: 'kv-title' }, 'Obra completa'),
             h('div', { class: `meter${full ? ' full' : ''}`, title: 'Altura autoportante' }, h('i', { style: `width:${Math.min(100, (tot.heightM / tot.maxHeightM) * 100)}%` })),
             h('dl', { class: 'dl' },
@@ -71,12 +88,29 @@ export function mountPanels(app) {
             } else if (sel_.type === 'opening') lv.openings = lv.openings.filter((o) => o.id !== sel_.id);
             else if (sel_.type === 'ubeam') lv.ubeams = lv.ubeams.filter((u) => u.id !== sel_.id);
             else if (sel_.type === 'timber') d.levels[0].timber = d.levels[0].timber.filter((t) => t.id !== sel_.id);
+            else if (sel_.type === 'slab') d.levels[1].slabs = d.levels[1].slabs.filter((x) => x.id !== sel_.id);
+            else if (sel_.type === 'stair') d.levels[0].stairs = d.levels[0].stairs.filter((x) => x.id !== sel_.id);
         });
     }
     app.deleteSelection = deleteSelection;
 
+    /** Botones para correr un muro 62,5 cm / 12,5 cm hacia cada lado (perpendicular a su eje). */
+    function moveButtons(w) {
+        const horizontal = w.y1 === w.y2;
+        const neg = horizontal ? '▲' : '◀';
+        const pos = horizontal ? '▼' : '▶';
+        const negName = horizontal ? 'norte' : 'oeste';
+        const posName = horizontal ? 'sur' : 'este';
+        return [[-5, `${neg} 62,5`, negName], [-1, `${neg} 12,5`, negName], [1, `${pos} 12,5`, posName], [5, `${pos} 62,5`, posName]].map(([d, text, name]) =>
+            h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: `Mover ${fmt(Math.abs(d) * G, 1)} cm hacia el ${name}`, onclick: () => app.moveWallBy(w.id, d) }, text));
+    }
+
     function renderProps() {
         clear(el.props);
+        if (store.ui.level === 2) {
+            renderRoofProps();
+            return;
+        }
         const s = store.ui.selection;
         const lv = store.level();
         const delBtn = h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: deleteSelection }, 'Eliminar (Supr)');
@@ -92,6 +126,9 @@ export function mountPanels(app) {
                 h('div', { class: 'kv-title' }, bearing ? 'Muro portante' : 'Tabique no portante'),
                 h('dl', { class: 'dl' }, h('dt', {}, 'Longitud'), h('dd', {}, `${fmt(len / 100)} m`), h('dt', {}, 'Bloques a lo largo'), h('dd', {}, fmt(len / 62.5, 2)), h('dt', {}, 'Eje'), h('dd', {}, w.y1 === w.y2 ? 'horizontal' : 'vertical')),
                 field('Espesor', sel(w.t, cfg.thicknesses.map((t) => [t, `${cm(t)} cm`]), (v) => modify('Cambiar espesor', (l) => { l.walls.find((x) => x.id === w.id).t = Number(v); }))),
+                h('div', { class: 'kv-title' }, 'Agrandar / achicar la habitación'),
+                h('p', { class: 'small muted' }, 'También podés arrastrar la manija azul del muro. Los muros que llegan a él se estiran solos.'),
+                h('div', { class: 'nudge', role: 'group', 'aria-label': 'Mover el muro' }, moveButtons(w)),
                 ops.length ? h('div', {}, h('div', { class: 'kv-title' }, 'Vanos'), ops.map((o) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', style: 'margin:2px', onclick: () => store.setUi({ selection: { type: 'opening', id: o.id, wall: w.id } }) }, cfg.presets[o.preset]?.label ?? `${o.kind === 'door' ? 'Puerta' : 'Ventana'} ${cm(o.w * G)} cm`))) : null,
                 beams.length ? h('div', {}, h('div', { class: 'kv-title' }, 'Vigas U'), beams.map((u) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', style: 'margin:2px', onclick: () => store.setUi({ selection: { type: 'ubeam', id: u.id, wall: w.id } }) }, `Hilada ${u.course + 1} · ${cm(u.len * G)} cm`))) : null,
                 h('div', { class: 'actions-row' }, delBtn),
@@ -134,6 +171,49 @@ export function mountPanels(app) {
             return;
         }
 
+        if (s?.type === 'slab') {
+            const sl = store.project.levels[1].slabs.find((x) => x.id === s.id);
+            if (!sl) return void (store.ui.selection = null);
+            const upd = (fn) => store.commit('Editar losa', (d) => fn(d.levels[1].slabs.find((x) => x.id === sl.id)));
+            const plan = store.analysis?.floors?.slabs?.find((x) => x.id === sl.id);
+            add(el.props,
+                h('div', { class: 'kv-title' }, 'Losa de piso (Nivel 2)'),
+                field('Espesor', sel(sl.thickness, [10, 12, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.thickness = Number(v); }))),
+                field('Ancho (× 12,5 cm)', num(sl.w, 2, 900, (v) => upd((x) => { x.w = v; }))),
+                field('Profundidad (× 12,5 cm)', num(sl.h, 2, 900, (v) => upd((x) => { x.h = v; }))),
+                field('Posición X (× 12,5 cm)', num(sl.x, 0, 1000, (v) => upd((x) => { x.x = v; }))),
+                field('Posición Y (× 12,5 cm)', num(sl.y, 0, 1000, (v) => upd((x) => { x.y = v; }))),
+                plan ? h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2(plan.areaM2)), h('dt', {}, 'Hormigón'), h('dd', {}, `${fmt((plan.areaM2 * sl.thickness) / 100, 2)} m³`)) : null,
+                h('p', { class: 'small muted' }, 'La losa apoya sobre los muros de la Planta Baja; el hueco de las escaleras se descuenta solo.'),
+                h('div', { class: 'actions-row' }, delBtn),
+            );
+            return;
+        }
+
+        if (s?.type === 'stair') {
+            const st = store.project.levels[0].stairs.find((x) => x.id === s.id);
+            if (!st) return void (store.ui.selection = null);
+            const upd = (fn) => store.commit('Editar escalera', (d) => fn(d.levels[0].stairs.find((x) => x.id === st.id)));
+            const plan = store.analysis?.floors?.stairs?.find((x) => x.id === st.id);
+            add(el.props,
+                h('div', { class: 'kv-title' }, 'Escalera'),
+                field('Forma', sel(st.shape, [['straight', 'Recta'], ['L', 'En L con descanso'], ['U', 'En U con descanso']], (v) => upd((x) => { x.shape = v; }))),
+                field('Sube hacia', sel(st.dir, [['N', 'Norte (arriba)'], ['E', 'Este (derecha)'], ['S', 'Sur (abajo)'], ['W', 'Oeste (izquierda)']], (v) => upd((x) => { x.dir = v; }))),
+                st.shape !== 'straight' ? field('Gira a', sel(st.turn, [['right', 'la derecha'], ['left', 'la izquierda']], (v) => upd((x) => { x.turn = v; }))) : null,
+                field('Ancho (× 12,5 cm)', num(st.w, 7, 16, (v) => upd((x) => { x.w = v; }))),
+                field('Huella (cm)', num(st.tread, 25, 32, (v) => upd((x) => { x.tread = v; }))),
+                field('Posición X (× 12,5 cm)', num(st.x, 0, 1000, (v) => upd((x) => { x.x = v; }))),
+                field('Posición Y (× 12,5 cm)', num(st.y, 0, 1000, (v) => upd((x) => { x.y = v; }))),
+                plan ? h('dl', { class: 'dl' },
+                    h('dt', {}, 'Contrahuella'), h('dd', {}, `${fmt(plan.riseCm, 1)} cm`),
+                    h('dt', {}, 'Peldaños'), h('dd', {}, int(plan.steps.length)),
+                    h('dt', {}, 'Descansos'), h('dd', {}, int(plan.landings.length)),
+                    h('dt', {}, 'Ocupa'), h('dd', {}, `${fmt(plan.bbox.w / 100)} × ${fmt(plan.bbox.h / 100)} m`)) : null,
+                h('div', { class: 'actions-row' }, delBtn),
+            );
+            return;
+        }
+
         if (s?.type === 'timber') {
             const t = store.project.levels[0].timber.find((x) => x.id === s.id);
             if (!t) return void (store.ui.selection = null);
@@ -160,6 +240,26 @@ export function mountPanels(app) {
         );
     }
 
+    /** Propiedades del techo (pestaña Techo): resumen; la edición está en la barra superior. */
+    function renderRoofProps() {
+        const r = store.project.roof;
+        const g = store.analysis?.roof;
+        if (!r || r.type === 'none') {
+            add(el.props, h('p', { class: 'empty-note' }, 'Sin techo. Elegí «A un agua» o «A dos aguas» en la barra de arriba.'));
+            return;
+        }
+        add(el.props,
+            h('div', { class: 'kv-title' }, r.type === 'gable' ? 'Techo a dos aguas' : 'Techo a un agua'),
+            h('p', { class: 'small muted' }, r.type === 'gable'
+                ? 'La cumbrera corre sobre el lado largo. Los cabios apoyan en los muros portantes de los dos lados y se cortan a largo comercial.'
+                : 'El faldón cae hacia el lado elegido; el muro alto queda al lado opuesto.'),
+            g?.bom ? h('dl', { class: 'dl' },
+                h('dt', {}, 'Pendiente'), h('dd', {}, `${r.slope} % (${fmt((Math.atan(r.slope / 100) * 180) / Math.PI, 1)}°)`),
+                h('dt', {}, 'Cubierta'), h('dd', {}, m2(g.bom.coverM2)),
+                h('dt', {}, 'Cabios'), h('dd', {}, int(g.bom.raftersCount))) : null,
+            h('p', { class: 'small muted' }, 'Los precios de cubierta, cabios y correas se editan en Cómputo.'));
+    }
+
     // ------------------------------------------------------------------ validación
     function renderIssues() {
         clear(el.issues);
@@ -173,7 +273,7 @@ export function mountPanels(app) {
         }
         const ico = { error: '✕', warn: '!', info: 'i' };
         for (const i of issues) {
-            add(el.issues, h('button', { type: 'button', class: `issue ${i.severity}`, title: 'Ir al elemento', onclick: () => app.focusIssue(i) }, h('span', { class: 'ico', 'aria-hidden': 'true' }, ico[i.severity]), h('span', {}, `${i.level === 1 ? '[PA] ' : ''}${i.message}`)));
+            add(el.issues, h('button', { type: 'button', class: `issue ${i.severity}`, title: 'Ir al elemento', onclick: () => app.focusIssue(i) }, h('span', { class: 'ico', 'aria-hidden': 'true' }, ico[i.severity]), h('span', {}, `${i.level === 1 ? '[PA] ' : i.level === 2 ? '[Techo] ' : ''}${i.message}`)));
         }
     }
 

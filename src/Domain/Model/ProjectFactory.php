@@ -45,6 +45,7 @@ final class ProjectFactory
         $settings = $this->settings(is_array($data['settings'] ?? null) ? $data['settings'] : []);
         $lot = is_array($data['lot'] ?? null) ? $data['lot'] : [];
 
+        $roofData = is_array($data['roof'] ?? null) ? $data['roof'] : [];
         $project = new Project(
             name: $this->string($data['name'] ?? 'Proyecto sin título', 120, 'name'),
             levels: $levels,
@@ -53,6 +54,8 @@ final class ProjectFactory
             latitude: $this->floatInRange($data['lat'] ?? -34.6, -66.0, 66.0, 'lat'),
             lotW: $this->intInRange($lot['w'] ?? 24, 4, 100, 'lot.w'),
             lotD: $this->intInRange($lot['d'] ?? 20, 4, 100, 'lot.d'),
+            upper: (bool) ($data['upper'] ?? false) || !$levels[1]->isEmpty(),
+            roof: $this->roof($roofData),
         );
 
         if ([] !== $this->errors) {
@@ -113,7 +116,32 @@ final class ProjectFactory
             $timber[] = $this->timber($t, "$path.timber[$i]", $ids);
         }
 
-        return new Level($walls, $openings, $ubeams, $timber);
+        $slabs = [];
+        foreach ($this->list($d['slabs'] ?? [], Hcca::MAX_SLABS_PER_LEVEL, "$path.slabs") as $i => $sl) {
+            $slabs[] = new Slab(
+                $this->id($sl['id'] ?? null, "$path.slabs[$i].id", $ids),
+                $this->coord($sl['x'] ?? null, "$path.slabs[$i].x"),
+                $this->coord($sl['y'] ?? null, "$path.slabs[$i].y"),
+                $this->intInRange($sl['w'] ?? 8, 2, Hcca::MAX_BBOX_UNITS, "$path.slabs[$i].w"),
+                $this->intInRange($sl['h'] ?? 8, 2, Hcca::MAX_BBOX_UNITS, "$path.slabs[$i].h"),
+                $this->intInRange($sl['thickness'] ?? 12, 8, 25, "$path.slabs[$i].thickness"),
+            );
+        }
+        $stairs = [];
+        foreach ($this->list($d['stairs'] ?? [], Hcca::MAX_STAIRS_PER_LEVEL, "$path.stairs") as $i => $st) {
+            $stairs[] = new Stair(
+                $this->id($st['id'] ?? null, "$path.stairs[$i].id", $ids),
+                $this->coord($st['x'] ?? null, "$path.stairs[$i].x"),
+                $this->coord($st['y'] ?? null, "$path.stairs[$i].y"),
+                in_array($st['dir'] ?? 'N', ['N', 'E', 'S', 'W'], true) ? $st['dir'] : 'N',
+                in_array($st['shape'] ?? 'straight', ['straight', 'L', 'U'], true) ? $st['shape'] : 'straight',
+                $this->intInRange($st['w'] ?? 8, 7, 16, "$path.stairs[$i].w"),
+                $this->intInRange($st['tread'] ?? 28, 25, 32, "$path.stairs[$i].tread"),
+                'left' === ($st['turn'] ?? 'right') ? 'left' : 'right',
+            );
+        }
+
+        return new Level($walls, $openings, $ubeams, $timber, $slabs, $stairs);
     }
 
     /** @param array<string, mixed> $o @param array<string, true> $ids */
@@ -173,6 +201,30 @@ final class ProjectFactory
             Axis::tryFrom((string) ($t['dir'] ?? 'x')) ?? Axis::X,
             $section,
             $this->intInRange($t['spacing'] ?? 40, Hcca::JOIST_MIN_SPACING_CM, Hcca::JOIST_MAX_SPACING_CM, "$path.spacing"),
+        );
+    }
+
+    /** @param array<string, mixed> $r */
+    private function roof(array $r): Roof
+    {
+        $type = RoofType::tryFrom((string) ($r['type'] ?? 'none')) ?? RoofType::None;
+        $dir = (string) ($r['dir'] ?? '');
+        $dir = RoofType::Shed === $type
+            ? (in_array($dir, ['N', 'S', 'E', 'W'], true) ? $dir : 'S')
+            : (in_array($dir, ['x', 'y'], true) ? $dir : 'x');
+        $section = (string) ($r['section'] ?? '3x8');
+        if (!isset(Hcca::timberSections()[$section])) {
+            $this->errors[] = 'roof.section desconocida';
+            $section = '3x8';
+        }
+
+        return new Roof(
+            $type,
+            $dir,
+            $this->intInRange($r['slope'] ?? 30, 10, 100, 'roof.slope'),
+            $this->intInRange($r['overhang'] ?? 40, 0, 100, 'roof.overhang'),
+            $section,
+            $this->intInRange($r['spacing'] ?? 50, Hcca::JOIST_MIN_SPACING_CM, Hcca::JOIST_MAX_SPACING_CM, 'roof.spacing'),
         );
     }
 

@@ -24,7 +24,37 @@ final readonly class RegionMap
         public array $faces = [],
         public array $exterior = [],
         public array $freeStanding = [],
+        /** @var list<int> ambiente de cada celda de la grilla (0 = exterior), fila por fila */
+        public array $cells = [],
+        public int $i0 = 0,
+        public int $j0 = 0,
+        public int $cols = 0,
+        public int $rows = 0,
     ) {
+    }
+
+    /** Ambiente (0 = exterior) de la celda (i, j) de la retícula de 12,5 cm. */
+    public function roomAtCell(int $i, int $j): int
+    {
+        if ($i < $this->i0 || $j < $this->j0 || $i >= $this->i0 + $this->cols || $j >= $this->j0 + $this->rows) {
+            return 0;
+        }
+
+        return $this->cells[($j - $this->j0) * $this->cols + ($i - $this->i0)];
+    }
+
+    /** ¿Todas las celdas del rectángulo (unidades) pertenecen a algún ambiente cerrado? */
+    public function isInsideRooms(int $x, int $y, int $w, int $h): bool
+    {
+        for ($j = $y; $j < $y + $h; ++$j) {
+            for ($i = $x; $i < $x + $w; ++$i) {
+                if (0 === $this->roomAtCell($i, $j)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     public function room(int $id): ?Room

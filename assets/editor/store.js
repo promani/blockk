@@ -2,6 +2,7 @@ import { analyze, solarPath } from '../lib/api.js';
 import { saveProject, blankProject } from '../lib/storage.js';
 
 const HISTORY_LIMIT = 60;
+const EMPTY_LEVEL = Object.freeze({ walls: [], openings: [], ubeams: [], timber: [], slabs: [], stairs: [] });
 
 /**
  * Estado del editor: proyecto normalizado + análisis del servidor + estado de interfaz.
@@ -41,8 +42,27 @@ export class Store extends EventTarget {
         return this.pendingCount > 0;
     }
 
+    /** Nivel activo. El techo (índice 2) no es un nivel con muros: devuelve uno vacío. */
     level() {
-        return this.project.levels[this.ui.level];
+        return this.project.levels[this.ui.level] ?? EMPTY_LEVEL;
+    }
+
+    /** Índice del último nivel con muros: 0 (solo Planta Baja) o 1 (con Nivel 2). */
+    get topLevel() {
+        return this.project.upper ? 1 : 0;
+    }
+
+    /** Agrega el Nivel 2: el techo pasa a ser el nivel superior. */
+    async addUpper() {
+        if (this.project.upper) return;
+        this.ui.level = 1;
+        this.ui.selection = null;
+        await this.commit('Agregar nivel', (d) => { d.upper = true; });
+    }
+
+    /** Si el Nivel 2 dejó de existir (deshacer), vuelve a la Planta Baja. */
+    #fixLevel() {
+        if (!this.project.upper && this.ui.level === 1) this.ui.level = 0;
     }
 
     setUi(patch, { silent = false } = {}) {
@@ -67,6 +87,7 @@ export class Store extends EventTarget {
             this.future = [];
         }
         this.project = project;
+        this.#fixLevel();
         this.ui.thickness = project.settings?.defaultT ?? 20;
         this.ui.selection = null;
         this.analysis = null;
@@ -102,6 +123,7 @@ export class Store extends EventTarget {
 
     async #restore(entry) {
         this.project = entry.project;
+        this.#fixLevel();
         this.ui.selection = null;
         if (entry.analysis) {
             this.seq++;
@@ -129,6 +151,7 @@ export class Store extends EventTarget {
             this.project = res.project;
             this.analysis = res.analysis;
             this.fresh = true;
+            this.#fixLevel();
             saveProject(this.project);
             this.emit('change');
             for (const n of res.analysis.notices ?? []) this.emit('toast', { message: n, kind: 'info' });

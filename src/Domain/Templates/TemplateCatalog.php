@@ -82,6 +82,7 @@ final class TemplateCatalog
                     ->opening(0, 'V125', 'x', 0, 15)
                     ->opening(0, 'V150', 'y', 40, 9)
                     ->opening(0, 'V100', 'y', 0, 11)
+                    ->roof('gable', 'x')
                     ->build(),
             ],
             'casa-minima' => [
@@ -99,6 +100,7 @@ final class TemplateCatalog
                     ->opening(0, 'VT62', 'y', 0, 35)
                     ->opening(0, 'P87', 'y', 30, 8)
                     ->opening(0, 'P75', 'y', 30, 32)
+                    ->roof('gable', 'x')
                     ->build(),
             ],
             'vivienda-2-dormitorios' => [
@@ -121,6 +123,7 @@ final class TemplateCatalog
                     ->opening(0, 'V150', 'x', 55, 50)
                     ->opening(0, 'V125', 'y', 0, 35)
                     ->opening(0, 'V125', 'y', 75, 35)
+                    ->roof('gable', 'x')
                     ->build(),
             ],
             'duplex-2-plantas' => [
@@ -146,6 +149,8 @@ final class TemplateCatalog
                     ->opening(1, 'V125', 'x', 40, 42)
                     ->opening(1, 'P87', 'y', 30, 22)
                     ->opening(1, 'P75', 'x', 15, 40)
+                    ->upper()
+                    ->roof('gable', 'x')
                     ->build(),
             ],
             'vivienda-evolutiva' => [
@@ -171,6 +176,8 @@ final class TemplateCatalog
                     ->opening(1, 'V125', 'x', 0, 8)
                     ->opening(1, 'V125', 'x', 40, 8)
                     ->opening(1, 'V100', 'y', 0, 16)
+                    ->upper()
+                    ->roof('gable', 'y')
                     ->build(),
             ],
         ];

@@ -12,12 +12,16 @@ final readonly class Level
      * @param list<Opening>       $openings
      * @param list<UBeam>         $ubeams
      * @param list<TimberElement> $timber   estructura de entrepiso que apoya sobre este nivel
+     * @param list<Slab>          $slabs    losas que hacen de piso de este nivel
+     * @param list<Stair>         $stairs   escaleras que suben desde este nivel
      */
     public function __construct(
         public array $walls = [],
         public array $openings = [],
         public array $ubeams = [],
         public array $timber = [],
+        public array $slabs = [],
+        public array $stairs = [],
     ) {
     }
 
@@ -50,13 +54,13 @@ final readonly class Level
      */
     public function withStructure(array $walls, array $openings, array $ubeams): self
     {
-        return new self($walls, $openings, $ubeams, $this->timber);
+        return new self($walls, $openings, $ubeams, $this->timber, $this->slabs, $this->stairs);
     }
 
     /** @param list<TimberElement> $timber */
     public function withTimber(array $timber): self
     {
-        return new self($this->walls, $this->openings, $this->ubeams, $timber);
+        return new self($this->walls, $this->openings, $this->ubeams, $timber, $this->slabs, $this->stairs);
     }
 
     /** @return array<string, mixed> */
@@ -67,6 +71,8 @@ final readonly class Level
             'openings' => array_map(static fn (Opening $o): array => $o->toArray(), $this->openings),
             'ubeams' => array_map(static fn (UBeam $u): array => $u->toArray(), $this->ubeams),
             'timber' => array_map(static fn (TimberElement $t): array => $t->toArray(), $this->timber),
+            'slabs' => array_map(static fn (Slab $t): array => $t->toArray(), $this->slabs),
+            'stairs' => array_map(static fn (Stair $t): array => $t->toArray(), $this->stairs),
         ];
     }
 }

@@ -111,3 +111,38 @@ export function nodeMarker(ctx, cam, x, y, z, color = '#1e293b') {
     ctx.stroke();
     ctx.restore();
 }
+
+/** Puntos de la retícula de ajuste alrededor del cursor: se ve dónde va a caer el trazo sin llenar el suelo de líneas. */
+export function snapDots(ctx, cam, gx, gy, step, z, G = 12.5, radius = 3) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(30,41,59,.38)';
+    for (let i = -radius; i <= radius; i++) {
+        for (let j = -radius; j <= radius; j++) {
+            if (!i && !j) continue;
+            const fade = 1 - Math.hypot(i, j) / (radius + 1);
+            if (fade <= 0) continue;
+            const [sx, sy] = cam.project((gx + i * step) * G, (gy + j * step) * G, z);
+            ctx.globalAlpha = fade;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 1.8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
+/** Resalta el muro al que el imán se pegó y, si es su extremo, marca el nodo. */
+export function magnetHit(ctx, cam, hit, box, gx, gy, z) {
+    wireBox(ctx, cam, box, { stroke: '#2563eb', width: 2.2, dash: [5, 3] });
+    const [sx, sy] = cam.project(gx * 12.5, gy * 12.5, z);
+    ctx.save();
+    ctx.strokeStyle = '#2563eb';
+    ctx.fillStyle = 'rgba(37,99,235,.18)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sx, sy, hit.kind === 'end' ? 9 : 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    label(ctx, hit.kind === 'end' ? 'Extremo de muro' : `Sobre la pared${hit.level === 0 && z > 0 ? ' de abajo' : ''}`, sx, sy - 22, { bg: 'rgba(37,99,235,.92)' });
+}

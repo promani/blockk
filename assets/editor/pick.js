@@ -69,7 +69,7 @@ export function alongPosition(app, wall, sx, sy) {
     return ((horizontal ? wx : wy) - (horizontal ? wall.x1 : wall.y1) * G) / G;
 }
 
-/** Elemento bajo el puntero: vano, muro o madera. */
+/** Elemento bajo el puntero: vano, muro, madera, losa o escalera. */
 export function pickAt(app, sx, sy) {
     const { store, cam } = app;
     const wall = pickWall(app, sx, sy);
@@ -90,6 +90,23 @@ export function pickAt(app, sx, sy) {
         for (const b of store.analysis.timber.beams ?? []) {
             const near = Math.abs(b.x1 - b.x2) < 0.01 ? Math.abs(wx - b.x1) < 12 && wy >= Math.min(b.y1, b.y2) - 6 && wy <= Math.max(b.y1, b.y2) + 6 : Math.abs(wy - b.y1) < 12 && wx >= Math.min(b.x1, b.x2) - 6 && wx <= Math.max(b.x1, b.x2) + 6;
             if (near) return { type: 'timber', id: b.id };
+        }
+    }
+    if (store.analysis?.floors) {
+        if (store.ui.level === 1) {
+            const [wx, wy] = cam.unproject(sx, sy, store.config.levelHeight + 8);
+            for (const sl of store.analysis.floors.slabs ?? []) {
+                const r = sl.rect;
+                if (wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h) return { type: 'slab', id: sl.id };
+            }
+        }
+        if (store.ui.level === 0) {
+            // los peldaños suben: se prueba a media altura de la escalera
+            const [wx, wy] = cam.unproject(sx, sy, store.config.levelHeight / 2);
+            for (const st of store.analysis.floors.stairs ?? []) {
+                const b = st.bbox;
+                if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return { type: 'stair', id: st.id };
+            }
         }
     }
     return null;

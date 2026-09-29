@@ -22,6 +22,13 @@ const PRICE_LABELS = {
     osb_sheet: ['Placa OSB 18 mm', 'placa'],
     elastic_band_m: ['Banda elástica de apoyo', 'm'],
     plate_u: ['Placa de reparto de carga', 'u'],
+    timber_3x12_m: ['Madera 3″×12″', 'm'],
+    roof_cover_m2: ['Cubierta de techo (chapa/teja)', 'm²'],
+    batten_m: ['Correas / listones de techo', 'm'],
+    mesh_m2: ['Malla electrosoldada (losa)', 'm²'],
+    formwork_m2: ['Encofrado de losa', 'm²'],
+    stair_step_u: ['Peldaño de escalera', 'u'],
+    stair_landing_m2: ['Descanso de escalera', 'm²'],
 };
 
 let state = { project: null, analysis: null, scope: 'total' };

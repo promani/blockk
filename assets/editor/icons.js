@@ -10,5 +10,7 @@ export const ICONS = {
     window: svg('<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M12 4v16M4 12h16"/>'),
     ubeam: svg('<path d="M4 7h16v11H4z"/><path d="M8 7v7h8V7"/>'),
     floor: svg('<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 9h18M3 13h18M3 17h18" stroke-width="1.3"/>'),
+    slab: svg('<path d="M3 10l9-5 9 5-9 5z"/><path d="M3 10v3l9 5 9-5v-3"/>'),
+    stair: svg('<path d="M4 20h4v-4h4v-4h4V8h4"/><path d="M4 20V4M20 8v12" stroke-width="1.2"/>'),
     beam: svg('<rect x="3" y="9" width="18" height="6" rx="1"/><path d="M6 9v6M18 9v6" stroke-width="1.3"/>'),
 };

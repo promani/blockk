@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domain;
 
 use App\Domain\Bom\BomCalculator;
+use App\Domain\Floor\SlabPlanner;
+use App\Domain\Floor\StairPlanner;
 use App\Domain\Geometry\OpeningPlacement;
 use App\Domain\Geometry\RegionAnalyzer;
 use App\Domain\Geometry\Topology;
@@ -13,6 +15,7 @@ use App\Domain\Masonry\CourseBuilder;
 use App\Domain\Model\InvalidProjectException;
 use App\Domain\Model\Project;
 use App\Domain\Model\Wall;
+use App\Domain\Roof\RoofPlanner;
 use App\Domain\Timber\TimberPlanner;
 use App\Domain\Validation\Issue;
 use App\Domain\Validation\ProjectValidator;
@@ -28,6 +31,9 @@ final class ProjectAnalyzer
         private readonly RegionAnalyzer $regions = new RegionAnalyzer(),
         private readonly CourseBuilder $courses = new CourseBuilder(),
         private readonly TimberPlanner $timber = new TimberPlanner(),
+        private readonly StairPlanner $stairs = new StairPlanner(),
+        private readonly SlabPlanner $slabs = new SlabPlanner(),
+        private readonly RoofPlanner $roof = new RoofPlanner(),
         private readonly BomCalculator $bom = new BomCalculator(),
         private readonly ProjectValidator $validator = new ProjectValidator(),
         private readonly OpeningPlacement $placement = new OpeningPlacement(),
@@ -92,14 +98,22 @@ final class ProjectAnalyzer
     {
         [$normalized, $notices] = $this->normalize($project);
         $levels = $this->analyzeLevels($normalized);
-        $timber = $this->timber->plan($normalized->level(0));
+        $stairPlan = $this->stairs->plan($normalized, $levels[0]->regions);
+        $timber = $this->timber->plan($normalized->level(0), $stairPlan->holes);
+        $slabPlan = $this->slabs->plan($normalized, $levels[0]->regions, $stairPlan->holes);
+        $roofPlan = $this->roof->plan($normalized, $levels);
+        $extras = ['stairs' => $stairPlan->bom, 'slabs' => $slabPlan->bom, 'roof' => $roofPlan->bom];
         $bom = $this->bom->calculate(
             $normalized,
             array_map(static fn (LevelAnalysis $l) => $l->courses, $levels),
             array_map(static fn (LevelAnalysis $l) => $l->topology, $levels),
             $timber,
+            $extras,
         );
         $issues = $this->validator->validate($normalized, $levels, $timber);
+        foreach ([...$stairPlan->issues, ...$slabPlan->issues, ...$roofPlan->issues] as $i) {
+            $issues[] = Issue::fromArray($i);
+        }
 
         return [
             'project' => $normalized->toArray(),
@@ -107,9 +121,11 @@ final class ProjectAnalyzer
                 'notices' => $notices,
                 'levels' => array_map(fn (LevelAnalysis $l, int $i): array => $this->levelPayload($l, $bom['levels'][$i] ?? []), $levels, array_keys($levels)),
                 'timber' => $timber->toArray(),
+                'floors' => ['stairs' => $stairPlan->stairs, 'slabs' => $slabPlan->slabs],
+                'roof' => $roofPlan->toArray(),
                 'bom' => $bom,
                 'issues' => array_map(static fn (Issue $i): array => $i->toArray(), $issues),
-                'telemetry' => $this->telemetry($normalized, $levels, $bom),
+                'telemetry' => $this->telemetry($normalized, $levels, $bom) + ['roof' => ['type' => $roofPlan->type, 'riseCm' => $roofPlan->geometry['riseCm'] ?? 0, 'coverM2' => $roofPlan->bom['coverM2'] ?? 0], 'slabM2' => $slabPlan->bom['areaM2'], 'stairs' => $stairPlan->bom['count']],
             ],
         ];
     }

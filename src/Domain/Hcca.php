@@ -62,6 +62,8 @@ final class Hcca
     public const int MAX_OPENINGS_PER_LEVEL = 1500;
     public const int MAX_UBEAMS_PER_LEVEL = 500;
     public const int MAX_TIMBER_PER_LEVEL = 40;
+    public const int MAX_SLABS_PER_LEVEL = 20;
+    public const int MAX_STAIRS_PER_LEVEL = 10;
     /** Presupuesto de complejidad tras normalizar (una vivienda real usa < 150 tramos por nivel). */
     public const int MAX_SEGMENTS_PER_LEVEL = 800;
 
@@ -94,6 +96,7 @@ final class Hcca
         return [
             '3x8' => ['label' => 'Pino tratado 3" × 8" (7,5 × 20 cm)', 'b' => 7.5, 'd' => 20.0, 'maxSpanCm' => 375],
             '3x10' => ['label' => 'Pino tratado 3" × 10" (7,5 × 25 cm)', 'b' => 7.5, 'd' => 25.0, 'maxSpanCm' => 475],
+            '3x12' => ['label' => 'Pino tratado 3" × 12" (7,5 × 30 cm)', 'b' => 7.5, 'd' => 30.0, 'maxSpanCm' => 575],
         ];
     }
 
@@ -164,6 +167,13 @@ final class Hcca
             'osb_sheet' => 34.0,
             'elastic_band_m' => 1.1,
             'plate_u' => 9.0,
+            'timber_3x12_m' => 11.0,
+            'roof_cover_m2' => 22.0,
+            'batten_m' => 1.4,
+            'mesh_m2' => 6.0,
+            'formwork_m2' => 12.0,
+            'stair_step_u' => 28.0,
+            'stair_landing_m2' => 95.0,
         ];
     }
 

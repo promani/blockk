@@ -16,7 +16,7 @@ Requisitos: PHP ≥ 8.4 (extensiones habituales de Symfony: `ctype`, `iconv`, `i
 ```bash
 composer install
 composer start            # php -S 127.0.0.1:8000 -t public   →   http://127.0.0.1:8000
-composer test             # PHPUnit (118 tests)
+composer test             # PHPUnit (131 tests)
 ```
 
 En producción: `APP_ENV=prod composer install --no-dev -o && php bin/console asset-map:compile && php bin/console cache:warmup`
@@ -27,20 +27,22 @@ y servir `public/` con PHP-FPM/Nginx/Apache o FrankenPHP. No hay base de datos: 
 
 | Ruta | Pantalla |
 |---|---|
-| `/` | **Editor 3D e isométrico**: herramientas Sala (R), Muro (W), Bloque (B), Puerta (P), Ventana (N), Viga U (U), Entrepiso (E), Viga de madera (T); vistas Isométrica / Planta (`Tab`), giro `[` `]`, niveles PB/PA, asoleamiento, telemetría en vivo, validación. |
+| `/` | **Editor 3D e isométrico**: herramientas Sala (R), Muro (W), Bloque (B), Puerta (P), Ventana (N), Viga U (U), Entrepiso (E), Viga de madera (T), **Losa (L)** y **Escalera (S)**; vistas Isométrica / Planta (`Tab`), botones **Girar** (`[` `]`) para ver desde otro ángulo, pestañas Nivel 1 / Nivel 2 / **Techo**, asoleamiento, telemetría en vivo, validación. |
 | `/computo` | **Cómputo y despiece**: KPIs, desglose por nivel, patrones de corte, madera, cotización con precios editables, envío a distribuidor (correo/WhatsApp), exportación **CSV** y **PDF vectorial** (generados en el navegador). |
 | `/galeria` | **Plantillas modulares** (1 planta, 2 plantas, evolutiva, quincho, dúplex, luz libre) con miniaturas SVG y métricas calculadas por el motor; proyecto en blanco con retícula parametrizable. |
 | `/catalogo` | **Catálogo técnico**: fichas de piezas, reglas de modulación, calculadora rápida de paño y mortero, FAQ de obra seca. |
 
-Atajos: `V R W B P N U E T` herramientas · `Ctrl+Z / Ctrl+Y` deshacer/rehacer · `Supr` eliminar · `1`/`2` nivel ·
-rueda = zoom · clic central o `Espacio`+arrastre = paneo · `F` encuadrar · `X` gira el bloque.
+Atajos: `V R W B P N U E T L S` herramientas · `Ctrl+Z / Ctrl+Y` deshacer/rehacer · `Supr` eliminar · 
+rueda = zoom · clic central o `Espacio`+arrastre = paneo · `F` encuadrar · `X` gira el bloque / la escalera · `1` `2` `3` Nivel 1 / Nivel 2 / Techo.
+
+Edición: la retícula del suelo es sólo una guía (línea por metro, más marcada cada 5 m); al dibujar aparecen puntos de ajuste junto al cursor y un **imán** azul pega el trazo al eje o extremo de la pared más cercana (del nivel o del de abajo). En Sala, el borde se alinea con paredes vecinas para hacer habitaciones contiguas. Con un muro elegido, su **manija azul** (o los botones ▲▼◀▶) lo corre y estira los muros que llegan a él, y arrastra al muro de arriba.
 
 ## Reglas constructivas que aplica el motor
 
 | Regla (PRD) | Dónde |
 |---|---|
 | Solo muros ortogonales (90°) | `Wall`, `ProjectFactory` |
-| **Máximo 2 niveles** autoportantes (PB + PA ≤ 6,00 m); el 3.er nivel está inhabilitado con advertencia | `Hcca::MAX_LEVELS`, `ProjectFactory`, UI |
+| **Máximo 2 niveles con muros** (PB + PA ≤ 6,00 m). La casa nace con 1 nivel + pestaña **Techo**; «+ Agregar nivel» crea el Nivel 2 y el techo pasa a apoyar sobre él. No existe un 3.er nivel | `Hcca::MAX_LEVELS`, `Project::upper`, UI |
 | Módulo 62,5 × 25 cm; submódulo de retícula 12,5 cm; nivel = 11 hiladas + 1 de bloque U = 12 hiladas = 3,00 m | `Hcca`, `CourseBuilder` |
 | Espesores: portantes 15/20 cm, tabiques 10/7,5 cm | `Hcca::THICKNESSES_CM` |
 | **Traba ≥ 12,5 cm** entre juntas verticales de hiladas consecutivas; encuentros a 90° alternados hilada a hilada; T con anclajes | `CourseBuilder`, `Topology`, `BomCalculator` |

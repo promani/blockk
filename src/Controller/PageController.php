@@ -35,7 +35,7 @@ final class PageController extends AbstractController
     public function gallery(): Response
     {
         // Las métricas de las plantillas salen del motor real; se cachean porque son deterministas.
-        $cards = $this->cache->get('gallery.cards.v1', function (ItemInterface $item): array {
+        $cards = $this->cache->get('gallery.cards.v2', function (ItemInterface $item): array {
             $item->expiresAfter(3600);
 
             return array_map(function (array $s): array {

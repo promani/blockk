@@ -8,7 +8,8 @@ import { Renderer } from './renderer.js';
 import { buildScene } from './scene.js';
 import { createTools, openingBox } from './tools.js';
 import { mountPanels } from './panels.js';
-import { wireBox } from './overlay.js';
+import { wireBox, snapDots, magnetHit } from './overlay.js';
+import { magnet } from './snap.js';
 import { wallRect, G } from './pick.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
@@ -19,7 +20,8 @@ const cam = new Camera();
 const renderer = new Renderer(canvas);
 
 const UI_KEY = 'blockk.ui.v1';
-const TOOL_ORDER = ['select', 'room', 'wall', 'block', '|', 'door', 'window', 'ubeam', '|', 'floor', 'beam'];
+const TOOL_ORDER = ['select', 'room', 'wall', 'block', '|', 'door', 'window', 'ubeam', '|', 'floor', 'beam', '|', 'slab', 'stair'];
+const ROOF_LEVEL = 2;
 
 let dirty = true;
 let scene = null;
@@ -58,8 +60,10 @@ function toast(message, kind = 'info') {
 }
 
 const activeTool = () => app.tools[store.ui.tool] ?? app.tools.select;
-/** Plano horizontal de trabajo: el del nivel activo; el entrepiso y las vigas se dibujan sobre la corona de PB. */
-const planeZ = () => activeTool().planeZ?.() ?? store.ui.level * config.levelHeight;
+/** Plano horizontal de trabajo: el del nivel activo (el techo apoya sobre el último nivel con muros). */
+const levelZ = () => (store.ui.level === ROOF_LEVEL ? (store.topLevel + 1) * config.levelHeight : store.ui.level * config.levelHeight);
+const planeZ = () => activeTool().planeZ?.() ?? levelZ();
+const levelLabel = () => config.levelShort[store.ui.level] ?? 'Techo';
 
 function persistUi() {
     try {
@@ -90,7 +94,7 @@ function fitView() {
         maxX = Math.max(...walls.map((w) => w.x2)) * G + 150;
         minY = Math.min(...walls.map((w) => w.y1)) * G - 150;
         maxY = Math.max(...walls.map((w) => w.y2)) * G + 150;
-        zTop = config.levelHeight * (store.ui.level + 1);
+        zTop = config.levelHeight * (store.topLevel + 1) + (store.ui.level === ROOF_LEVEL ? 160 : 0);
     }
     cam.fit(minX, minY, maxX, maxY, zTop, 70);
     app.render();
@@ -111,9 +115,17 @@ function pointerInfo(e) {
     }
     const maxX = store.project.lot.w * 8;
     const maxY = store.project.lot.d * 8;
+    // Imán: cerca de una pared (del nivel o del de abajo) el punto salta a su eje o extremo.
+    let hit = null;
+    if (activeTool().magnet) {
+        const m = magnet(app, wx, wy, gx, gy, step);
+        gx = m.gx;
+        gy = m.gy;
+        hit = m.hit;
+    }
     gx = Math.min(maxX, Math.max(0, gx));
     gy = Math.min(maxY, Math.max(0, gy));
-    return { sx, sy, wx, wy, gx, gy };
+    return { sx, sy, wx, wy, gx, gy, hit };
 }
 
 let pan = null;
@@ -150,7 +162,7 @@ canvas.addEventListener('pointermove', (e) => {
     }
     const p = pointerInfo(e);
     app.pointer = p;
-    $('#cursor-info').textContent = `x ${fmt(p.gx * G / 100, 3)} m · y ${fmt(p.gy * G / 100, 3)} m · nodo ${p.gx}, ${p.gy} · ${config.levelShort[store.ui.level]}`;
+    $('#cursor-info').textContent = `x ${fmt(p.gx * G / 100, 3)} m · y ${fmt(p.gy * G / 100, 3)} m · nodo ${p.gx}, ${p.gy} · ${levelLabel()}`;
     activeTool().move?.(p, e);
     app.render();
 });
@@ -221,6 +233,7 @@ document.addEventListener('keydown', (e) => {
     else if (k === '-') zoomBy(0.8);
     else if (k === '1') setLevel(0);
     else if (k === '2') setLevel(1);
+    else if (k === '3') setLevel(ROOF_LEVEL);
     else {
         const id = Object.entries(app.tools).find(([, tool]) => tool.hotkey === k)?.[0];
         if (id) setTool(id);
@@ -232,7 +245,7 @@ document.addEventListener('keyup', (e) => { if (e.key === ' ') spaceDown = false
 function setTool(id) {
     const tool = app.tools[id];
     if (!tool) return;
-    const reason = tool.disabled?.();
+    const reason = toolDisabled(tool);
     if (reason) {
         toast(reason, 'error');
         return;
@@ -245,10 +258,59 @@ function setTool(id) {
     app.render();
 }
 
+/** Motivo por el que una herramienta no está disponible ahora (null si lo está). */
+function toolDisabled(tool) {
+    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select') return 'En la pestaña Techo solo se elige y edita el techo: volvé a un nivel para dibujar.';
+    return tool.disabled?.() ?? null;
+}
+
 function refreshOptions() {
+    if (store.ui.level === ROOF_LEVEL) {
+        const hint = 'Elegí el tipo de techo y ajustá pendiente y alero. Se apoya sobre el último nivel con muros.';
+        add(clear($('#tooloptions')), h('span', { class: 'title' }, 'Techo'), roofOptions(), h('span', { class: 'hint', title: hint }, hint));
+        app.setHint(hint);
+        return;
+    }
     const tool = activeTool();
     add(clear($('#tooloptions')), h('span', { class: 'title' }, tool.label), tool.options?.(), h('span', { class: 'hint', title: tool.hint }, tool.hint));
     app.setHint(tool.hint);
+}
+
+const FALL_SIDES = [['S', 'Sur (abajo)'], ['N', 'Norte (arriba)'], ['E', 'Este (derecha)'], ['W', 'Oeste (izquierda)']];
+
+/** Lado largo del rectángulo que envuelve al último nivel con muros: por defecto la cumbrera va paralela a él. */
+function longerAxis() {
+    const walls = store.project.levels[store.topLevel].walls;
+    if (!walls.length) return 'x';
+    const w = Math.max(...walls.map((x) => x.x2)) - Math.min(...walls.map((x) => x.x1));
+    const d = Math.max(...walls.map((x) => x.y2)) - Math.min(...walls.map((x) => x.y1));
+    return w >= d ? 'x' : 'y';
+}
+
+function roofOptions() {
+    const r = store.project.roof ?? { type: 'none', dir: 'x', slope: 30, overhang: 40, section: '3x8', spacing: 50 };
+    const set = (label, patch) => store.commit(label, (d) => { d.roof = { ...d.roof, ...patch }; });
+    const sel = (label, value, items, onChange) =>
+        h('label', { class: 'field-inline' }, label, h('select', { onchange: (e) => onChange(e.target.value) }, items.map(([v, t]) => h('option', { value: v, selected: String(v) === String(value) }, t))));
+    const numIn = (label, value, min, max, step, onChange, unit) =>
+        h('label', { class: 'field-inline' }, label, h('input', { type: 'number', value, min, max, step, class: 'w-narrow', onchange: (e) => { const v = Number(e.target.value); if (Number.isFinite(v)) onChange(Math.min(max, Math.max(min, v))); } }), unit);
+    const types = h('span', { class: 'seg', role: 'group', 'aria-label': 'Tipo de techo' }, [['none', 'Sin techo'], ['shed', 'A un agua'], ['gable', 'A dos aguas']].map(([v, t]) =>
+        h('button', {
+            type: 'button',
+            class: 'seg-btn',
+            'aria-pressed': String(r.type === v),
+            onclick: () => set('Tipo de techo', { type: v, dir: v === 'shed' ? (r.type === 'shed' ? r.dir : 'S') : v === 'gable' ? (['x', 'y'].includes(r.dir) ? r.dir : longerAxis()) : r.dir }),
+        }, t)));
+    if (r.type === 'none') return h('span', { class: 'row' }, types);
+
+    return h('span', { class: 'row' }, types,
+        r.type === 'gable'
+            ? sel('Cumbrera', r.dir, [['x', '↔ horizontal'], ['y', '↕ vertical']], (v) => set('Dirección de cumbrera', { dir: v }))
+            : sel('Cae hacia', r.dir, FALL_SIDES, (v) => set('Caída del techo', { dir: v })),
+        numIn('Pendiente', r.slope, 10, 100, 5, (v) => set('Pendiente', { slope: v }), '%'),
+        numIn('Alero', r.overhang, 0, 100, 5, (v) => set('Alero', { overhang: v }), 'cm'),
+        sel('Cabios', r.section, Object.entries(config.timberSections).map(([k, x]) => [k, x.label.replace('Pino tratado ', '')]), (v) => set('Sección de cabios', { section: v })),
+        sel('Separación', r.spacing, [30, 40, 50, 60].map((v) => [v, `${v} cm`]), (v) => set('Separación de cabios', { spacing: Number(v) })));
 }
 
 function renderToolbar() {
@@ -259,7 +321,7 @@ function renderToolbar() {
             continue;
         }
         const tool = app.tools[id];
-        const reason = tool.disabled?.();
+        const reason = toolDisabled(tool);
         const btn = h('button', {
             type: 'button',
             class: 'tool',
@@ -274,32 +336,55 @@ function renderToolbar() {
     }
 }
 
+let levelsKey = '';
 function renderLevels() {
+    const key = `${store.ui.level}:${store.project.upper}`;
+    if (key === levelsKey) return;
+    levelsKey = key;
     const wrap = clear($('#levels'));
     wrap.setAttribute('role', 'tablist');
-    config.levelNames.forEach((name, i) => {
-        wrap.append(h('button', { type: 'button', role: 'tab', class: 'level-tab', 'aria-selected': String(store.ui.level === i), onclick: () => setLevel(i), title: `${name} (${i + 1})` }, name));
-    });
-    // El tercer nivel está inhabilitado de forma permanente: la mampostería autoportante HCCA no lo admite.
-    wrap.append(h('button', {
-        type: 'button',
-        class: 'level-tab locked',
-        'aria-disabled': 'true',
-        title: 'Límite de carga autoportante: PB + PA ≤ 6,00 m. Un tercer nivel requiere estructura independiente de hormigón armado o metálica.',
-        onclick: () => toast('Límite de carga autoportante: la mampostería HCCA admite como máximo 2 niveles (PB + PA ≤ 6,00 m). Un tercer nivel requiere una estructura independiente de hormigón armado o metálica.', 'error'),
-    }, '+ Nivel 3', h('span', { class: 'lock', 'aria-hidden': 'true' }, '🔒')));
+    const tab = (i, name, title) => wrap.append(h('button', { type: 'button', role: 'tab', class: `level-tab${i === ROOF_LEVEL ? ' roof' : ''}`, 'aria-selected': String(store.ui.level === i), onclick: () => setLevel(i), title }, name));
+    tab(0, config.levelNames[0], `${config.levelNames[0]} (1)`);
+    if (store.project.upper) tab(1, config.levelNames[1], `${config.levelNames[1]} (2)`);
+    tab(ROOF_LEVEL, config.levelNames[ROOF_LEVEL], 'Techo (3): a un agua o a dos aguas');
+    if (!store.project.upper) {
+        wrap.append(h('button', {
+            type: 'button',
+            class: 'level-tab add',
+            title: 'Agrega la Planta Alta (Nivel 2); el techo pasa a ser el nivel superior. Máximo 2 niveles con muros autoportantes.',
+            onclick: () => addLevel(),
+        }, '+ Agregar nivel'));
+    }
 }
 
-function setLevel(i) {
-    if (i === store.ui.level) return;
+async function addLevel() {
     activeTool().reset?.();
-    store.setUi({ level: i, selection: null });
     app.hover = null;
+    await store.addUpper();
     if (activeTool().disabled?.()) store.setUi({ tool: 'select' });
     renderLevels();
     renderToolbar();
     refreshOptions();
     panels.renderAll();
+    fitView();
+    toast('Nivel 2 agregado. El techo ahora se apoya sobre él. Podés dibujar una losa (L) como piso.');
+}
+
+function setLevel(i) {
+    if (i === 1 && !store.project.upper) {
+        toast('Todavía no hay Nivel 2: usá «+ Agregar nivel».', 'error');
+        return;
+    }
+    if (i === store.ui.level) return;
+    activeTool().reset?.();
+    store.setUi({ level: i, selection: null });
+    app.hover = null;
+    if (toolDisabled(activeTool())) store.setUi({ tool: 'select' });
+    renderLevels();
+    renderToolbar();
+    refreshOptions();
+    panels.renderAll();
+    if (i === ROOF_LEVEL) fitView();
     app.render();
 }
 
@@ -323,14 +408,16 @@ function zoomBy(f) {
 }
 
 function focusIssue(issue) {
-    if (issue.level !== undefined && issue.level !== store.ui.level) setLevel(issue.level);
+    if (issue.level !== undefined && issue.level !== store.ui.level && (issue.level !== 1 || store.project.upper)) setLevel(issue.level);
     if (issue.x != null) {
         cam.cx = issue.x * G;
         cam.cy = issue.y * G;
     }
-    const level = store.project.levels[issue.level ?? 0];
+    const level = store.project.levels[issue.level ?? 0] ?? store.level();
     let selection = null;
-    if (level.walls.some((w) => w.id === issue.ref)) selection = { type: 'wall', id: issue.ref };
+    if (level.slabs?.some((x) => x.id === issue.ref)) selection = { type: 'slab', id: issue.ref };
+    else if (store.project.levels[0].stairs?.some((x) => x.id === issue.ref)) selection = { type: 'stair', id: issue.ref };
+    else if (level.walls.some((w) => w.id === issue.ref)) selection = { type: 'wall', id: issue.ref };
     else if (level.openings.some((o) => o.id === issue.ref)) selection = { type: 'opening', id: issue.ref };
     else if (store.project.levels[0].timber.some((t) => t.id === issue.ref)) selection = { type: 'timber', id: issue.ref };
     store.setUi({ selection });
@@ -353,6 +440,14 @@ function selectionBox(sel) {
         const w = o && lv.walls.find((x) => x.id === o.wall);
         return o && w ? openingBox(w, o.pos, o.w, o.sill, o.h, base) : null;
     }
+    if (sel.type === 'slab') {
+        const sl = store.analysis?.floors?.slabs?.find((x) => x.id === sel.id);
+        return sl ? { x0: sl.rect.x, y0: sl.rect.y, x1: sl.rect.x + sl.rect.w, y1: sl.rect.y + sl.rect.h, z0: config.levelHeight, z1: config.levelHeight + sl.thickness } : null;
+    }
+    if (sel.type === 'stair') {
+        const st = store.analysis?.floors?.stairs?.find((x) => x.id === sel.id);
+        return st ? { x0: st.bbox.x, y0: st.bbox.y, x1: st.bbox.x + st.bbox.w, y1: st.bbox.y + st.bbox.h, z0: 0, z1: config.levelHeight } : null;
+    }
     if (sel.type === 'timber') {
         const f = store.analysis?.timber?.fields?.find((x) => x.id === sel.id);
         if (f) return { x0: f.rect.x, y0: f.rect.y, x1: f.rect.x + f.rect.w, y1: f.rect.y + f.rect.h, z0: config.levelHeight, z1: config.levelHeight + 22 };
@@ -368,6 +463,22 @@ function overlay(ctx) {
     if (hover && JSON.stringify(app.hover) !== JSON.stringify(store.ui.selection)) wireBox(ctx, cam, hover, { stroke: 'rgba(30,41,59,.65)', width: 1.5, dash: [4, 3] });
     if (sel) wireBox(ctx, cam, sel, { stroke: '#8bc53f', width: 3 });
     activeTool().draw?.(ctx, cam);
+    drawAssist(ctx);
+}
+
+/** Ayudas de puntería: puntos de ajuste alrededor del cursor e imán a paredes. */
+function drawAssist(ctx) {
+    const tool = activeTool();
+    const p = app.pointer;
+    if (!tool.magnet || !p || store.ui.level === ROOF_LEVEL) return;
+    const z = planeZ();
+    snapDots(ctx, cam, p.gx, p.gy, store.ui.snap, z);
+    if (p.hit) {
+        const w = p.hit.wall;
+        const [x0, y0, x1, y1] = wallRect(w);
+        const base = p.hit.level * config.levelHeight;
+        magnetHit(ctx, cam, p.hit, { x0, y0, x1, y1, z0: base, z1: base + config.levelHeight }, p.gx, p.gy, z);
+    }
 }
 
 /* ------------------------------------------------------------------ dibujo */
@@ -407,12 +518,14 @@ function draw() {
 
 /* ------------------------------------------------------------------ eventos del store */
 store.addEventListener('change', () => {
+    renderLevels();
     panels.renderAll();
     updateHistoryButtons();
-    if (store.ui.tool !== 'select') refreshOptions();
+    if (store.ui.tool !== 'select' || store.ui.level === ROOF_LEVEL) refreshOptions();
     app.render();
 });
 store.addEventListener('ui', () => {
+    renderLevels();
     panels.renderProps();
     updateHistoryButtons();
     renderToolbar();

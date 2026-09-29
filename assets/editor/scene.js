@@ -6,7 +6,7 @@
  * Códigos adicionales de la escena: 4 hoja de puerta · 5 vidrio · 6 tirante · 7 placa de entrepiso · 8 viga.
  */
 
-export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8 };
+export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8, STEP: 9, SLAB: 10 };
 
 const G = 12.5;
 const COURSE_H = 25;
@@ -22,7 +22,8 @@ export function buildScene(project, analysis, config) {
         levels.push({ index: li, boxes, base, used: (analysis.levels[li]?.used ?? false) });
     }
     const timber = buildTimber(analysis.timber, config);
-    const all = [...levels.flatMap((l) => l.boxes), ...timber.boxes];
+    const floors = buildFloors(analysis.floors, config);
+    const all = [...levels.flatMap((l) => l.boxes), ...timber.boxes, ...floors];
     return { levels, timber, all, sorted: new Map() };
 }
 
@@ -136,26 +137,28 @@ function buildTimber(timber, config) {
                 field: f.id,
             });
         }
-        // Placa de entrepiso: cara interior de los muros (se retira medio espesor de muro típico).
+        // Placa de entrepiso (sin los huecos de escalera), retirada del eje hasta la cara interior de los muros.
         const inset = 10;
         const r = f.rect;
-        boxes.push({
-            x0: r.x + inset,
-            x1: r.x + r.w - inset,
-            y0: r.y + inset,
-            y1: r.y + r.h - inset,
-            z0: top + s.d,
-            z1: top + s.d + 2,
-            zs: top,
-            kind: KIND.DECK,
-            axis: 'x',
-            adjA: true,
-            adjB: true,
-            top: true,
-            level: 0,
-            field: f.id,
-            deck: true,
-        });
+        for (const part of f.deckParts ?? [{ x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }]) {
+            boxes.push({
+                x0: part.x0 + (Math.abs(part.x0 - r.x) < 0.01 ? inset : 0),
+                x1: part.x1 - (Math.abs(part.x1 - (r.x + r.w)) < 0.01 ? inset : 0),
+                y0: part.y0 + (Math.abs(part.y0 - r.y) < 0.01 ? inset : 0),
+                y1: part.y1 - (Math.abs(part.y1 - (r.y + r.h)) < 0.01 ? inset : 0),
+                z0: top + s.d,
+                z1: top + s.d + 2,
+                zs: top,
+                kind: KIND.DECK,
+                axis: 'x',
+                adjA: true,
+                adjB: true,
+                top: true,
+                level: 0,
+                field: f.id,
+                deck: true,
+            });
+        }
     }
     for (const b of timber.beams ?? []) {
         const s = dims[b.section] ?? { b: 7.5, d: 25 };
@@ -179,6 +182,37 @@ function buildTimber(timber, config) {
     }
 
     return { boxes, fields: timber.fields ?? [] };
+}
+
+/** Peldaños y descansos de escaleras (nivel 0) y losas de piso (nivel 1). */
+function buildFloors(floors, config) {
+    const boxes = [];
+    const base = (o) => ({ axis: 'x', adjA: true, adjB: true, top: true, ...o });
+    for (const st of floors?.stairs ?? []) {
+        for (const p of st.steps) boxes.push(base({ x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1, z0: p.z - st.riseCm, z1: p.z, zs: p.z - st.riseCm, kind: KIND.STEP, level: 0, stair: st.id }));
+        for (const p of st.landings) boxes.push(base({ x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1, z0: p.z - 12, z1: p.z, zs: p.z - 12, kind: KIND.STEP, level: 0, stair: st.id }));
+    }
+    const top = config.levelHeight;
+    for (const sl of floors?.slabs ?? []) {
+        const r = sl.rect;
+        const inset = 10;
+        for (const part of sl.parts) {
+            boxes.push(base({
+                x0: part.x0 + (Math.abs(part.x0 - r.x) < 0.01 ? inset : 0),
+                x1: part.x1 - (Math.abs(part.x1 - (r.x + r.w)) < 0.01 ? inset : 0),
+                y0: part.y0 + (Math.abs(part.y0 - r.y) < 0.01 ? inset : 0),
+                y1: part.y1 - (Math.abs(part.y1 - (r.y + r.h)) < 0.01 ? inset : 0),
+                z0: top,
+                z1: top + sl.thickness,
+                zs: top,
+                kind: KIND.SLAB,
+                level: 1,
+                slab: sl.id,
+            }));
+        }
+    }
+
+    return boxes;
 }
 
 /** Caja rotada al marco de la vista: [x0', x1', y0', y1'] tras girar `rot` × 90° alrededor del origen. */
