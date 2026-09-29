@@ -66,6 +66,11 @@ final class RoofPlanner
         $zTop = ($roof->level + 1) * (float) Hcca::LEVEL_HEIGHT_CM;
         $o = (float) $roof->overhang;
         $s = $roof->slopePct / 100;
+        // Los cabios apoyan sobre el borde exterior del muro (no en su eje): la cubierta sube media pared × pendiente (+1 cm)
+        // y los hastiales se levantan hasta tocarla. Así el coronamiento no asoma por encima del faldón.
+        $lift = 10 * $s + 1;
+        $zBase = $zTop;
+        $zTop += $lift;
 
         // Orientación: "along" es la dirección de la cumbrera / del borde del faldón; "across" la perpendicular (donde cae el agua).
         $shed = RoofType::Shed === $roof->type;
@@ -95,7 +100,7 @@ final class RoofPlanner
                 $planes[] = ['pts' => [$pt($a0 - $o, $edge, $zLow), $pt($a1 + $o, $edge, $zLow), $pt($a1 + $o, $mid, $zRidge), $pt($a0 - $o, $mid, $zRidge)], 'areaM2' => round($rafterLen * $lr / 10000, 2)];
             }
             foreach ([$a0, $a1] as $a) {
-                $gables[] = $this->gable($roof, $a === $a0 ? 'A' : 'B', [$pt($a, $c0, $zTop), $pt($a, $c1, $zTop), $pt($a, $mid, $zRidge)], $span * $rise / 2);
+                $gables[] = $this->gable($roof, $a === $a0 ? 'A' : 'B', [$pt($a, $c0, $zBase), $pt($a, $c1, $zBase), $pt($a, $c1, $zTop), $pt($a, $mid, $zRidge), $pt($a, $c0, $zTop)], $span * ($rise / 2 + $lift));
             }
             $ridge = ['from' => $pt($a0 - $o, $mid, $zRidge), 'to' => $pt($a1 + $o, $mid, $zRidge)];
             $n = (int) ceil($lr / $roof->spacing) + 1;
@@ -127,10 +132,10 @@ final class RoofPlanner
             $zHigh = $zTop + $rise + $o * $s;
             $planes[] = ['pts' => [$pt($a0 - $o, $lowOuter, $zLow), $pt($a1 + $o, $lowOuter, $zLow), $pt($a1 + $o, $highOuter, $zHigh), $pt($a0 - $o, $highOuter, $zHigh)], 'areaM2' => round($rafterLen * $lr / 10000, 2)];
             foreach ([$a0, $a1] as $a) {
-                $gables[] = $this->gable($roof, $a === $a0 ? 'A' : 'B', [$pt($a, $low, $zTop), $pt($a, $high, $zTop), $pt($a, $high, $zTop + $rise)], $span * $rise / 2);
+                $gables[] = $this->gable($roof, $a === $a0 ? 'A' : 'B', [$pt($a, $low, $zBase), $pt($a, $high, $zBase), $pt($a, $high, $zTop + $rise), $pt($a, $low, $zTop)], $span * ($rise / 2 + $lift));
             }
             // Muro alto: el muro del lado alto se levanta hasta la cumbre del faldón (parte fija del techo a un agua).
-            $gables[] = $this->gable($roof, 'H', [$pt($a0, $high, $zTop), $pt($a1, $high, $zTop), $pt($a1, $high, $zTop + $rise), $pt($a0, $high, $zTop + $rise)], ($a1 - $a0) * $rise, true);
+            $gables[] = $this->gable($roof, 'H', [$pt($a0, $high, $zBase), $pt($a1, $high, $zBase), $pt($a1, $high, $zTop + $rise), $pt($a0, $high, $zTop + $rise)], ($a1 - $a0) * ($rise + $lift), true);
             $n = (int) ceil($lr / $roof->spacing) + 1;
             for ($i = 0; $i < $n; ++$i) {
                 $al = $a0 - $o + $i * $lr / max(1, $n - 1);
@@ -172,9 +177,6 @@ final class RoofPlanner
         if ($roof->slopePct < 15 || $roof->slopePct > 70) {
             $issues[] = $this->issue($roof, 'info', 'roof.slope', 'Pendiente fuera del rango habitual (15–70 %): verificar con el tipo de cubierta elegido.');
         }
-        if ($masonryM2 > 0) {
-            $issues[] = $this->issue($roof, 'info', 'roof.gable', sprintf('Hastiales de bloque del techo %s (≈ %s m²): se computan por superficie (+10 %%) y no entran en el despiece de cortes. Se pueden quitar o cambiar de espesor al elegirlos.', $roof->id, number_format($masonryM2, 1, ',', '')));
-        }
 
         $byT = [];
         foreach ($gables as $g) {
@@ -191,7 +193,7 @@ final class RoofPlanner
             'geometry' => [
                 'rect' => ['x0' => $x0, 'y0' => $y0, 'x1' => $x1, 'y1' => $y1],
                 'overhang' => $o,
-                'zTop' => $zTop,
+                'zTop' => $zBase,
                 'riseCm' => round($rise, 1),
                 'rafterLenCm' => round($rafterLen, 1),
                 'planes' => $planes,
@@ -223,18 +225,93 @@ final class RoofPlanner
     private function gable(RoofPart $roof, string $side, array $pts, float $areaCm2, bool $fixed = false): array
     {
         $enabled = $fixed || ('A' === $side ? $roof->gableA : $roof->gableB);
-        $m2 = $areaCm2 / 10000;
+        $layout = $this->layGable($pts);
+        $pieces = $enabled ? array_merge(...array_map(static fn (array $c): array => $c['pieces'], $layout['courses'] ?: [['pieces' => []]])) : [];
+        $full = count(array_filter($pieces, static fn (int $l): bool => $l >= Hcca::BLOCK_L));
 
         return [
             'id' => $roof->id.':'.$side,
             'side' => $side,
             'pts' => $pts,
-            'areaM2' => round($m2, 2),
+            'areaM2' => round($areaCm2 / 10000, 2),
             'enabled' => $enabled,
             'fixed' => $fixed,
             'thickness' => $roof->gableT,
-            'blocks' => $enabled ? (int) ceil($m2 / self::BLOCK_FACE_M2 * 1.10) : 0,
+            // Despiece por hilada (para dibujar las juntas y para el cómputo): u a lo largo del hastial, v desde el coronamiento.
+            'plane' => $layout['plane'],
+            'courses' => array_map(static fn (array $c): array => ['v0' => $c['v0'], 'u0' => $c['u0'], 'joints' => $c['joints']], $layout['courses']),
+            'pieces' => $pieces,
+            'blocks' => count($pieces),
+            'fullBlocks' => $full,
+            'cutPieces' => count($pieces) - $full,
         ];
+    }
+
+    /**
+     * Traba de un hastial (o del muro alto de un techo a un agua): hiladas de 25 cm desde el coronamiento; en cada hilada se cubre
+     * el ancho del polígono en su cara inferior (la más ancha) con bloques de 62,5 cm corridos medio bloque en hiladas alternas.
+     * Las piezas de los extremos se cortan en diagonal siguiendo la pendiente; se computan por su largo inferior.
+     *
+     * @param list<array{float, float, float}> $pts
+     *
+     * @return array{plane: array{axis: string, at: float, z: float}, courses: list<array{v0: float, u0: float, joints: list<float>, pieces: list<int>}>}
+     */
+    private function layGable(array $pts): array
+    {
+        $alongY = abs($pts[0][0] - $pts[1][0]) < 0.01 && abs($pts[1][0] - $pts[2][0]) < 0.01;
+        $z0 = min(array_column($pts, 2));
+        $poly = array_map(static fn (array $p): array => [$alongY ? $p[1] : $p[0], $p[2] - $z0], $pts);
+        $vMax = max(array_column($poly, 1));
+        $courses = [];
+        for ($k = 0; $k * 25 < $vMax - 0.5; ++$k) {
+            $v0 = $k * 25.0;
+            $span = $this->spanAt($poly, $v0);
+            if (null === $span || $span[1] - $span[0] < 2.5) {
+                continue;
+            }
+            [$uL, $uR] = $span;
+            $widthTicks = (int) round(($uR - $uL) * Hcca::TICKS_PER_CM);
+            $pieces = [];
+            $joints = [];
+            $pos = 0;
+            $first = 1 === $k % 2 ? intdiv(Hcca::BLOCK_L, 2) : Hcca::BLOCK_L;
+            while ($pos < $widthTicks) {
+                $len = min(0 === $pos ? $first : Hcca::BLOCK_L, $widthTicks - $pos);
+                $pieces[] = $len;
+                $pos += $len;
+                if ($pos < $widthTicks) {
+                    $joints[] = round($uL + $pos / Hcca::TICKS_PER_CM, 2);
+                }
+            }
+            $courses[] = ['v0' => $v0, 'u0' => round($uL, 2), 'joints' => $joints, 'pieces' => $pieces];
+        }
+
+        return ['plane' => ['axis' => $alongY ? 'y' : 'x', 'at' => $alongY ? $pts[0][0] : $pts[0][1], 'z' => $z0], 'courses' => $courses];
+    }
+
+    /**
+     * Intervalo [uMin, uMax] donde la recta horizontal v corta al polígono convexo, o null.
+     *
+     * @param list<array{float, float}> $poly
+     *
+     * @return array{float, float}|null
+     */
+    private function spanAt(array $poly, float $v): ?array
+    {
+        $xs = [];
+        $n = count($poly);
+        for ($i = 0; $i < $n; ++$i) {
+            [$ua, $va] = $poly[$i];
+            [$ub, $vb] = $poly[($i + 1) % $n];
+            if (($va <= $v && $vb >= $v) || ($vb <= $v && $va >= $v)) {
+                $xs[] = abs($vb - $va) < 1e-9 ? $ua : $ua + ($v - $va) * ($ub - $ua) / ($vb - $va);
+                if (abs($vb - $va) < 1e-9) {
+                    $xs[] = $ub;
+                }
+            }
+        }
+
+        return [] === $xs ? null : [min($xs), max($xs)];
     }
 
     /**

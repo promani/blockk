@@ -131,18 +131,26 @@ export function snapDots(ctx, cam, gx, gy, step, z, G = 12.5, radius = 3) {
     ctx.restore();
 }
 
-/** Resalta el muro al que el imán se pegó y, si es su extremo, marca el nodo. */
-export function magnetHit(ctx, cam, hit, box, gx, gy, z) {
-    wireBox(ctx, cam, box, { stroke: '#2563eb', width: 2.2, dash: [5, 3] });
-    const [sx, sy] = cam.project(gx * 12.5, gy * 12.5, z);
+/** Imán: marca el punto donde se pegó el trazo y el eje del muro (sin tapar el dibujo). */
+export function magnetHit(ctx, cam, hit, wall, gx, gy, z) {
+    const G = 12.5;
+    const a = cam.project(wall.x1 * G, wall.y1 * G, z);
+    const b = cam.project(wall.x2 * G, wall.y2 * G, z);
+    const [sx, sy] = cam.project(gx * G, gy * G, z);
     ctx.save();
-    ctx.strokeStyle = '#2563eb';
-    ctx.fillStyle = 'rgba(37,99,235,.18)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(37,99,235,.55)';
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(sx, sy, hit.kind === 'end' ? 9 : 6, 0, Math.PI * 2);
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    ctx.stroke();
+    ctx.strokeStyle = '#2563eb';
+    ctx.fillStyle = '#fff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(sx, sy, hit.kind === 'end' ? 7 : 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-    label(ctx, hit.kind === 'end' ? 'Extremo de muro' : `Sobre la pared${hit.level === 0 && z > 0 ? ' de abajo' : ''}`, sx, sy - 22, { bg: 'rgba(37,99,235,.92)' });
+    if (hit.level === 0 && z > 0) label(ctx, 'Sobre el muro de abajo', sx, sy - 20, { bg: 'rgba(37,99,235,.92)' });
 }

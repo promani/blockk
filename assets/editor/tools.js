@@ -31,6 +31,27 @@ export function createTools(app) {
             store.setUi({ thickness: Number(v) });
         });
 
+    /** Ajuste único para todas las herramientas de dibujo: bloque entero (62,5 cm) o fino (12,5 cm). */
+    const snapOption = () => h('span', { class: 'seg', role: 'group', 'aria-label': 'Ajuste' },
+        [[5, 'Bloque 62,5'], [1, 'Fino 12,5']].map(([v, t]) => h('button', {
+            type: 'button',
+            'aria-pressed': String(store.ui.snap === v),
+            title: v === 5 ? 'Medidas en bloques enteros de 62,5 cm (menos cortes)' : 'Medidas cada 12,5 cm (medio o cuarto de bloque)',
+            onclick: () => { store.setUi({ snap: v }); app.persistUi?.(); app.refreshOptions(); },
+        }, t)));
+    const step = () => Math.max(1, store.ui.snap);
+
+    /**
+     * Extremo de un tramo desde `origin`: se alinea con una pared existente cercana (imán o misma recta) y, si no hay,
+     * el largo se redondea al ajuste elegido. Así un muro dibujado a mano y la herramienta Habitación dan las mismas medidas.
+     */
+    const snapLen = (v, origin, lines, minLen) => {
+        const near = nearestLine(lines, v, 2);
+        if (near !== null && Math.abs(near - origin) >= minLen) return near;
+        const d = v - origin;
+        return origin + (d < 0 ? -1 : 1) * Math.max(minLen, Math.round(Math.abs(d) / step()) * step());
+    };
+
     const newWall = (draft, x1, y1, x2, y2, t) => {
         draft.levels[store.ui.level].walls.push({ id: nextId(draft, 'w'), x1, y1, x2, y2, t });
     };
@@ -223,7 +244,7 @@ export function createTools(app) {
     // ---------------- seleccionar ----------------
     T.select = {
         hotkey: 'v',
-        label: 'Seleccionar',
+        label: 'Elegir',
         hint: 'Clic en un muro, vano, habitación (piso de color), losa, escalera o techo. Arrastrá las manijas azules para cambiar el tamaño.',
         reset() { drag = null; },
         move(p) {
@@ -332,18 +353,14 @@ export function createTools(app) {
 
     // ---------------- sala ----------------
     let room = null;
-    const snapSpan = (v, origin, lines) => {
-        const near = nearestLine(lines, v, 2);
-        if (near !== null && Math.abs(near - origin) >= 10) return near;
-        const d = v - origin;
-        return origin + (d < 0 ? -1 : 1) * Math.max(10, Math.round(Math.abs(d) / 5) * 5);
-    };
+    const minRoom = () => (step() === 1 ? 4 : 10);
+    const snapSpan = (v, origin, lines) => snapLen(v, origin, lines, minRoom());
     T.room = {
         magnet: true,
         hotkey: 'r',
-        label: 'Crear sala',
-        hint: 'Arrastrá en diagonal: se crean las 4 paredes. Cerca de una pared existente el borde se pega a ella (habitación contigua).',
-        options: () => h('span', { class: 'row' }, thicknessOption()),
+        label: 'Habitación',
+        hint: 'Arrastrá en diagonal: se crean las 4 paredes. Cerca de otra pared, el borde se pega a ella (habitaciones contiguas).',
+        options: () => h('span', { class: 'row' }, thicknessOption(), snapOption()),
         reset() { room = null; },
         down(p) {
             room = { a: { gx: p.gx, gy: p.gy }, rect: null };
@@ -369,7 +386,7 @@ export function createTools(app) {
             const r = room?.rect;
             room = null;
             if (!r) return;
-            store.commit('Crear sala', (d) => {
+            store.commit('Crear habitación', (d) => {
                 const t = store.ui.thickness;
                 newWall(d, r.x, r.y, r.x + r.w, r.y, t);
                 newWall(d, r.x + r.w, r.y, r.x + r.w, r.y + r.h, t);
@@ -407,9 +424,21 @@ export function createTools(app) {
         let downAt = null;
         let axis = 'x';
 
+        let chainStart = null;
         const compute = (p) => {
             if (!start) return null;
             const e = ortho(start, p);
+            if (!opts.module) {
+                // Mismo ajuste que Habitación: se pega al inicio de la cadena o a paredes cercanas; si no, largo en bloques.
+                if (chainStart && Math.abs(p.gx - chainStart.gx) <= 1 && Math.abs(p.gy - chainStart.gy) <= 1 && (chainStart.gx === start.gx || chainStart.gy === start.gy)) return { ...chainStart };
+                if (p.hit) return e;
+                const lines = wallLines(store);
+                if (chainStart) {
+                    lines.xs.push(chainStart.gx);
+                    lines.ys.push(chainStart.gy);
+                }
+                return e.gy === start.gy ? { gx: snapLen(e.gx, start.gx, lines.xs, Math.max(2, step())), gy: start.gy } : { gx: start.gx, gy: snapLen(e.gy, start.gy, lines.ys, Math.max(2, step())) };
+            }
             if (opts.module) {
                 const len = Math.max(0, Math.abs(e.gx - start.gx) + Math.abs(e.gy - start.gy));
                 const sign = Math.sign(e.gx - start.gx + (e.gy - start.gy)) || 1;
@@ -428,7 +457,15 @@ export function createTools(app) {
                 app.toast('Muro demasiado corto (mínimo 25 cm).', 'error');
                 return false;
             }
-            store.commit(opts.commitLabel, (d) => newWall(d, a.gx, a.gy, b.gx, b.gy, store.ui.thickness));
+            const roomsBefore = store.analysis?.levels?.[store.ui.level]?.rooms?.length ?? 0;
+            store.commit(opts.commitLabel, (d) => newWall(d, a.gx, a.gy, b.gx, b.gy, store.ui.thickness)).then(() => {
+                // Si el muro cerró un contorno se avisa (igual que al crear una habitación).
+                const rooms = store.analysis?.levels?.[store.ui.level]?.rooms ?? [];
+                if (!opts.module && rooms.length > roomsBefore) {
+                    const newest = rooms.reduce((m, r) => (r.id > m.id ? r : m), rooms[0]);
+                    app.toast(`Habitación cerrada: ${fmt(newest.netM2)} m² útiles.`);
+                }
+            });
             return true;
         };
         return {
@@ -436,17 +473,23 @@ export function createTools(app) {
             hotkey: opts.key,
             label: opts.label,
             hint: opts.hint,
-            options: () => h('span', { class: 'row' }, thicknessOption(), opts.module ? h('button', { class: 'btn btn-outline btn-sm', onclick: () => { axis = axis === 'x' ? 'y' : 'x'; app.refreshOptions(); } }, `Orientación: ${axis === 'x' ? '↔ horizontal' : '↕ vertical'} (X)`) : null),
-            reset() { start = null; end = null; pressed = false; },
+            options: () => h('span', { class: 'row' }, thicknessOption(), opts.module ? null : snapOption(), opts.module ? h('button', { class: 'btn btn-outline btn-sm', onclick: () => { axis = axis === 'x' ? 'y' : 'x'; app.refreshOptions(); } }, `Orientación: ${axis === 'x' ? '↔ horizontal' : '↕ vertical'} (X)`) : null),
+            reset() { start = null; end = null; pressed = false; chainStart = null; },
             down(p, e) {
                 if (start && !pressed) {
                     const b = compute(p);
                     if (commitSeg(start, b)) start = { ...b };
-                    if (e.detail >= 2) start = null; // doble clic corta la cadena
+                    // Doble clic o volver al punto de partida terminan la cadena (el contorno quedó cerrado).
+                    if (e.detail >= 2 || (chainStart && b && b.gx === chainStart.gx && b.gy === chainStart.gy)) {
+                        start = null;
+                        chainStart = null;
+                        end = null;
+                    }
                     app.render();
                     return;
                 }
                 start = { gx: p.gx, gy: p.gy };
+                chainStart = { ...start };
                 end = null;
                 pressed = true;
                 dragged = false;
@@ -473,12 +516,14 @@ export function createTools(app) {
                 if (dragged) {
                     commitSeg(start, compute(p));
                     start = null;
+                    chainStart = null;
                     end = null;
                 }
             },
             keyDown(e) {
                 if (e.key === 'Escape' && start) {
                     start = null;
+                    chainStart = null;
                     end = null;
                     pressed = false;
                     app.render();
@@ -493,6 +538,7 @@ export function createTools(app) {
             },
             contextmenu() {
                 start = null;
+                chainStart = null;
                 end = null;
                 pressed = false;
                 app.render();
@@ -510,7 +556,9 @@ export function createTools(app) {
                     ghostBox(ctx, cam, box, { fill: 'rgba(139,197,63,.35)', stroke: '#3f6212' });
                     const len = Math.abs(end.gx - start.gx) + Math.abs(end.gy - start.gy);
                     const modular = len % 5 === 0;
-                    dimLabel(ctx, cam, x0, y0, x1, y1, z + cfg.levelHeight, `${fmt((len * G) / 100)} m · ${fmt((len * G) / 62.5, 1)} bloques${modular ? '' : ' · no modular (+cortes)'}`);
+                    const closes = chainStart && end.gx === chainStart.gx && end.gy === chainStart.gy && (start.gx !== chainStart.gx || start.gy !== chainStart.gy);
+                    if (closes) nodeMarker(ctx, cam, end.gx * G, end.gy * G, z, '#2563eb');
+                    if (len > 0) dimLabel(ctx, cam, x0, y0, x1, y1, z + cfg.levelHeight, `${fmt((len * G) / 100)} m · ${fmt((len * G) / 62.5, 1)} bloques${modular ? '' : ' · con cortes'}${closes ? ' · cierra la habitación' : ''}`);
                 } else if (opts.module && app.pointer && !start) {
                     const a = { gx: app.pointer.gx, gy: app.pointer.gy };
                     const b = axis === 'x' ? { gx: a.gx + 5, gy: a.gy } : { gx: a.gx, gy: a.gy + 5 };
@@ -523,8 +571,8 @@ export function createTools(app) {
             },
         };
     };
-    T.wall = segmentTool({ key: 'w', label: 'Muro a 90°', hint: 'Clic y arrastre (o clic-clic): muros ortogonales. Doble clic, Esc o clic derecho terminan la cadena.', commitLabel: 'Agregar muro' });
-    T.block = segmentTool({ key: 'b', label: 'Bloque individual', hint: 'Clic: un bloque de 62,5 cm. Arrastre: hilera de bloques enteros (múltiplos de 62,5 cm). X gira la orientación.', module: true, commitLabel: 'Agregar bloques' });
+    T.wall = segmentTool({ key: 'w', label: 'Muro', hint: 'Clic en cada esquina (o arrastrá un muro). Al volver al punto de partida la habitación se cierra; Esc o doble clic terminan.', commitLabel: 'Agregar muro' });
+    T.block = segmentTool({ key: 'b', label: 'Bloque suelto', hint: 'Clic: un bloque de 62,5 cm. Arrastre: hilera de bloques enteros (múltiplos de 62,5 cm). X gira la orientación.', module: true, commitLabel: 'Agregar bloques' });
 
     // ---------------- puertas y ventanas ----------------
     const openingTool = (kind) => {
@@ -628,7 +676,8 @@ export function createTools(app) {
     let floorSection = '3x8';
     let floorSpacing = 40;
     let floor = null;
-    const groundOnly = () => (store.ui.level === 0 ? null : 'El entrepiso se dibuja sobre la Planta Baja: pasá a "Nivel 1".');
+    // El piso del Nivel 2 (losa o entrepiso de madera) y sus vigas se dibujan desde la pestaña «Nivel 2», sobre las habitaciones de abajo.
+    const groundOnly = () => (!store.project.upper ? 'Primero agregá el Nivel 2 con «+ Agregar nivel».' : store.ui.level === 1 ? null : 'El piso del Nivel 2 se dibuja desde la pestaña «Nivel 2».');
     const floorRect = (a, p) => {
         const x = Math.min(a.gx, p.gx);
         const y = Math.min(a.gy, p.gy);
@@ -636,7 +685,7 @@ export function createTools(app) {
     };
     T.floor = {
         magnet: true,
-        hotkey: 'e',
+        hotkey: '',
         label: 'Entrepiso de madera',
         hint: 'Clic dentro de un ambiente rectangular, o arrastre un rectángulo a ejes de muros. Los tirantes cruzan la luz menor.',
         disabled: groundOnly,
@@ -763,7 +812,7 @@ export function createTools(app) {
     const needUpper = () => (!store.project.upper ? 'Primero agregá el Nivel 2 con «+ Agregar nivel».' : store.ui.level === 1 ? null : 'La losa es el piso del Nivel 2: elegí la pestaña «Nivel 2».');
     T.slab = {
         magnet: true,
-        hotkey: 'l',
+        hotkey: '',
         label: 'Losa de piso',
         hint: 'Clic dentro de una habitación de abajo: losa del mismo tamaño (o un módulo más chica). O arrastrá un rectángulo. Debe apoyar sobre muros.',
         disabled: needUpper,
@@ -832,6 +881,28 @@ export function createTools(app) {
                 nodeMarker(ctx, cam, p.gx * G, p.gy * G, z, '#475569');
             }
         },
+    };
+
+    // ---------------- piso del Nivel 2: losa de hormigón o entrepiso de madera (una sola herramienta) ----------------
+    let pisoKind = 'slab';
+    const piso = () => (pisoKind === 'slab' ? T.slab : T.floor);
+    T.piso = {
+        magnet: true,
+        hotkey: 'l',
+        label: 'Piso',
+        hint: 'Clic dentro de una habitación de abajo: piso del mismo tamaño (o arrastrá un rectángulo). Losa de hormigón o entrepiso de madera.',
+        disabled: needUpper,
+        planeZ: () => cfg.levelHeight,
+        options: () => h('span', { class: 'row' },
+            h('span', { class: 'seg', role: 'group', 'aria-label': 'Tipo de piso' }, [['slab', 'Losa de hormigón'], ['floor', 'Madera (tirantes)']].map(([v, t]) =>
+                h('button', { type: 'button', 'aria-pressed': String(pisoKind === v), onclick: () => { piso().reset?.(); pisoKind = v; app.refreshOptions(); app.render(); } }, t))),
+            piso().options?.()),
+        reset() { T.slab.reset(); T.floor.reset(); },
+        down: (p, e) => piso().down?.(p, e),
+        move: (p, e) => piso().move?.(p, e),
+        up: (p, e) => piso().up?.(p, e),
+        keyDown: (e) => piso().keyDown?.(e) ?? false,
+        draw: (ctx, cam) => piso().draw?.(ctx, cam),
     };
 
     // ---------------- escalera (con descanso) ----------------
@@ -1054,9 +1125,11 @@ export function createTools(app) {
     };
 
     // metadatos para la barra de herramientas
+    const SHORT = { select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', door: 'Puerta', window: 'Ventana', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
     for (const [id, t] of Object.entries(T)) {
         t.id = id;
-        t.icon = ICONS[id === 'ubeam' ? 'ubeam' : id];
+        t.short = SHORT[id] ?? t.label;
+        t.icon = ICONS[id === 'piso' ? 'slab' : id];
     }
 
     return T;

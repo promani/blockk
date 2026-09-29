@@ -35,12 +35,14 @@ final class BomCalculator
     {
         $pct = $project->settings->reservePct;
         $levels = [];
+        // Piezas de los hastiales de bloque de los techos: entran al despiece del nivel donde apoyan y al total.
+        $gables = $extras['gables'] ?? [];
         foreach ($models as $i => $model) {
-            $levels[] = $this->scope([$model], [$topologies[$i]], $pct, !$project->level($i)->isEmpty());
+            $levels[] = $this->scope([$model], [$topologies[$i]], $pct, !$project->level($i)->isEmpty(), array_values(array_filter($gables, static fn (array $g): bool => $g['level'] === $i)));
         }
         $used = array_values(array_filter($models, static fn (CourseModel $m, int $i): bool => !$project->level($i)->isEmpty(), ARRAY_FILTER_USE_BOTH));
         $usedTopo = array_values(array_filter($topologies, static fn (Topology $t, int $i): bool => !$project->level($i)->isEmpty(), ARRAY_FILTER_USE_BOTH));
-        $total = $this->scope($used, $usedTopo, $pct, [] !== $used);
+        $total = $this->scope($used, $usedTopo, $pct, [] !== $used || [] !== $gables, $gables);
 
         $lines = $this->lines($total, $timber, $project, $extras);
         $cost = array_sum(array_map(static fn (array $l): float => $l['subtotal'], $lines));
@@ -63,7 +65,8 @@ final class BomCalculator
      *
      * @return array<string, mixed>
      */
-    private function scope(array $models, array $topologies, int $reservePct, bool $used): array
+    /** @param list<array{level: int, t: int, pieces: list<int>}> $gables */
+    private function scope(array $models, array $topologies, int $reservePct, bool $used, array $gables = []): array
     {
         /** @var array<string, array{kind: PieceKind, t: int, full: int, cuts: list<int>, groups: array<int, list<int>>, lengthTicks: int}> $stats */
         $stats = [];
@@ -100,6 +103,23 @@ final class BomCalculator
                     } else {
                         $d8M += 2 * $len / 2000;
                     }
+                }
+            }
+        }
+
+        foreach ($gables as $g) {
+            $key = PieceKind::Block->value.':'.$g['t'];
+            $stats[$key] ??= ['kind' => PieceKind::Block, 't' => $g['t'], 'full' => 0, 'cuts' => [], 'groups' => [], 'lengthTicks' => 0];
+            foreach ($g['pieces'] as $len) {
+                ++$pieceCount;
+                $stats[$key]['lengthTicks'] += $len;
+                $areaByT[$g['t']] = ($areaByT[$g['t']] ?? 0) + $len * Hcca::BLOCK_H;
+                if ($len >= Hcca::BLOCK_L) {
+                    ++$stats[$key]['full'];
+                } else {
+                    $stats[$key]['cuts'][] = $len;
+                    $stats[$key]['groups']['roof'.$g['level']][] = $len;
+                    ++$cutPieceCount;
                 }
             }
         }
@@ -305,10 +325,6 @@ final class BomCalculator
         if (($rf['battenMl'] ?? 0) > 0) {
             $add('Techo', 'CLA', 'Clavaderas / correas (40 cm)', 'm', (float) ceil($rf['battenMl']), $prices['batten_m']);
             $add('Techo', 'CUB', 'Cubierta (chapa o teja, ref.)', 'm²', $rf['coverM2'], $prices['roof_cover_m2']);
-        }
-        foreach ($rf['gableByThickness'] ?? [] as $th => $m2) {
-            $bt = 0.625 * 0.25 * ($th / 100) * $prices['block_m3'];
-            $add('Techo', 'HAS-'.$th, 'Hastiales: bloques 62,5×25×'.$th.' (estimado por superficie, +10 %)', 'u', (int) ceil($m2 / (0.625 * 0.25) * 1.10), $bt, $this->fmt($m2).' m²');
         }
 
         return $lines;

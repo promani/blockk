@@ -30,7 +30,7 @@ function distToSegment(px, py, ax, ay, bx, by) {
  */
 export function magnet(app, wx, wy, gx, gy, step = 1) {
     const { store, cam } = app;
-    const reach = PIXELS / cam.zoom; // cm
+    const reach = Math.min(PIXELS / cam.zoom, 40); // cm: nunca más de 40 cm, para no «robar» trazos cercanos
     let best = null;
     for (const { w, level } of snapWalls(store)) {
         const ax = w.x1 * G;

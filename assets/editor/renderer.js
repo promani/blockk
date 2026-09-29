@@ -172,10 +172,7 @@ export class Renderer {
             if (b.kind === KIND.DOOR || b.kind === KIND.GLASS) {
                 if (b.level === activeLevel && b.course >= ui.cut) continue;
             }
-            const ghostDeck = b.deck && activeLevel === 0;
-            if (ghostDeck) ctx.globalAlpha = 0.32;
             this.drawBox(ctx, cam, it, strokeOn);
-            if (ghostDeck) ctx.globalAlpha = 1;
         }
         if (upperFloors) this.drawRoomFloors(f, 1, 300);
     }
@@ -217,21 +214,54 @@ export class Renderer {
             ctx.lineWidth = 1;
             ctx.stroke();
         };
-        for (const gb of g.gables ?? []) if (gb.enabled) this.drawGable(ctx, cam, gb, poly);
-        // Faldones del más lejano al más cercano (según el giro de la vista).
+        // Hastiales primero: los aleros de los faldones los tapan en parte (como en la realidad).
+        const cx = (g.rect.x0 + g.rect.x1) / 2;
+        const cy = (g.rect.y0 + g.rect.y1) / 2;
+        for (const gb of g.gables ?? []) {
+            if (!gb.enabled || !gb.plane) continue;
+            // El hastial se dibuja en la cara exterior del muro (no en su eje), así tapa el coronamiento como en obra.
+            const { axis, at } = gb.plane;
+            const d = Math.min(gb.thickness / 2, g.overhang ?? 0) * Math.sign(at - (axis === 'y' ? cx : cy));
+            const pts = gb.pts.map(([x, y, z]) => (axis === 'y' ? [x + d, y, z] : [x, y + d, z]));
+            this.drawGable(ctx, cam, { ...gb, pts, plane: { ...gb.plane, at: at + d } }, poly);
+        }
+        // Faldones opacos del más lejano al más cercano, sombreados según hacia dónde miran; cada uno con sus propios cabios.
         const depth = (pl) => pl.pts.reduce((a, p) => { const [X, Y] = Camera.rotate(p[0], p[1], cam.rot); return a + X + Y; }, 0);
         const planes = [...g.planes].sort((a, b) => depth(a) - depth(b));
-        for (const pl of planes) poly(pl.pts, 'rgba(196,99,63,.93)', '#7a3b25');
-        ctx.strokeStyle = 'rgba(90,40,20,.55)';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        for (const r of g.rafters ?? []) {
-            const a = P(r.from);
-            const b = P(r.to);
-            ctx.moveTo(a[0], a[1]);
-            ctx.lineTo(b[0], b[1]);
+        for (const pl of planes) {
+            const [p0, p1, , p3] = pl.pts;
+            const u = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+            const v = [p3[0] - p0[0], p3[1] - p0[1], p3[2] - p0[2]];
+            let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+            if (n[2] < 0) n = n.map((c) => -c);
+            const len = Math.hypot(...n) || 1;
+            const light = (-0.35 * n[0] - 0.55 * n[1] + 0.76 * n[2]) / len; // luz desde arriba a la izquierda
+            poly(pl.pts, shade('#c4633f', 0.78 + 0.3 * Math.max(0, light)), '#7a3b25');
+            const xs = pl.pts.map((q) => q[0]);
+            const ys = pl.pts.map((q) => q[1]);
+            const inside = (r) => {
+                const mx = (r.from[0] + r.to[0]) / 2;
+                const my = (r.from[1] + r.to[1]) / 2;
+                return mx >= Math.min(...xs) - 0.5 && mx <= Math.max(...xs) + 0.5 && my >= Math.min(...ys) - 0.5 && my <= Math.max(...ys) + 0.5;
+            };
+            ctx.save();
+            ctx.beginPath();
+            pl.pts.map(P).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.closePath();
+            ctx.clip();
+            ctx.strokeStyle = 'rgba(90,40,20,.35)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            for (const r of g.rafters ?? []) {
+                if (!inside(r)) continue;
+                const a = P(r.from);
+                const b = P(r.to);
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(b[0], b[1]);
+            }
+            ctx.stroke();
+            ctx.restore();
         }
-        ctx.stroke();
         if (g.ridge) {
             const a = P(g.ridge.from);
             const b = P(g.ridge.to);
@@ -244,13 +274,12 @@ export class Renderer {
         }
     }
 
-    /** Hastial de bloque: polígono con las hiladas de 25 cm marcadas. */
+    /** Hastial de bloque: polígono con las hiladas y las juntas verticales del despiece del servidor. */
     drawGable(ctx, cam, gb, poly) {
-        poly(gb.pts, '#dfe4ea', 'rgba(30,41,59,.55)');
-        if (cam.zoom < 0.09) return;
-        const zs = gb.pts.map((p) => p[2]);
-        const zMin = Math.min(...zs);
-        const zMax = Math.max(...zs);
+        poly(gb.pts, '#e7ebf1', 'rgba(30,41,59,.55)');
+        if (cam.zoom < 0.07 || !gb.plane) return;
+        const { axis, at, z } = gb.plane;
+        const P = (u, v) => (axis === 'y' ? cam.project(at, u, z + v) : cam.project(u, at, z + v));
         ctx.save();
         ctx.beginPath();
         gb.pts.forEach((pt, i) => {
@@ -260,17 +289,23 @@ export class Renderer {
         });
         ctx.closePath();
         ctx.clip();
-        ctx.strokeStyle = 'rgba(30,41,59,.28)';
+        ctx.strokeStyle = 'rgba(30,41,59,.30)';
         ctx.lineWidth = 0.6;
         ctx.beginPath();
-        // recta horizontal por cada hilada: se intersecta con el bounding box del polígono y el clip recorta
-        const xs = gb.pts.map((p) => p[0]);
-        const ys = gb.pts.map((p) => p[1]);
-        for (let z = zMin + 25; z < zMax; z += 25) {
-            const a = cam.project(Math.min(...xs), Math.min(...ys), z);
-            const b = cam.project(Math.max(...xs), Math.max(...ys), z);
-            ctx.moveTo(a[0], a[1]);
-            ctx.lineTo(b[0], b[1]);
+        const us = gb.pts.map((p) => (axis === 'y' ? p[1] : p[0]));
+        const uMin = Math.min(...us);
+        const uMax = Math.max(...us);
+        for (const c of gb.courses ?? []) {
+            const [ax, ay] = P(uMin, c.v0);
+            const [bx, by] = P(uMax, c.v0);
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(bx, by);
+            for (const u of c.joints) {
+                const [px, py] = P(u, c.v0);
+                const [qx, qy] = P(u, c.v0 + 25);
+                ctx.moveTo(px, py);
+                ctx.lineTo(qx, qy);
+            }
         }
         ctx.stroke();
         ctx.restore();
@@ -408,7 +443,7 @@ export class Renderer {
             ctx.globalAlpha = 1;
             if (!ghost) this.drawPlanRooms(f, li);
             this.drawPlanOpenings(f, project.levels[li], ghost);
-            if (li === 0) this.drawPlanTimber(f, ghost);
+            if (li === 1 && !ghost) this.drawPlanTimber(f, false);
             if (li === 0) this.drawPlanStairs(f, ghost);
             if (li === 1) this.drawPlanSlabs(f);
         }

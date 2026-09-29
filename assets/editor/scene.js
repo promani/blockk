@@ -134,7 +134,7 @@ function buildTimber(timber, config) {
                 adjA: false,
                 adjB: false,
                 top: true,
-                level: 0,
+                level: 1,
                 field: f.id,
             });
         }
@@ -155,7 +155,7 @@ function buildTimber(timber, config) {
                 adjA: true,
                 adjB: true,
                 top: true,
-                level: 0,
+                level: 1,
                 field: f.id,
                 deck: true,
             });
@@ -177,7 +177,7 @@ function buildTimber(timber, config) {
             adjA: false,
             adjB: false,
             top: true,
-            level: 0,
+            level: 1,
             beam: b.id,
         });
     }

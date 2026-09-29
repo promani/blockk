@@ -16,7 +16,7 @@ Requisitos: PHP ≥ 8.4 (extensiones habituales de Symfony: `ctype`, `iconv`, `i
 ```bash
 composer install
 composer start            # php -S 127.0.0.1:8000 -t public   →   http://127.0.0.1:8000
-composer test             # PHPUnit (135 tests)
+composer test             # PHPUnit (138 tests)
 ```
 
 En producción: `APP_ENV=prod composer install --no-dev -o && php bin/console asset-map:compile && php bin/console cache:warmup`
@@ -27,15 +27,15 @@ y servir `public/` con PHP-FPM/Nginx/Apache o FrankenPHP. No hay base de datos: 
 
 | Ruta | Pantalla |
 |---|---|
-| `/` | **Editor 3D e isométrico**: herramientas Sala (R), Muro (W), Bloque (B), Puerta (P), Ventana (N), Viga U (U), Entrepiso (E), Viga de madera (T), **Losa (L)**, **Escalera (S)** y **Techo (H)**; vistas Isométrica / Planta (`Tab`), botones **Girar** (`[` `]`) para ver desde otro ángulo, pestañas Nivel 1 / Nivel 2 / **Techo**, asoleamiento, telemetría en vivo, validación. |
+| `/` | **Editor 3D e isométrico**: barra de herramientas con nombres que cambia según la pestaña — Nivel 1: Elegir (V), Habitación (R), Muro (W), Puerta (P), Ventana (N), Escalera (S); Nivel 2: las mismas con **Piso** (L: losa de hormigón o entrepiso de madera) en lugar de Escalera; Techo: Elegir y **Techo** (H); bajo «Más»: Bloque (B), Viga U (U) y Viga de madera (T). Una guía **«Próximo paso»** propone qué hacer y abre la herramienta con un clic; vistas Isométrica / Planta (`Tab`), botones **Girar** (`[` `]`) para ver desde otro ángulo, pestañas Nivel 1 / Nivel 2 / **Techo**, asoleamiento, telemetría en vivo, validación. |
 | `/computo` | **Cómputo y despiece**: KPIs, desglose por nivel, patrones de corte, madera, cotización con precios editables, envío a distribuidor (correo/WhatsApp), exportación **CSV** y **PDF vectorial** (generados en el navegador). |
 | `/galeria` | **Plantillas modulares** (1 planta, 2 plantas, evolutiva, quincho, dúplex, luz libre) con miniaturas SVG y métricas calculadas por el motor; proyecto en blanco con retícula parametrizable. |
 | `/catalogo` | **Catálogo técnico**: fichas de piezas, reglas de modulación, calculadora rápida de paño y mortero, FAQ de obra seca. |
 
-Atajos: `V R W B P N U E T L S` herramientas · `Ctrl+Z / Ctrl+Y` deshacer/rehacer · `Supr` eliminar · 
+Atajos: `V R W P N S L H B U T` herramientas · `Ctrl+Z / Ctrl+Y` deshacer/rehacer · `Supr` eliminar · 
 rueda = zoom · clic central o `Espacio`+arrastre = paneo · `F` encuadrar · `X` gira el bloque / la escalera · `1` `2` `3` Nivel 1 / Nivel 2 / Techo.
 
-Edición: la retícula del suelo es sólo una guía (línea por metro, más marcada cada 5 m); al dibujar aparecen puntos de ajuste junto al cursor y un **imán** azul pega el trazo al eje o extremo de la pared más cercana (del nivel o del de abajo). En Sala, el borde se alinea con paredes vecinas para hacer habitaciones contiguas. Cada habitación cerrada se pinta con su propio color de piso; al elegirla (clic en el piso) aparecen **esquinas azules** que la agrandan o achican moviendo los muros que la forman. **Techos:** en la pestaña Techo se dibujan como habitaciones (rectángulo o clic dentro de un ambiente); cada uno tiene su tipo (a un agua / a dos aguas), pendiente, alero y cabios, y apoya sobre el Nivel 1 o el Nivel 2, así que se puede cubrir sólo parte de la casa. Los **hastiales** de bloque son seleccionables (se quitan o cambian de espesor) y se computan por superficie. Con un muro elegido, su **manija azul** (o los botones ▲▼◀▶) lo corre y estira los muros que llegan a él, y arrastra al muro de arriba.
+Edición: la retícula del suelo es sólo una guía (línea por metro, más marcada cada 5 m); al dibujar aparecen puntos de ajuste junto al cursor y un **imán** azul pega el trazo al eje o extremo de la pared más cercana (del nivel o del de abajo). Un único **ajuste** (bloque entero 62,5 cm, por defecto, o fino 12,5 cm) rige Habitación y Muro por igual: dibujar las cuatro paredes a mano da la misma habitación que la herramienta Habitación, y al volver al punto de partida la cadena de muros se cierra sola. Los bordes se alinean con paredes vecinas para hacer habitaciones contiguas. Cada habitación cerrada se pinta con su propio color de piso; al elegirla (clic en el piso) aparecen **esquinas azules** que la agrandan o achican moviendo los muros que la forman. **Techos:** en la pestaña Techo se dibujan como habitaciones (rectángulo o clic dentro de un ambiente); cada uno tiene su tipo (a un agua / a dos aguas), pendiente, alero y cabios, y apoya sobre el Nivel 1 o el Nivel 2, así que se puede cubrir sólo parte de la casa. Los **hastiales** de bloque (y el muro alto de un techo a un agua) se despiezan hilada por hilada con traba de medio bloque y sus bloques se suman a «Bloques a comprar», pallets, mortero y costo; son seleccionables (se quitan o cambian de espesor). Los cabios apoyan sobre el borde exterior del muro. Con un muro elegido, su **manija azul** (o los botones ▲▼◀▶) lo corre y estira los muros que llegan a él, y arrastra al muro de arriba.
 
 ## Reglas constructivas que aplica el motor
 

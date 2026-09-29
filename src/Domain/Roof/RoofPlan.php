@@ -45,6 +45,25 @@ final readonly class RoofPlan
         return $t;
     }
 
+    /**
+     * Piezas de bloque de los hastiales habilitados, para sumarlas al despiece: [nivel de apoyo, espesor en ticks, largos en ticks].
+     *
+     * @return list<array{level: int, t: int, pieces: list<int>}>
+     */
+    public function gablePieces(): array
+    {
+        $out = [];
+        foreach ($this->parts as $p) {
+            foreach ($p['geometry']['gables'] ?? [] as $g) {
+                if ($g['enabled'] && [] !== $g['pieces']) {
+                    $out[] = ['level' => $p['level'], 't' => (int) round($g['thickness'] * 20), 'pieces' => $g['pieces']];
+                }
+            }
+        }
+
+        return $out;
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {

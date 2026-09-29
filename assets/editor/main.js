@@ -10,6 +10,7 @@ import { createTools, openingBox } from './tools.js';
 import { mountPanels } from './panels.js';
 import { wireBox, snapDots, magnetHit } from './overlay.js';
 import { magnet } from './snap.js';
+import { mountGuide } from './guide.js';
 import { wallRect, G } from './pick.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
@@ -19,9 +20,15 @@ const stage = $('#stage');
 const cam = new Camera();
 const renderer = new Renderer(canvas);
 
-const UI_KEY = 'blockk.ui.v1';
-const TOOL_ORDER = ['select', 'room', 'wall', 'block', '|', 'door', 'window', 'ubeam', '|', 'floor', 'beam', '|', 'slab', 'stair', '|', 'roof'];
+const UI_KEY = 'blockk.ui.v2';
 const ROOF_LEVEL = 2;
+/** Herramientas de cada pestaña: las principales con nombre y, bajo «Más», las de uso avanzado. */
+const TOOLSETS = {
+    0: { main: ['select', 'room', 'wall', 'door', 'window', 'stair'], more: ['block', 'ubeam'] },
+    1: { main: ['select', 'room', 'wall', 'door', 'window', 'piso'], more: ['block', 'ubeam', 'beam'] },
+    2: { main: ['select', 'roof'], more: [] },
+};
+let showMore = false;
 
 let dirty = true;
 let scene = null;
@@ -38,6 +45,7 @@ const app = {
     tools: null,
     render: () => { dirty = true; },
     refreshOptions,
+    persistUi: () => persistUi(),
     toast,
     focusIssue,
     setHint: (t) => { $('#hint-info').textContent = t; },
@@ -48,6 +56,17 @@ app.draw = () => draw(); // dibujo síncrono (mediciones de rendimiento)
 
 app.tools = createTools(app);
 const panels = mountPanels(app);
+const guide = mountGuide(app, {
+    go: (level, tool) => {
+        if (level === 1 && !store.project.upper) return;
+        setLevel(level);
+        setTool(tool);
+        canvas.focus({ preventScroll: true });
+    },
+    suggest: () => panels.openSuggest(),
+    issues: () => panels.openIssues(),
+    addLevel: () => addLevel(),
+});
 
 /* ------------------------------------------------------------------ utilidades */
 function toast(message, kind = 'info') {
@@ -89,7 +108,16 @@ function fitView() {
     let maxX = p.lot.w * 100;
     let maxY = p.lot.d * 100;
     let zTop = config.levelHeight;
-    if (walls.length) {
+    if (!walls.length) {
+        // Proyecto vacío: se encuadra un área de ~12 × 10 m en el centro del lote para dibujar cómodo.
+        const cx = (p.lot.w * 100) / 2;
+        const cy = (p.lot.d * 100) / 2;
+        minX = cx - Math.min(600, cx);
+        maxX = cx + Math.min(600, cx);
+        minY = cy - Math.min(500, cy);
+        maxY = cy + Math.min(500, cy);
+        zTop = 0;
+    } else {
         minX = Math.min(...walls.map((w) => w.x1)) * G - 150;
         maxX = Math.max(...walls.map((w) => w.x2)) * G + 150;
         minY = Math.min(...walls.map((w) => w.y1)) * G - 150;
@@ -133,7 +161,6 @@ let spaceDown = false;
 
 canvas.addEventListener('pointerdown', (e) => {
     canvas.focus({ preventScroll: true });
-    $('#welcome').hidden = true;
     if (e.button === 1 || (e.button === 0 && (spaceDown || e.altKey))) {
         e.preventDefault();
         pan = { x: e.clientX, y: e.clientY };
@@ -278,26 +305,30 @@ function refreshOptions() {
     app.setHint(tool.hint);
 }
 
+function toolButton(id) {
+    const tool = app.tools[id];
+    const reason = toolDisabled(tool);
+    const btn = h('button', {
+        type: 'button',
+        class: 'tool',
+        'aria-pressed': String(store.ui.tool === id),
+        title: `${tool.label}${tool.hotkey ? ` (${tool.hotkey.toUpperCase()})` : ''}${reason ? ` — ${reason}` : ''}`,
+        'aria-label': tool.label,
+        'aria-disabled': reason ? 'true' : null,
+        onclick: () => setTool(id),
+    }, h('span', { class: 'tool-name' }, tool.short));
+    btn.insertAdjacentHTML('afterbegin', tool.icon); // ícono SVG estático (no proviene del usuario)
+    return btn;
+}
+
 function renderToolbar() {
     const bar = clear($('#toolbar'));
-    for (const id of TOOL_ORDER) {
-        if (id === '|') {
-            bar.append(h('div', { class: 'tool-sep' }));
-            continue;
-        }
-        const tool = app.tools[id];
-        const reason = toolDisabled(tool);
-        const btn = h('button', {
-            type: 'button',
-            class: 'tool',
-            'aria-pressed': String(store.ui.tool === id),
-            title: `${tool.label} (${tool.hotkey.toUpperCase()})${reason ? ` — ${reason}` : ''}`,
-            'aria-label': tool.label,
-            disabled: Boolean(reason),
-            onclick: () => setTool(id),
-        }, h('kbd', {}, tool.hotkey.toUpperCase()));
-        btn.insertAdjacentHTML('afterbegin', tool.icon); // ícono SVG estático (no proviene del usuario)
-        bar.append(btn);
+    const set = TOOLSETS[store.ui.level] ?? TOOLSETS[0];
+    for (const id of set.main) bar.append(toolButton(id));
+    if (set.more.length) {
+        const open = showMore || set.more.includes(store.ui.tool);
+        bar.append(h('button', { type: 'button', class: 'tool-more', 'aria-expanded': String(open), onclick: () => { showMore = !open; renderToolbar(); } }, open ? 'Menos ▴' : 'Más ▾'));
+        if (open) for (const id of set.more) bar.append(toolButton(id));
     }
 }
 
@@ -309,9 +340,9 @@ function renderLevels() {
     const wrap = clear($('#levels'));
     wrap.setAttribute('role', 'tablist');
     const tab = (i, name, title) => wrap.append(h('button', { type: 'button', role: 'tab', class: `level-tab${i === ROOF_LEVEL ? ' roof' : ''}`, 'aria-selected': String(store.ui.level === i), onclick: () => setLevel(i), title }, name));
-    tab(0, config.levelNames[0], `${config.levelNames[0]} (1)`);
-    if (store.project.upper) tab(1, config.levelNames[1], `${config.levelNames[1]} (2)`);
-    tab(ROOF_LEVEL, config.levelNames[ROOF_LEVEL], 'Techo (3): a un agua o a dos aguas');
+    tab(0, 'Nivel 1', `${config.levelNames[0]} (1)`);
+    if (store.project.upper) tab(1, 'Nivel 2', `${config.levelNames[1]} (2)`);
+    tab(ROOF_LEVEL, 'Techo', 'Techo (3): a un agua o a dos aguas');
     if (!store.project.upper) {
         wrap.append(h('button', {
             type: 'button',
@@ -344,8 +375,9 @@ function setLevel(i) {
     activeTool().reset?.();
     store.setUi({ level: i, selection: null });
     app.hover = null;
+    const set = TOOLSETS[i];
     if (i === ROOF_LEVEL) store.setUi({ tool: 'roof' });
-    else if (store.ui.tool === 'roof' || toolDisabled(activeTool())) store.setUi({ tool: 'select' });
+    else if (![...set.main, ...set.more].includes(store.ui.tool) || toolDisabled(activeTool())) store.setUi({ tool: 'select' });
     renderLevels();
     renderToolbar();
     refreshOptions();
@@ -486,12 +518,7 @@ function drawAssist(ctx) {
     if (!tool.magnet || !p) return;
     const z = planeZ();
     snapDots(ctx, cam, p.gx, p.gy, store.ui.snap, z);
-    if (p.hit) {
-        const w = p.hit.wall;
-        const [x0, y0, x1, y1] = wallRect(w);
-        const base = p.hit.level * config.levelHeight;
-        magnetHit(ctx, cam, p.hit, { x0, y0, x1, y1, z0: base, z1: base + config.levelHeight }, p.gx, p.gy, z);
-    }
+    if (p.hit) magnetHit(ctx, cam, p.hit, p.hit.wall, p.gx, p.gy, z);
 }
 
 /* ------------------------------------------------------------------ dibujo */
@@ -532,6 +559,7 @@ function draw() {
 /* ------------------------------------------------------------------ eventos del store */
 store.addEventListener('change', () => {
     renderLevels();
+    guide.render();
     panels.renderAll();
     updateHistoryButtons();
     if (store.ui.tool !== 'select' || store.ui.level === ROOF_LEVEL) refreshOptions();
@@ -539,6 +567,7 @@ store.addEventListener('change', () => {
 });
 store.addEventListener('ui', () => {
     renderLevels();
+    guide.render();
     panels.renderProps();
     updateHistoryButtons();
     renderToolbar();
@@ -562,20 +591,15 @@ $('#rot-right').addEventListener('click', () => rotate(1));
 $('#zoom-in').addEventListener('click', () => zoomBy(1.25));
 $('#zoom-out').addEventListener('click', () => zoomBy(0.8));
 $('#zoom-fit').addEventListener('click', fitView);
-$('#snap').addEventListener('change', (e) => { store.setUi({ snap: Number(e.target.value) }); persistUi(); app.render(); });
 $('#cut').addEventListener('input', (e) => {
     const v = Number(e.target.value);
     store.setUi({ cut: v }, { silent: true });
-    $('#cut-out').textContent = `${v}/${config.courses}`;
+    $('#cut-out').textContent = v >= config.courses ? 'todo' : `${fmt((v * config.blockH) / 100, 2)} m`;
     app.render();
 });
 $('#btn-undo').addEventListener('click', () => store.undo());
 $('#btn-redo').addEventListener('click', () => store.redo());
 $('#project-name').addEventListener('change', (e) => store.patchProject({ name: e.target.value.trim() || 'Proyecto sin título' }));
-$('#welcome-close').addEventListener('click', () => {
-    $('#welcome').hidden = true;
-    try { localStorage.setItem('blockk.welcome', '1'); } catch { /* ok */ }
-});
 
 $('#btn-save').addEventListener('click', () => {
     downloadBlob(new Blob([JSON.stringify(store.project, null, 2)], { type: 'application/json' }), `${slug(store.project.name)}.blockk.json`);
@@ -619,7 +643,6 @@ $('#form-new').addEventListener('submit', async (e) => {
         if (ui.snap) store.setUi({ snap: ui.snap }, { silent: true });
         if (ui.view) store.setUi({ view: ui.view }, { silent: true });
     } catch { /* ok */ }
-    $('#snap').value = String(store.ui.snap);
     cam.view = store.ui.view;
     for (const b of $$('#view-toggle button')) b.setAttribute('aria-pressed', String(b.dataset.view === store.ui.view));
 
@@ -632,11 +655,6 @@ $('#form-new').addEventListener('submit', async (e) => {
     await store.load(saved);
     fitView();
     store.ensureSolar();
-    if (!store.project.levels.some((l) => l.walls.length)) {
-        let seen = false;
-        try { seen = localStorage.getItem('blockk.welcome') === '1'; } catch { /* ok */ }
-        $('#welcome').hidden = seen;
-    }
     canvas.focus({ preventScroll: true });
     saveProject(store.project);
 })();

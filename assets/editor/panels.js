@@ -1,5 +1,5 @@
 import { h, add, clear, $ } from '../lib/dom.js';
-import { fmt, int, m2, pct, money, cm } from '../lib/format.js';
+import { fmt, int, m2, pct, cm } from '../lib/format.js';
 import { suggest } from '../lib/api.js';
 import { nextId } from '../lib/storage.js';
 import { roomColor } from './renderer.js';
@@ -38,33 +38,36 @@ export function mountPanels(app) {
                         h('dt', {}, 'Superficie de cubierta'), h('dd', {}, m2(roofBom.coverM2)),
                         h('dt', {}, 'Cabios'), h('dd', {}, int(roofBom.raftersCount)),
                         h('dt', {}, 'Cumbrera / correas'), h('dd', {}, `${fmt(roofBom.ridgeMl, 1)} m / ${fmt(roofBom.battenMl, 0)} m`),
-                        h('dt', {}, 'Hastiales de bloque'), h('dd', { title: 'Se computan por superficie (+10 %); están en el cómputo, no en el despiece de cortes.' }, m2(roofBom.gableMasonryM2)))
+                        h('dt', {}, 'Hastiales de bloque'), h('dd', { title: 'Sus bloques están sumados en «Bloques a comprar».' }, m2(roofBom.gableMasonryM2)))
                     : h('p', { class: 'empty-note' }, 'Todavía no hay techos. Arrastrá un rectángulo sobre los muros (herramienta Techo).'))
             : null;
         const full = tot.heightM >= tot.maxHeightM;
-        add(el.tele, 
+        const kpi = (label, value, title) => h('div', { class: 'kpi-mini', title }, h('b', {}, value), h('span', {}, label));
+        add(el.tele,
+            h('div', { class: 'kpi-grid' },
+                kpi('m² útiles', fmt(tot.netM2, 1), 'Superficie útil de todos los niveles'),
+                kpi('bloques', int(tot.blocks), 'Bloques a comprar (con reserva), incluidos hastiales'),
+                kpi('pallets', int(tot.pallets)),
+                kpi(`${tot.currency} (ref.)`, fmt(tot.cost, 0), 'Costo de referencia con precios de ejemplo (se editan en Cómputo)')),
             roofBlock,
-            h('div', { class: 'kv-title' }, cfg.levelNames[Math.min(store.ui.level, 1)]),
-            h('dl', { class: 'dl' },
-                h('dt', {}, 'Superficie útil'), h('dd', {}, m2(lv.netM2)),
-                h('dt', {}, 'Superficie a ejes'), h('dd', {}, m2(lv.grossM2)),
-                h('dt', {}, 'Muros (longitud)'), h('dd', {}, `${fmt(lv.wallLengthM, 2)} m`),
-                h('dt', {}, 'Ambientes cerrados'), h('dd', {}, int(lv.rooms)),
-                h('dt', {}, 'Hiladas'), h('dd', { title: '11 hiladas de bloque + 1 hilada de bloque U (corona)' }, `${lv.courses.regular} + 1 U = ${lv.courses.total}/${lv.courses.total}`),
-                h('dt', {}, 'Bloques HCCA del nivel'), h('dd', {}, int(lv.blocks))),
-            t.slabM2 > 0 || t.stairs > 0 ? h('dl', { class: 'dl' }, t.slabM2 > 0 ? [h('dt', {}, 'Losa de piso'), h('dd', {}, m2(t.slabM2))] : null, t.stairs > 0 ? [h('dt', {}, 'Escaleras'), h('dd', {}, int(t.stairs))] : null) : null,
-            h('div', { class: 'kv-title' }, 'Obra completa'),
-            h('div', { class: `meter${full ? ' full' : ''}`, title: 'Altura autoportante' }, h('i', { style: `width:${Math.min(100, (tot.heightM / tot.maxHeightM) * 100)}%` })),
-            h('dl', { class: 'dl' },
-                h('dt', {}, 'Altura autoportante'), h('dd', {}, `${fmt(tot.heightM, 2)} / ${fmt(tot.maxHeightM, 2)} m`),
-                h('dt', {}, 'Superficie útil total'), h('dd', {}, m2(tot.netM2)),
-                h('dt', {}, 'Bloques a comprar'), h('dd', {}, int(tot.blocks)),
-                h('dt', {}, 'Pallets'), h('dd', {}, int(tot.pallets)),
-                h('dt', {}, 'Mortero adhesivo'), h('dd', {}, `${int(tot.adhesiveBags)} bolsas`),
-                h('dt', {}, 'Descarte de material'), h('dd', { title: 'Objetivo del sistema: < 4 %' }, pct(tot.scrapPct)),
-                h('dt', {}, 'Bloques con corte'), h('dd', {}, pct(tot.cutBlocksPct)),
-                h('dt', {}, 'Costo de referencia'), h('dd', {}, money(tot.cost, tot.currency))),
-            h('p', { class: 'small muted' }, 'Los precios son de ejemplo y se editan en Cómputo.'),
+            h('details', { class: 'more' },
+                h('summary', {}, 'Más datos'),
+                h('div', { class: 'kv-title' }, cfg.levelNames[Math.min(store.ui.level, 1)]),
+                h('dl', { class: 'dl' },
+                    h('dt', {}, 'Superficie útil'), h('dd', {}, m2(lv.netM2)),
+                    h('dt', {}, 'Superficie a ejes'), h('dd', {}, m2(lv.grossM2)),
+                    h('dt', {}, 'Muros (longitud)'), h('dd', {}, `${fmt(lv.wallLengthM, 2)} m`),
+                    h('dt', {}, 'Habitaciones'), h('dd', {}, int(lv.rooms)),
+                    h('dt', {}, 'Bloques del nivel'), h('dd', {}, int(lv.blocks))),
+                t.slabM2 > 0 || t.stairs > 0 ? h('dl', { class: 'dl' }, t.slabM2 > 0 ? [h('dt', {}, 'Losa de piso'), h('dd', {}, m2(t.slabM2))] : null, t.stairs > 0 ? [h('dt', {}, 'Escaleras'), h('dd', {}, int(t.stairs))] : null) : null,
+                h('div', { class: 'kv-title' }, 'Obra completa'),
+                h('div', { class: `meter${full ? ' full' : ''}`, title: 'Altura autoportante' }, h('i', { style: `width:${Math.min(100, (tot.heightM / tot.maxHeightM) * 100)}%` })),
+                h('dl', { class: 'dl' },
+                    h('dt', {}, 'Altura autoportante'), h('dd', {}, `${fmt(tot.heightM, 2)} / ${fmt(tot.maxHeightM, 2)} m`),
+                    h('dt', {}, 'Mortero adhesivo'), h('dd', {}, `${int(tot.adhesiveBags)} bolsas`),
+                    h('dt', {}, 'Descarte de material'), h('dd', { title: 'Objetivo del sistema: < 4 %' }, pct(tot.scrapPct)),
+                    h('dt', {}, 'Bloques con corte'), h('dd', {}, pct(tot.cutBlocksPct))),
+                h('p', { class: 'small muted' }, 'Precios de ejemplo: se editan en Cómputo.')),
         );
     }
 
@@ -227,8 +230,8 @@ export function mountPanels(app) {
             add(el.props,
                 h('div', { class: 'kv-title' }, side === 'H' ? 'Muro alto del techo' : `Hastial ${side} del techo ${rid}`),
                 field('Espesor', sel(r.gableT, [10, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.gableT = Number(v); }))),
-                h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2(gb.areaM2)), h('dt', {}, 'Bloques (+10 %)'), h('dd', {}, int(gb.blocks))),
-                h('p', { class: 'small muted' }, 'Son bloques 62,5 × 25 cm apilados en hiladas de 25 cm siguiendo la pendiente; el cómputo los estima por superficie.'),
+                h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2(gb.areaM2)), h('dt', {}, 'Hiladas'), h('dd', {}, int(gb.courses?.length ?? 0)), h('dt', {}, 'Piezas'), h('dd', {}, `${int(gb.fullBlocks)} enteras + ${int(gb.cutPieces)} cortadas`)),
+                h('p', { class: 'small muted' }, 'Bloques de 62,5 × 25 cm con traba de medio bloque; los extremos se cortan siguiendo la pendiente. Están sumados en «Bloques a comprar».'),
                 h('div', { class: 'actions-row' },
                     side === 'H' ? null : h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: deleteSelection }, 'Quitar hastial (Supr)'),
                     h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'roof', id: rid } }) }, 'Ver techo')));
@@ -297,7 +300,7 @@ export function mountPanels(app) {
         }
 
         add(el.props, 
-            h('p', { class: 'empty-note' }, 'Nada seleccionado. Usá la herramienta Seleccionar (V) y hacé clic en un muro, vano o entrepiso.'),
+            h('p', { class: 'empty-note' }, 'Nada elegido. Con «Elegir» hacé clic en un muro, una puerta o el piso de una habitación para verlo y cambiarlo.'),
             h('div', { class: 'kv-title' }, 'Ajustes del proyecto'),
             field('Espesor por defecto', sel(store.ui.thickness, cfg.thicknesses.map((t) => [t, `${cm(t)} cm`]), (v) => { store.setUi({ thickness: Number(v) }); store.patchProject({ settings: { ...store.project.settings, defaultT: Number(v) } }); })),
             field('Reserva por rotura (%)', num(store.project.settings?.reservePct ?? 3, 0, 30, (v) => { store.patchProject({ settings: { ...store.project.settings, reservePct: v } }); store.refresh(); })),
@@ -329,9 +332,13 @@ export function mountPanels(app) {
             return;
         }
         const ico = { error: '✕', warn: '!', info: 'i' };
-        for (const i of issues) {
-            add(el.issues, h('button', { type: 'button', class: `issue ${i.severity}`, title: 'Ir al elemento', onclick: () => app.focusIssue(i) }, h('span', { class: 'ico', 'aria-hidden': 'true' }, ico[i.severity]), h('span', {}, `${i.level === 1 ? '[PA] ' : i.level === 2 ? '[Techo] ' : ''}${i.message}`)));
-        }
+        const item = (i) => h('button', { type: 'button', class: `issue ${i.severity}`, title: 'Ir al elemento', onclick: () => app.focusIssue(i) }, h('span', { class: 'ico', 'aria-hidden': 'true' }, ico[i.severity]), h('span', {}, `${i.level === 1 ? '[Nivel 2] ' : i.level === 2 ? '[Techo] ' : ''}${i.message}`));
+        // Primero lo que hay que corregir; las notas informativas quedan plegadas para no distraer.
+        const main = issues.filter((i) => i.severity !== 'info');
+        const notes = issues.filter((i) => i.severity === 'info');
+        if (!main.length) add(el.issues, h('p', { class: 'empty-note' }, 'Nada para corregir.'));
+        for (const i of main) add(el.issues, item(i));
+        if (notes.length) add(el.issues, h('details', { class: 'more' }, h('summary', {}, `${notes.length} nota${notes.length > 1 ? 's' : ''} técnica${notes.length > 1 ? 's' : ''}`), notes.map(item)));
     }
 
     // ------------------------------------------------------------------ asoleamiento (se construye una sola vez)
@@ -449,5 +456,17 @@ export function mountPanels(app) {
         },
         renderProps,
         syncSolar,
+        /** Abre «Sol y orientación» y pide sugerencias de ventanas. */
+        openSuggest() {
+            const card = document.getElementById('card-solar');
+            card.open = true;
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            runSuggest();
+        },
+        openIssues() {
+            const card = document.getElementById('card-issues');
+            card.open = true;
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
     };
 }

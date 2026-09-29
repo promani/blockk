@@ -124,7 +124,7 @@ export function pickAt(app, sx, sy) {
         if (opening) return { type: 'opening', id: opening.id, wall: wall.id };
         return { type: 'wall', id: wall.id };
     }
-    if (store.ui.level === 0 && store.analysis?.timber) {
+    if (store.ui.level === 1 && store.analysis?.timber) {
         const z = store.config.levelHeight;
         const [wx, wy] = cam.unproject(sx, sy, z + 20);
         for (const f of store.analysis.timber.fields ?? []) {

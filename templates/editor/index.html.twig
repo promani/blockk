@@ -32,15 +32,9 @@
                 <button type="button" id="rot-left" title="Ver desde otro ángulo: girar 90° a la izquierda ([)" aria-label="Girar a la izquierda"><span aria-hidden="true">⟲</span> Girar</button>
                 <button type="button" id="rot-right" title="Ver desde otro ángulo: girar 90° a la derecha (])" aria-label="Girar a la derecha">Girar <span aria-hidden="true">⟳</span></button>
             </div>
-            <label class="field-inline" title="Paso de la retícula al dibujar">Paso
-                <select id="snap">
-                    <option value="1">12,5 cm (submódulo)</option>
-                    <option value="5">62,5 cm (módulo)</option>
-                </select>
-            </label>
-            <label class="field-inline cut" title="Corta la vista a cierta altura para ver los ambientes (no afecta al cómputo)">Corte
+            <label class="field-inline cut" title="Baja la altura de los muros del nivel para ver adentro (no cambia el proyecto)">Ver adentro
                 <input type="range" id="cut" min="1" max="12" value="12" aria-label="Hilada visible">
-                <output id="cut-out">12/12</output>
+                <output id="cut-out">todo</output>
             </label>
             <span class="req-status" id="req-status" role="status" aria-live="polite"></span>
         </div>
@@ -53,22 +47,16 @@
                 <button type="button" id="zoom-fit" aria-label="Encuadrar" title="Encuadrar el proyecto (F)">⤢</button>
             </div>
             <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-            <div class="welcome" id="welcome" hidden>
-                <h2>Empecemos</h2>
-                <p>Elegí <b>Sala</b> (R) y arrastrá en diagonal: se generan las 4 paredes ajustadas al módulo de 62,5 cm.
-                   Después agregá puertas (P), ventanas (N) y, si querés, una Planta Alta.</p>
-                <p><a href="{{ path('gallery') }}">Ver plantillas modulares</a></p>
-                <button type="button" class="btn btn-primary" id="welcome-close">Entendido</button>
-            </div>
+            <div class="guide" id="guide" aria-live="polite"></div>
         </div>
         <div class="statusbar" id="statusbar"><span id="cursor-info">—</span><span id="hint-info"></span></div>
     </section>
 
     <aside class="sidepanel" id="sidepanel" aria-label="Panel de proyecto">
-        <details open class="card" id="card-telemetry"><summary>Telemetría en vivo</summary><div id="telemetry" class="card-body"></div></details>
-        <details open class="card" id="card-props"><summary>Propiedades</summary><div id="props" class="card-body"></div></details>
-        <details open class="card" id="card-solar"><summary>Asoleamiento y bioclima</summary><div id="solar" class="card-body"></div></details>
-        <details open class="card" id="card-issues"><summary>Validación constructiva <span class="badge" id="issues-badge">0</span></summary><div id="issues" class="card-body"></div></details>
+        <details open class="card" id="card-props"><summary>Selección</summary><div id="props" class="card-body"></div></details>
+        <details open class="card" id="card-telemetry"><summary>Resumen</summary><div id="telemetry" class="card-body"></div></details>
+        <details open class="card" id="card-issues"><summary>Revisión <span class="badge" id="issues-badge">0</span></summary><div id="issues" class="card-body"></div></details>
+        <details class="card" id="card-solar"><summary>Sol y orientación</summary><div id="solar" class="card-body"></div></details>
     </aside>
 </main>
 <dialog id="dlg-new" class="dialog">

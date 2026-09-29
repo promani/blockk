@@ -54,7 +54,8 @@ final class RoofFloorTest extends TestCase
         // Largo de faldón 5,00 + 2 × 0,40 = 5,80 m → 13 cabios por faldón a 50 cm.
         self::assertSame(26, $roof['bom']['raftersCount']);
         self::assertEqualsWithDelta(2 * hypot(227.5, 68.25) * 580 / 10000, $roof['bom']['coverM2'], 0.05);
-        self::assertEqualsWithDelta(3.75 * 0.5625, $roof['bom']['gableMasonryM2'], 0.01);
+        // Dos hastiales de 3,75 m: triángulo de 56,25 cm más la faja de 4 cm hasta el apoyo de los cabios.
+        self::assertEqualsWithDelta(2 * 3.75 * (0.5625 / 2 + 0.04), $roof['bom']['gableMasonryM2'], 0.01);
         self::assertNotContains('roof.rafter-span', $this->codes($a));
     }
 
@@ -85,7 +86,7 @@ final class RoofFloorTest extends TestCase
 
         self::assertEqualsWithDelta(600.0, $a['roof']['parts'][0]['geometry']['zTop'], 0.01);
         $codes = array_column($a['bom']['lines'], 'code');
-        foreach (['CAB', 'CUM', 'CLA', 'CUB', 'HAS'] as $c) {
+        foreach (['CAB', 'CUM', 'CLA', 'CUB'] as $c) {
             self::assertNotEmpty(array_filter($codes, static fn (string $code): bool => str_starts_with($code, $c)), $c);
         }
         self::assertSame('gable', $a['telemetry']['roof']['count'] > 0 ? 'gable' : 'none');
@@ -235,8 +236,9 @@ final class RoofFloorTest extends TestCase
         self::assertSame(0, $g[0]['blocks']);
         self::assertTrue($g[1]['enabled']);
         self::assertEqualsWithDelta($full['roof']['bom']['gableMasonryM2'] / 2, $noA['roof']['bom']['gableMasonryM2'], 0.01);
-        self::assertContains('HAS-15', array_column($noA['bom']['lines'], 'code'));
-        self::assertContains('HAS-20', array_column($full['bom']['lines'], 'code'));
+        // Los bloques del hastial de 15 cm aparecen como una línea de mampostería propia (los muros son de 20 cm).
+        self::assertContains('B15', array_column($noA['bom']['lines'], 'code'));
+        self::assertNotContains('B15', array_column($full['bom']['lines'], 'code'));
     }
 
     #[Test]
@@ -271,5 +273,41 @@ final class RoofFloorTest extends TestCase
         self::assertContains('roof.covered', $this->codes($this->analyze($b)));
         $ok = Fixtures::room(40, 30)->room(1, 0, 0, 40, 30)->roofPart(1, 0, 0, 40, 30);
         self::assertNotContains('roof.covered', $this->codes($this->analyze($ok)));
+    }
+
+    #[Test]
+    public function gableBlocksAreLaidCourseByCourseAndAddedToTheTotals(): void
+    {
+        // Luz 3,75 m, pendiente 30 %: altura 56,25 cm + 4 cm de apoyo de los cabios sobre el borde exterior del muro →
+        // 3 hiladas de ancho 375 / 235 / 68,3 cm, con traba de medio bloque.
+        $with = $this->analyze(Fixtures::room(40, 30)->roofPart(0, 0, 0, 40, 30, 'gable', 'x'));
+        $without = $this->analyze(Fixtures::room(40, 30)->roofPart(0, 0, 0, 40, 30, 'gable', 'x', more: ['gableA' => false, 'gableB' => false]));
+        $g = $with['roof']['parts'][0]['geometry']['gables'][0];
+
+        self::assertCount(3, $g['courses']);
+        self::assertSame([1250, 1250, 1250, 1250, 1250, 1250], $g['courses'] === [] ? [] : array_slice($g['pieces'], 0, 6));
+        self::assertSame([625, 1250, 1250, 1250, 325, 1250, 117], array_slice($g['pieces'], 6));
+        self::assertSame(10, $g['fullBlocks']);
+        self::assertSame(3, $g['cutPieces']);
+
+        $stock = static fn (array $a): int => $a['bom']['total']['stock'];
+        self::assertGreaterThanOrEqual(20, $stock($with) - $stock($without), 'Dos hastiales: al menos sus 20 bloques enteros (los cortes pueden salir de sobrantes de los muros)');
+        self::assertLessThanOrEqual(20 + 6, $stock($with) - $stock($without));
+        self::assertSame($with['bom']['levels'][0]['stock'], $with['telemetry']['levels'][0]['blocks']);
+        self::assertGreaterThan($without['telemetry']['total']['blocks'], $with['telemetry']['total']['blocks']);
+        self::assertGreaterThan($without['bom']['totalCost'], $with['bom']['totalCost']);
+    }
+
+    #[Test]
+    public function shedRoofRaisesAHighWallWithBlocks(): void
+    {
+        $a = $this->analyze(Fixtures::room(40, 30)->roofPart(0, 0, 0, 40, 30, 'shed', 'S', 30, '3x10'));
+        $h = array_values(array_filter($a['roof']['parts'][0]['geometry']['gables'], static fn (array $g): bool => 'H' === $g['side']))[0];
+
+        // Muro alto de 5,00 m sobre el lado norte, 1,125 m de alto: 5 hiladas; la primera con 8 bloques enteros.
+        self::assertTrue($h['fixed']);
+        self::assertCount(5, $h['courses']);
+        self::assertSame(8, count(array_filter(array_slice($h['pieces'], 0, 8), static fn (int $l): bool => 1250 === $l)));
+        self::assertGreaterThan(30, $h['blocks']);
     }
 }

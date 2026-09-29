@@ -27,7 +27,7 @@ export class Store extends EventTarget {
             view: 'iso',
             tool: 'select',
             selection: null,
-            snap: 1,
+            snap: 5, // ajuste: 5 = bloque entero (62,5 cm), 1 = fino (12,5 cm)
             cut: config.courses,
             thickness: 20,
             solar: { show: true, hour: 12, season: 'winter', path: null, pathKey: '' },

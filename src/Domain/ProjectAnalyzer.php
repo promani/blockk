@@ -102,7 +102,7 @@ final class ProjectAnalyzer
         $timber = $this->timber->plan($normalized->level(0), $stairPlan->holes);
         $slabPlan = $this->slabs->plan($normalized, $levels[0]->regions, $stairPlan->holes);
         $roofPlan = $this->roof->plan($normalized, $levels);
-        $extras = ['stairs' => $stairPlan->bom, 'slabs' => $slabPlan->bom, 'roof' => $roofPlan->bom()];
+        $extras = ['stairs' => $stairPlan->bom, 'slabs' => $slabPlan->bom, 'roof' => $roofPlan->bom(), 'gables' => $roofPlan->gablePieces()];
         $bom = $this->bom->calculate(
             $normalized,
             array_map(static fn (LevelAnalysis $l) => $l->courses, $levels),
