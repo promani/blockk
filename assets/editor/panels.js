@@ -2,6 +2,7 @@ import { h, add, clear, $ } from '../lib/dom.js';
 import { fmt, int, m2, pct, money, cm } from '../lib/format.js';
 import { suggest } from '../lib/api.js';
 import { nextId } from '../lib/storage.js';
+import { roomColor } from './renderer.js';
 
 const G = 12.5;
 const COMPASS = [['NO', 315], ['N', 0], ['NE', 45], ['O', 270], null, ['E', 90], ['SO', 225], ['S', 180], ['SE', 135]];
@@ -27,19 +28,18 @@ export function mountPanels(app) {
         const lv = t.levels[Math.min(store.ui.level, 1)];
         const tot = t.total;
         const roofBom = a.roof?.bom;
+        const nRoofs = a.roof?.parts?.length ?? 0;
         const roofBlock = store.ui.level === 2
             ? h('div', {},
-                h('div', { class: 'kv-title' }, 'Techo'),
-                a.roof?.type && a.roof.type !== 'none' && roofBom
+                h('div', { class: 'kv-title' }, 'Techos'),
+                nRoofs && roofBom
                     ? h('dl', { class: 'dl' },
-                        h('dt', {}, 'Tipo'), h('dd', {}, a.roof.type === 'gable' ? 'A dos aguas' : 'A un agua'),
+                        h('dt', {}, 'Techos'), h('dd', {}, int(nRoofs)),
                         h('dt', {}, 'Superficie de cubierta'), h('dd', {}, m2(roofBom.coverM2)),
-                        h('dt', {}, 'Altura de la cumbrera'), h('dd', {}, `${fmt(a.roof.geometry.riseCm / 100, 2)} m sobre el muro`),
-                        h('dt', {}, 'Largo de cabio'), h('dd', {}, `${fmt(a.roof.geometry.rafterLenCm / 100, 2)} m`),
-                        h('dt', {}, 'Cabios'), h('dd', {}, `${int(roofBom.raftersCount)} × ${roofBom.section.replace('x', '″×')}″ de ${fmt(roofBom.raftersCommercialCm / 100, 2)} m`),
+                        h('dt', {}, 'Cabios'), h('dd', {}, int(roofBom.raftersCount)),
                         h('dt', {}, 'Cumbrera / correas'), h('dd', {}, `${fmt(roofBom.ridgeMl, 1)} m / ${fmt(roofBom.battenMl, 0)} m`),
-                        h('dt', {}, 'Mampostería de hastiales'), h('dd', { title: 'Se computa por superficie; no está en el despiece de bloques.' }, m2(roofBom.gableMasonryM2)))
-                    : h('p', { class: 'empty-note' }, 'Sin techo o sin muros para apoyarlo. Elegí «A un agua» o «A dos aguas» en la barra de arriba.'))
+                        h('dt', {}, 'Hastiales de bloque'), h('dd', { title: 'Se computan por superficie (+10 %); están en el cómputo, no en el despiece de cortes.' }, m2(roofBom.gableMasonryM2)))
+                    : h('p', { class: 'empty-note' }, 'Todavía no hay techos. Arrastrá un rectángulo sobre los muros (herramienta Techo).'))
             : null;
         const full = tot.heightM >= tot.maxHeightM;
         add(el.tele, 
@@ -88,7 +88,13 @@ export function mountPanels(app) {
             } else if (sel_.type === 'opening') lv.openings = lv.openings.filter((o) => o.id !== sel_.id);
             else if (sel_.type === 'ubeam') lv.ubeams = lv.ubeams.filter((u) => u.id !== sel_.id);
             else if (sel_.type === 'timber') d.levels[0].timber = d.levels[0].timber.filter((t) => t.id !== sel_.id);
-            else if (sel_.type === 'slab') d.levels[1].slabs = d.levels[1].slabs.filter((x) => x.id !== sel_.id);
+            else if (sel_.type === 'roof') d.roofs = d.roofs.filter((r) => r.id !== sel_.id);
+            else if (sel_.type === 'gable') {
+                const [rid, side] = String(sel_.id).split(':');
+                const r = d.roofs.find((x) => x.id === rid);
+                if (r && side === 'A') r.gableA = false;
+                else if (r && side === 'B') r.gableB = false;
+            } else if (sel_.type === 'slab') d.levels[1].slabs = d.levels[1].slabs.filter((x) => x.id !== sel_.id);
             else if (sel_.type === 'stair') d.levels[0].stairs = d.levels[0].stairs.filter((x) => x.id !== sel_.id);
         });
     }
@@ -171,6 +177,64 @@ export function mountPanels(app) {
             return;
         }
 
+        if (s?.type === 'room') {
+            const room = store.analysis?.levels?.[store.ui.level]?.rooms?.find((r) => r.id === s.id);
+            if (!room) return void (store.ui.selection = null);
+            add(el.props,
+                h('div', { class: 'kv-title' }, h('span', { class: 'swatch', style: `background:${roomColor(room)}` }), room.name),
+                h('dl', { class: 'dl' },
+                    h('dt', {}, 'Superficie útil'), h('dd', {}, m2(room.netM2)),
+                    h('dt', {}, 'Superficie a ejes'), h('dd', {}, m2(room.grossM2)),
+                    h('dt', {}, 'Perímetro'), h('dd', {}, `${fmt(room.perimeterM, 2)} m`),
+                    h('dt', {}, 'Medidas'), h('dd', {}, `${fmt((room.bbox.w * G) / 100, 2)} × ${fmt((room.bbox.h * G) / 100, 2)} m${room.rect ? '' : ' (en L / irregular)'}`)),
+                h('p', { class: 'small muted' }, 'Arrastrá las esquinas azules para agrandar o achicar la habitación: se corren los dos muros de la esquina y los que llegan a ellos se estiran.'));
+            return;
+        }
+
+        if (s?.type === 'roof') {
+            const r = store.project.roofs.find((x) => x.id === s.id);
+            if (!r) return void (store.ui.selection = null);
+            const part = store.analysis?.roof?.parts?.find((p) => p.id === r.id);
+            const upd = (fn) => store.commit('Editar techo', (d) => fn(d.roofs.find((x) => x.id === r.id)));
+            const check = (label, key) => h('div', { class: 'proprow' }, h('label', {}, label, h('input', { type: 'checkbox', checked: r[key], onchange: (e) => upd((x) => { x[key] = e.target.checked; }) })));
+            add(el.props,
+                h('div', { class: 'kv-title' }, `Techo ${r.id} · ${r.type === 'gable' ? 'a dos aguas' : 'a un agua'}`),
+                store.project.upper ? field('Apoya sobre', sel(r.level, [[0, 'Nivel 1'], [1, 'Nivel 2']], (v) => upd((x) => { x.level = Number(v); }))) : null,
+                field('Ancho (× 12,5 cm)', num(r.w, 2, 900, (v) => upd((x) => { x.w = v; }))),
+                field('Profundidad (× 12,5 cm)', num(r.h, 2, 900, (v) => upd((x) => { x.h = v; }))),
+                field('Posición X (× 12,5 cm)', num(r.x, 0, 1000, (v) => upd((x) => { x.x = v; }))),
+                field('Posición Y (× 12,5 cm)', num(r.y, 0, 1000, (v) => upd((x) => { x.y = v; }))),
+                check('Hastial A (extremo inicial)', 'gableA'),
+                check('Hastial B (extremo final)', 'gableB'),
+                field('Espesor de hastiales', sel(r.gableT, [10, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.gableT = Number(v); }))),
+                part ? h('dl', { class: 'dl' },
+                    h('dt', {}, 'Cubierta'), h('dd', {}, m2(part.bom.coverM2)),
+                    h('dt', {}, 'Altura sobre el muro'), h('dd', {}, `${fmt(part.geometry.riseCm / 100, 2)} m`),
+                    h('dt', {}, 'Largo de cabio'), h('dd', {}, `${fmt(part.geometry.rafterLenCm / 100, 2)} m`),
+                    h('dt', {}, 'Cabios'), h('dd', {}, `${int(part.bom.raftersCount)} de ${fmt(part.bom.raftersCommercialCm / 100, 2)} m`),
+                    h('dt', {}, 'Bloques de hastiales'), h('dd', {}, int(part.geometry.gables.reduce((a, g) => a + g.blocks, 0)))) : null,
+                h('p', { class: 'small muted' }, 'Tipo, pendiente, alero y cabios se cambian en la barra de arriba. Arrastrá las esquinas azules para cambiar el tamaño; clic en un hastial para editarlo.'),
+                h('div', { class: 'actions-row' }, delBtn));
+            return;
+        }
+
+        if (s?.type === 'gable') {
+            const [rid, side] = String(s.id).split(':');
+            const r = store.project.roofs.find((x) => x.id === rid);
+            const gb = store.analysis?.roof?.parts?.find((p) => p.id === rid)?.geometry.gables.find((g) => g.id === s.id);
+            if (!r || !gb) return void (store.ui.selection = null);
+            const upd = (fn) => store.commit('Editar hastial', (d) => fn(d.roofs.find((x) => x.id === rid)));
+            add(el.props,
+                h('div', { class: 'kv-title' }, side === 'H' ? 'Muro alto del techo' : `Hastial ${side} del techo ${rid}`),
+                field('Espesor', sel(r.gableT, [10, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.gableT = Number(v); }))),
+                h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2(gb.areaM2)), h('dt', {}, 'Bloques (+10 %)'), h('dd', {}, int(gb.blocks))),
+                h('p', { class: 'small muted' }, 'Son bloques 62,5 × 25 cm apilados en hiladas de 25 cm siguiendo la pendiente; el cómputo los estima por superficie.'),
+                h('div', { class: 'actions-row' },
+                    side === 'H' ? null : h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: deleteSelection }, 'Quitar hastial (Supr)'),
+                    h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'roof', id: rid } }) }, 'Ver techo')));
+            return;
+        }
+
         if (s?.type === 'slab') {
             const sl = store.project.levels[1].slabs.find((x) => x.id === s.id);
             if (!sl) return void (store.ui.selection = null);
@@ -240,24 +304,14 @@ export function mountPanels(app) {
         );
     }
 
-    /** Propiedades del techo (pestaña Techo): resumen; la edición está en la barra superior. */
+    /** Pestaña Techo sin selección: lista de techos y ayuda. */
     function renderRoofProps() {
-        const r = store.project.roof;
-        const g = store.analysis?.roof;
-        if (!r || r.type === 'none') {
-            add(el.props, h('p', { class: 'empty-note' }, 'Sin techo. Elegí «A un agua» o «A dos aguas» en la barra de arriba.'));
-            return;
-        }
+        const roofs = store.project.roofs ?? [];
         add(el.props,
-            h('div', { class: 'kv-title' }, r.type === 'gable' ? 'Techo a dos aguas' : 'Techo a un agua'),
-            h('p', { class: 'small muted' }, r.type === 'gable'
-                ? 'La cumbrera corre sobre el lado largo. Los cabios apoyan en los muros portantes de los dos lados y se cortan a largo comercial.'
-                : 'El faldón cae hacia el lado elegido; el muro alto queda al lado opuesto.'),
-            g?.bom ? h('dl', { class: 'dl' },
-                h('dt', {}, 'Pendiente'), h('dd', {}, `${r.slope} % (${fmt((Math.atan(r.slope / 100) * 180) / Math.PI, 1)}°)`),
-                h('dt', {}, 'Cubierta'), h('dd', {}, m2(g.bom.coverM2)),
-                h('dt', {}, 'Cabios'), h('dd', {}, int(g.bom.raftersCount))) : null,
-            h('p', { class: 'small muted' }, 'Los precios de cubierta, cabios y correas se editan en Cómputo.'));
+            roofs.length
+                ? h('div', {}, h('div', { class: 'kv-title' }, 'Techos del proyecto'), roofs.map((r) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', style: 'margin:2px', onclick: () => store.setUi({ selection: { type: 'roof', id: r.id } }) }, `${r.id} · ${r.type === 'gable' ? '2 aguas' : '1 agua'} · ${fmt((r.w * G) / 100, 1)}×${fmt((r.h * G) / 100, 1)} m`)))
+                : h('p', { class: 'empty-note' }, 'Sin techos. Con la herramienta Techo (H) arrastrá un rectángulo sobre los muros, o hacé clic dentro de una habitación.'),
+            h('p', { class: 'small muted' }, 'Cada techo es un rectángulo independiente: podés cubrir la planta alta y, aparte, la parte baja de la planta baja. Los precios de cubierta, cabios y correas se editan en Cómputo.'));
     }
 
     // ------------------------------------------------------------------ validación

@@ -10,6 +10,10 @@ import { fmt } from '../lib/format.js';
 
 const G = 12.5;
 
+/** Colores de piso por ambiente (pasteles): el mismo ambiente conserva su color al editar. */
+export const ROOM_COLORS = ['#fbe3b8', '#bfe3ee', '#dccdf3', '#cfe9bd', '#f8c9c9', '#f3eaa6', '#b9e0d6', '#f1cfe0'];
+export const roomColor = (room) => ROOM_COLORS[(room.id - 1) % ROOM_COLORS.length];
+
 const BASE = {
     [KIND.BLOCK]: '#e7ebf1',
     [KIND.CUT]: '#f4d99a',
@@ -77,6 +81,7 @@ export class Renderer {
     }
 
     drawStatic(f) {
+        this.frame = f;
         const { ctx, dpr } = this;
         const { cam } = f;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -150,9 +155,15 @@ export class Renderer {
 
         const list = sortedItems(scene, scene.all, cam.rot, 'all');
         const margin = 40;
+        this.drawRoomFloors(f, 0, 0);
+        let upperFloors = f.project.upper && activeLevel >= 1;
         for (const it of list) {
             const b = it.b;
             if (b.level > activeLevel) continue;
+            if (upperFloors && b.zs >= 300) {
+                upperFloors = false;
+                this.drawRoomFloors(f, 1, 300);
+            }
             // Descarte de cajas fuera de la pantalla (proyectos grandes con zoom cercano).
             const [px, py] = cam.project((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
             const reach = (Math.max(b.x1 - b.x0, b.y1 - b.y0) + (b.z1 - b.z0)) * cam.zoom;
@@ -166,14 +177,35 @@ export class Renderer {
             this.drawBox(ctx, cam, it, strokeOn);
             if (ghostDeck) ctx.globalAlpha = 1;
         }
-        if (activeLevel === 2) this.drawRoofIso(f);
+        if (upperFloors) this.drawRoomFloors(f, 1, 300);
     }
 
-    drawRoofIso(f) {
+    /** Piso de color de cada ambiente cerrado del nivel `li`, a la cota `z`. */
+    drawRoomFloors(f, li, z) {
         const { ctx } = this;
         const { cam, analysis } = f;
-        const g = analysis.roof?.geometry;
-        if (!g?.planes) return;
+        for (const room of analysis.levels[li]?.rooms ?? []) {
+            if (!room.fill?.length) continue;
+            const color = roomColor(room);
+            ctx.fillStyle = color;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            for (const [x, y, w, h] of room.fill) {
+                const pts = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]].map(([a, b]) => cam.project(a * G, b * G, z));
+                pts.forEach(([sx, sy], i) => (i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)));
+                ctx.closePath();
+            }
+            ctx.fill();
+            ctx.stroke();
+        }
+    }
+
+    /** Un techo: hastiales de bloque, faldones (del más lejano al más cercano), cabios y cumbrera. */
+    drawRoofPart(f, part) {
+        const { ctx } = this;
+        const { cam } = f;
+        const g = part.geometry;
         const P = (pt) => cam.project(pt[0], pt[1], pt[2]);
         const poly = (pts, fill, stroke) => {
             ctx.beginPath();
@@ -185,7 +217,7 @@ export class Renderer {
             ctx.lineWidth = 1;
             ctx.stroke();
         };
-        for (const gb of g.gables ?? []) poly(gb.pts, '#dde3eb', 'rgba(30,41,59,.5)');
+        for (const gb of g.gables ?? []) if (gb.enabled) this.drawGable(ctx, cam, gb, poly);
         // Faldones del más lejano al más cercano (según el giro de la vista).
         const depth = (pl) => pl.pts.reduce((a, p) => { const [X, Y] = Camera.rotate(p[0], p[1], cam.rot); return a + X + Y; }, 0);
         const planes = [...g.planes].sort((a, b) => depth(a) - depth(b));
@@ -212,8 +244,44 @@ export class Renderer {
         }
     }
 
+    /** Hastial de bloque: polígono con las hiladas de 25 cm marcadas. */
+    drawGable(ctx, cam, gb, poly) {
+        poly(gb.pts, '#dfe4ea', 'rgba(30,41,59,.55)');
+        if (cam.zoom < 0.09) return;
+        const zs = gb.pts.map((p) => p[2]);
+        const zMin = Math.min(...zs);
+        const zMax = Math.max(...zs);
+        ctx.save();
+        ctx.beginPath();
+        gb.pts.forEach((pt, i) => {
+            const [x, y] = cam.project(pt[0], pt[1], pt[2]);
+            if (i) ctx.lineTo(x, y);
+            else ctx.moveTo(x, y);
+        });
+        ctx.closePath();
+        ctx.clip();
+        ctx.strokeStyle = 'rgba(30,41,59,.28)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        // recta horizontal por cada hilada: se intersecta con el bounding box del polígono y el clip recorta
+        const xs = gb.pts.map((p) => p[0]);
+        const ys = gb.pts.map((p) => p[1]);
+        for (let z = zMin + 25; z < zMax; z += 25) {
+            const a = cam.project(Math.min(...xs), Math.min(...ys), z);
+            const b = cam.project(Math.max(...xs), Math.max(...ys), z);
+            ctx.moveTo(a[0], a[1]);
+            ctx.lineTo(b[0], b[1]);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
     drawBox(ctx, cam, it, strokeOn) {
         const b = it.b;
+        if (b.kind === KIND.ROOF) {
+            this.drawRoofPart(this.frame, b.roof);
+            return;
+        }
         const rot = cam.rot;
         const glass = b.kind === KIND.GLASS;
         const pal = PALETTE[b.kind];
@@ -328,6 +396,7 @@ export class Renderer {
                     rects.set(r.join(','), r);
                 }
             }
+            if (!ghost) this.drawRoomFloors(f, li, 0);
             const fill = ghost ? '#a9b4c4' : '#1e293b';
             const edge = ghost ? '#94a3b8' : '#0f172a';
             ctx.globalAlpha = ghost ? 0.7 : 1;
@@ -423,9 +492,9 @@ export class Renderer {
     drawPlanRoof(f) {
         const { ctx } = this;
         const { cam, analysis } = f;
-        const g = analysis.roof?.geometry;
-        if (!g?.planes) return;
         ctx.save();
+        for (const part of analysis.roof?.parts ?? []) {
+        const g = part.geometry;
         ctx.lineJoin = 'round';
         for (const pl of g.planes) {
             ctx.beginPath();
@@ -486,6 +555,7 @@ export class Renderer {
                 const [mx, my] = cam.project((Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2, 0);
                 ctx.fillText(`${fmt(pl.areaM2, 1)} m²`, mx, my - 8);
             }
+        }
         }
         ctx.restore();
     }

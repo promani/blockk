@@ -45,7 +45,6 @@ final class ProjectFactory
         $settings = $this->settings(is_array($data['settings'] ?? null) ? $data['settings'] : []);
         $lot = is_array($data['lot'] ?? null) ? $data['lot'] : [];
 
-        $roofData = is_array($data['roof'] ?? null) ? $data['roof'] : [];
         $project = new Project(
             name: $this->string($data['name'] ?? 'Proyecto sin título', 120, 'name'),
             levels: $levels,
@@ -55,7 +54,7 @@ final class ProjectFactory
             lotW: $this->intInRange($lot['w'] ?? 24, 4, 100, 'lot.w'),
             lotD: $this->intInRange($lot['d'] ?? 20, 4, 100, 'lot.d'),
             upper: (bool) ($data['upper'] ?? false) || !$levels[1]->isEmpty(),
-            roof: $this->roof($roofData),
+            roofs: $this->roofs($data, $levels),
         );
 
         if ([] !== $this->errors) {
@@ -204,27 +203,78 @@ final class ProjectFactory
         );
     }
 
-    /** @param array<string, mixed> $r */
-    private function roof(array $r): Roof
+    /**
+     * Techos rectangulares (`roofs`). Los proyectos guardados con el formato anterior (`roof` único) se convierten en un techo
+     * que cubre la caja envolvente del último nivel con muros.
+     *
+     * @param array<string, mixed> $data
+     * @param list<Level>          $levels
+     *
+     * @return list<RoofPart>
+     */
+    private function roofs(array $data, array $levels): array
     {
-        $type = RoofType::tryFrom((string) ($r['type'] ?? 'none')) ?? RoofType::None;
+        if (!array_key_exists('roofs', $data)) {
+            $legacy = is_array($data['roof'] ?? null) ? $data['roof'] : [];
+            $type = RoofType::tryFrom((string) ($legacy['type'] ?? 'none')) ?? RoofType::None;
+            $top = isset($levels[1]) && !$levels[1]->isEmpty() ? 1 : 0;
+            $walls = ($levels[$top] ?? new Level())->walls;
+            if (RoofType::None === $type || [] === $walls) {
+                return [];
+            }
+            $legacy += ['id' => 'r1', 'level' => $top, 'type' => $type->value];
+            $legacy['x'] = min(array_map(static fn (Wall $w): int => $w->x1, $walls));
+            $legacy['y'] = min(array_map(static fn (Wall $w): int => $w->y1, $walls));
+            $legacy['w'] = max(array_map(static fn (Wall $w): int => $w->x2, $walls)) - $legacy['x'];
+            $legacy['h'] = max(array_map(static fn (Wall $w): int => $w->y2, $walls)) - $legacy['y'];
+
+            return [$this->roofPart($legacy, 'roof', $seen)];
+        }
+        $list = $this->list($data['roofs'], Hcca::MAX_ROOFS, 'roofs');
+        $seen = [];
+        $out = [];
+        foreach ($list as $i => $r) {
+            $out[] = $this->roofPart($r, "roofs[$i]", $seen);
+        }
+
+        return $out;
+    }
+
+    /** @param array<string, mixed> $r @param array<string, true>|null $seen */
+    private function roofPart(array $r, string $path, ?array &$seen): RoofPart
+    {
+        $seen ??= [];
+        $type = RoofType::tryFrom((string) ($r['type'] ?? 'gable')) ?? RoofType::Gable;
+        if (RoofType::None === $type) {
+            $type = RoofType::Gable;
+        }
         $dir = (string) ($r['dir'] ?? '');
         $dir = RoofType::Shed === $type
             ? (in_array($dir, ['N', 'S', 'E', 'W'], true) ? $dir : 'S')
             : (in_array($dir, ['x', 'y'], true) ? $dir : 'x');
         $section = (string) ($r['section'] ?? '3x8');
         if (!isset(Hcca::timberSections()[$section])) {
-            $this->errors[] = 'roof.section desconocida';
+            $this->errors[] = "$path.section desconocida";
             $section = '3x8';
         }
+        $gableT = (int) ($r['gableT'] ?? 20);
 
-        return new Roof(
+        return new RoofPart(
+            $this->id($r['id'] ?? null, "$path.id", $seen),
+            $this->intInRange($r['level'] ?? 0, 0, Hcca::MAX_LEVELS - 1, "$path.level"),
+            $this->coord($r['x'] ?? null, "$path.x"),
+            $this->coord($r['y'] ?? null, "$path.y"),
+            $this->intInRange($r['w'] ?? 8, 2, Hcca::MAX_BBOX_UNITS, "$path.w"),
+            $this->intInRange($r['h'] ?? 8, 2, Hcca::MAX_BBOX_UNITS, "$path.h"),
             $type,
             $dir,
-            $this->intInRange($r['slope'] ?? 30, 10, 100, 'roof.slope'),
-            $this->intInRange($r['overhang'] ?? 40, 0, 100, 'roof.overhang'),
+            $this->intInRange($r['slope'] ?? 30, 10, 100, "$path.slope"),
+            $this->intInRange($r['overhang'] ?? 40, 0, 100, "$path.overhang"),
             $section,
-            $this->intInRange($r['spacing'] ?? 50, Hcca::JOIST_MIN_SPACING_CM, Hcca::JOIST_MAX_SPACING_CM, 'roof.spacing'),
+            $this->intInRange($r['spacing'] ?? 50, Hcca::JOIST_MIN_SPACING_CM, Hcca::JOIST_MAX_SPACING_CM, "$path.spacing"),
+            (bool) ($r['gableA'] ?? true),
+            (bool) ($r['gableB'] ?? true),
+            in_array($gableT, RoofPart::GABLE_THICKNESSES, true) ? $gableT : 20,
         );
     }
 

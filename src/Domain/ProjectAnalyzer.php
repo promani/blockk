@@ -102,7 +102,7 @@ final class ProjectAnalyzer
         $timber = $this->timber->plan($normalized->level(0), $stairPlan->holes);
         $slabPlan = $this->slabs->plan($normalized, $levels[0]->regions, $stairPlan->holes);
         $roofPlan = $this->roof->plan($normalized, $levels);
-        $extras = ['stairs' => $stairPlan->bom, 'slabs' => $slabPlan->bom, 'roof' => $roofPlan->bom];
+        $extras = ['stairs' => $stairPlan->bom, 'slabs' => $slabPlan->bom, 'roof' => $roofPlan->bom()];
         $bom = $this->bom->calculate(
             $normalized,
             array_map(static fn (LevelAnalysis $l) => $l->courses, $levels),
@@ -125,7 +125,7 @@ final class ProjectAnalyzer
                 'roof' => $roofPlan->toArray(),
                 'bom' => $bom,
                 'issues' => array_map(static fn (Issue $i): array => $i->toArray(), $issues),
-                'telemetry' => $this->telemetry($normalized, $levels, $bom) + ['roof' => ['type' => $roofPlan->type, 'riseCm' => $roofPlan->geometry['riseCm'] ?? 0, 'coverM2' => $roofPlan->bom['coverM2'] ?? 0], 'slabM2' => $slabPlan->bom['areaM2'], 'stairs' => $stairPlan->bom['count']],
+                'telemetry' => $this->telemetry($normalized, $levels, $bom) + ['roof' => ['count' => count($roofPlan->parts), 'coverM2' => $roofPlan->bom()['coverM2']], 'slabM2' => $slabPlan->bom['areaM2'], 'stairs' => $stairPlan->bom['count']],
             ],
         ];
     }
@@ -147,7 +147,8 @@ final class ProjectAnalyzer
                 'endTrim' => Hcca::ticksToCm($l->topology->perpendicularThickness($w, false)),
             ];
         }
-        $rooms = array_map(static fn ($r): array => $r->toArray(), $l->regions->rooms);
+        $shapes = $l->regions->shapes();
+        $rooms = array_map(static fn ($r): array => $r->toArray() + ['fill' => $shapes[$r->id]['fill'] ?? [], 'corners' => $shapes[$r->id]['corners'] ?? []], $l->regions->rooms);
 
         return [
             'used' => !$l->level->isEmpty(),

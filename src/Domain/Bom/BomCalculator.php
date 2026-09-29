@@ -296,19 +296,19 @@ final class BomCalculator
             $add('Losa de piso', 'LEN', 'Encofrado de losa', 'm²', $sl['formworkM2'], $prices['formwork_m2']);
         }
         $rf = $extras['roof'] ?? [];
-        if (($rf['raftersCount'] ?? 0) > 0) {
-            $section = $rf['section'];
-            $len = $rf['raftersCommercialCm'];
-            $add('Techo', 'CAB', 'Cabios '.Hcca::timberSections()[$section]['label'].' de '.$this->fmt($len / 100).' m', 'u', $rf['raftersCount'], $prices['timber_'.$section.'_m'] * $len / 100);
-            if ($rf['ridgeMl'] > 0) {
-                $add('Techo', 'CUM', 'Cumbrera '.Hcca::timberSections()[$section]['label'], 'm', (float) ceil($rf['ridgeMl']), $prices['timber_'.$section.'_m']);
-            }
+        foreach ($rf['rafters'] ?? [] as $r) {
+            $add('Techo', 'CAB-'.$r['section'].'-'.$r['lengthCm'], 'Cabios '.Hcca::timberSections()[$r['section']]['label'].' de '.$this->fmt($r['lengthCm'] / 100).' m', 'u', $r['count'], $prices['timber_'.$r['section'].'_m'] * $r['lengthCm'] / 100);
+        }
+        foreach ($rf['ridge'] ?? [] as $section => $ml) {
+            $add('Techo', 'CUM-'.$section, 'Cumbrera '.Hcca::timberSections()[$section]['label'], 'm', (float) ceil($ml), $prices['timber_'.$section.'_m']);
+        }
+        if (($rf['battenMl'] ?? 0) > 0) {
             $add('Techo', 'CLA', 'Clavaderas / correas (40 cm)', 'm', (float) ceil($rf['battenMl']), $prices['batten_m']);
             $add('Techo', 'CUB', 'Cubierta (chapa o teja, ref.)', 'm²', $rf['coverM2'], $prices['roof_cover_m2']);
-            if ($rf['gableMasonryM2'] > 0) {
-                $b20 = 0.625 * 0.25 * 0.20 * $prices['block_m3'];
-                $add('Techo', 'HAS', 'Hastiales: bloques 62,5×25×20 (estimado por superficie, +10 %)', 'u', (int) ceil($rf['gableMasonryM2'] / (0.625 * 0.25) * 1.10), $b20, $this->fmt($rf['gableMasonryM2']).' m²');
-            }
+        }
+        foreach ($rf['gableByThickness'] ?? [] as $th => $m2) {
+            $bt = 0.625 * 0.25 * ($th / 100) * $prices['block_m3'];
+            $add('Techo', 'HAS-'.$th, 'Hastiales: bloques 62,5×25×'.$th.' (estimado por superficie, +10 %)', 'u', (int) ceil($m2 / (0.625 * 0.25) * 1.10), $bt, $this->fmt($m2).' m²');
         }
 
         return $lines;

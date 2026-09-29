@@ -7,8 +7,10 @@ const PIXELS = 16; // radio de atracción en pantalla
 
 /** Muros candidatos: los del nivel activo y, en el Nivel 2, los del nivel de abajo (guía para construir encima). */
 export function snapWalls(store) {
-    const list = store.project.levels[Math.min(store.ui.level, 1)].walls.map((w) => ({ w, level: store.ui.level }));
-    if (store.ui.level === 1) for (const w of store.project.levels[0].walls) list.push({ w, level: 0 });
+    // En la pestaña Techo se ajusta a los muros del nivel sobre el que se apoya el techo.
+    const li = store.ui.level === 2 ? Math.min(store.ui.roofLevel ?? store.topLevel, store.topLevel) : store.ui.level;
+    const list = store.project.levels[li].walls.map((w) => ({ w, level: li }));
+    if (li === 1) for (const w of store.project.levels[0].walls) list.push({ w, level: 0 });
 
     return list;
 }

@@ -69,9 +69,53 @@ export function alongPosition(app, wall, sx, sy) {
     return ((horizontal ? wx : wy) - (horizontal ? wall.x1 : wall.y1) * G) / G;
 }
 
-/** Elemento bajo el puntero: vano, muro, madera, losa o escalera. */
+function inPoly(pts, x, y) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i];
+        const [xj, yj] = pts[j];
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+}
+
+/** Techo (o su hastial) bajo el puntero, en la pestaña Techo: el más cercano a la cámara. */
+function pickRoof(app, sx, sy) {
+    const { cam, store } = app;
+    const parts = store.analysis?.roof?.parts ?? [];
+    if (cam.view === 'plan') {
+        const [wx, wy] = cam.unproject(sx, sy, 0);
+        const hits = parts.filter((p) => {
+            const g = p.geometry;
+            const o = g.overhang ?? 0;
+            return wx >= g.rect.x0 - o && wx <= g.rect.x1 + o && wy >= g.rect.y0 - o && wy <= g.rect.y1 + o;
+        });
+        hits.sort((a, b) => b.level - a.level || area(a) - area(b));
+        return hits[0] ? { type: 'roof', id: hits[0].id } : null;
+    }
+    const depth = (p) => {
+        const g = p.geometry;
+        const [X, Y] = Camera.rotate((g.rect.x0 + g.rect.x1) / 2, (g.rect.y0 + g.rect.y1) / 2, cam.rot);
+        return p.level * 10000 + X + Y;
+    };
+    for (const part of [...parts].sort((a, b) => depth(b) - depth(a))) {
+        const proj = (pts) => pts.map((q) => cam.project(q[0], q[1], q[2]));
+        for (const gb of part.geometry.gables ?? []) {
+            if (gb.enabled && inPoly(proj(gb.pts), sx, sy)) return { type: 'gable', id: gb.id };
+        }
+        for (const pl of part.geometry.planes ?? []) {
+            if (inPoly(proj(pl.pts), sx, sy)) return { type: 'roof', id: part.id };
+        }
+    }
+    return null;
+}
+
+const area = (p) => (p.geometry.rect.x1 - p.geometry.rect.x0) * (p.geometry.rect.y1 - p.geometry.rect.y0);
+
+/** Elemento bajo el puntero: vano, muro, madera, losa, escalera, habitación (piso) o techo. */
 export function pickAt(app, sx, sy) {
     const { store, cam } = app;
+    if (store.ui.level === 2) return pickRoof(app, sx, sy);
     const wall = pickWall(app, sx, sy);
     if (wall) {
         const along = alongPosition(app, wall, sx, sy);
@@ -107,6 +151,15 @@ export function pickAt(app, sx, sy) {
                 const b = st.bbox;
                 if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return { type: 'stair', id: st.id };
             }
+        }
+    }
+    if (store.ui.level <= 1) {
+        // Piso de una habitación cerrada (se elige para verla y cambiarle el tamaño desde las esquinas).
+        const [wx, wy] = cam.unproject(sx, sy, store.ui.level * store.config.levelHeight);
+        const ux = wx / G;
+        const uy = wy / G;
+        for (const room of store.analysis?.levels?.[store.ui.level]?.rooms ?? []) {
+            if (room.fill?.some(([x, y, w, h]) => ux >= x && ux < x + w && uy >= y && uy < y + h)) return { type: 'room', id: room.id };
         }
     }
     return null;

@@ -57,6 +57,73 @@ final readonly class RegionMap
         return true;
     }
 
+    /**
+     * Forma de cada ambiente para dibujarlo y editarlo: rectángulos que lo rellenan (x, y, w, h en unidades) y sus esquinas
+     * (vértices del contorno, en unidades). Se omite en planos enormes para no encarecer el análisis.
+     *
+     * @return array<int, array{fill: list<array{int, int, int, int}>, corners: list<array{int, int}>}>
+     */
+    public function shapes(): array
+    {
+        if ([] === $this->cells || $this->cols * $this->rows > 250_000) {
+            return [];
+        }
+        $shapes = [];
+        // Rellenos: tramos horizontales por fila, fusionados con la fila de arriba si tienen la misma extensión.
+        $open = []; // room => list of [i0, i1, j0, rowsCount]
+        for ($j = $this->j0; $j <= $this->j0 + $this->rows; ++$j) {
+            $runs = [];
+            if ($j < $this->j0 + $this->rows) {
+                $i = $this->i0;
+                $end = $this->i0 + $this->cols;
+                while ($i < $end) {
+                    $r = $this->cells[($j - $this->j0) * $this->cols + ($i - $this->i0)];
+                    $k = $i + 1;
+                    while ($k < $end && $this->cells[($j - $this->j0) * $this->cols + ($k - $this->i0)] === $r) {
+                        ++$k;
+                    }
+                    if ($r > 0) {
+                        $runs[] = [$r, $i, $k];
+                    }
+                    $i = $k;
+                }
+            }
+            $next = [];
+            foreach ($runs as [$r, $a, $b]) {
+                $k = "$r:$a:$b";
+                if (isset($open[$k])) {
+                    $next[$k] = $open[$k];
+                    ++$next[$k][4];
+                    unset($open[$k]);
+                } else {
+                    $next[$k] = [$r, $a, $b, $j, 1];
+                }
+            }
+            foreach ($open as [$r, $a, $b, $j0, $n]) {
+                $shapes[$r]['fill'][] = [$a, $j0, $b - $a, $n];
+            }
+            $open = $next;
+        }
+        // Esquinas: vértice de la retícula rodeado por 1 o 3 celdas del ambiente (o 2 en diagonal).
+        for ($j = $this->j0; $j <= $this->j0 + $this->rows; ++$j) {
+            for ($i = $this->i0; $i <= $this->i0 + $this->cols; ++$i) {
+                $c = [$this->roomAtCell($i - 1, $j - 1), $this->roomAtCell($i, $j - 1), $this->roomAtCell($i - 1, $j), $this->roomAtCell($i, $j)];
+                foreach (array_unique(array_filter($c)) as $r) {
+                    $n = 0;
+                    foreach ($c as $v) {
+                        $n += $v === $r ? 1 : 0;
+                    }
+                    $diagonal = 2 === $n && (($c[0] === $r && $c[3] === $r) || ($c[1] === $r && $c[2] === $r));
+                    if (1 === $n || 3 === $n || $diagonal) {
+                        $shapes[$r]['corners'][] = [$i, $j];
+                    }
+                }
+            }
+        }
+
+        return $shapes;
+    }
+
     public function room(int $id): ?Room
     {
         return array_find($this->rooms, static fn (Room $r): bool => $r->id === $id);

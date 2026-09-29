@@ -44,13 +44,13 @@ final class RoofFloorTest extends TestCase
         $a = $this->analyze(Fixtures::room(40, 30)->roof('gable', 'x'));
         $roof = $a['roof'];
 
-        self::assertSame('gable', $roof['type']);
-        self::assertCount(2, $roof['geometry']['planes']);
-        self::assertCount(2, $roof['geometry']['gables']);
+        self::assertSame('gable', $roof['parts'][0]['type']);
+        self::assertCount(2, $roof['parts'][0]['geometry']['planes']);
+        self::assertCount(2, $roof['parts'][0]['geometry']['gables']);
         // Luz 3,75 m, pendiente 30 %: cumbrera 3,00 + 0,5625 m sobre el coronamiento.
-        self::assertEqualsWithDelta(56.25, $roof['geometry']['riseCm'], 0.1);
-        self::assertEqualsWithDelta(300.0, $roof['geometry']['zTop'], 0.01);
-        self::assertEqualsWithDelta(hypot(187.5 + 40, 56.25 + 12), $roof['geometry']['rafterLenCm'], 0.2);
+        self::assertEqualsWithDelta(56.25, $roof['parts'][0]['geometry']['riseCm'], 0.1);
+        self::assertEqualsWithDelta(300.0, $roof['parts'][0]['geometry']['zTop'], 0.01);
+        self::assertEqualsWithDelta(hypot(187.5 + 40, 56.25 + 12), $roof['parts'][0]['geometry']['rafterLenCm'], 0.2);
         // Largo de faldón 5,00 + 2 × 0,40 = 5,80 m → 13 cabios por faldón a 50 cm.
         self::assertSame(26, $roof['bom']['raftersCount']);
         self::assertEqualsWithDelta(2 * hypot(227.5, 68.25) * 580 / 10000, $roof['bom']['coverM2'], 0.05);
@@ -62,7 +62,7 @@ final class RoofFloorTest extends TestCase
     public function shedRoofFallsTowardsTheChosenSideAndChecksTheRafterSpan(): void
     {
         $a = $this->analyze(Fixtures::room(40, 30)->roof('shed', 'S'));
-        $planes = $a['roof']['geometry']['planes'];
+        $planes = $a['roof']['parts'][0]['geometry']['planes'];
 
         self::assertCount(1, $planes);
         $ys = array_map(static fn (array $p): float => $p[1], $planes[0]['pts']);
@@ -83,12 +83,12 @@ final class RoofFloorTest extends TestCase
         $result = (new ProjectAnalyzer())->analyze(Fixtures::build($b));
         $a = $result['analysis'];
 
-        self::assertEqualsWithDelta(600.0, $a['roof']['geometry']['zTop'], 0.01);
+        self::assertEqualsWithDelta(600.0, $a['roof']['parts'][0]['geometry']['zTop'], 0.01);
         $codes = array_column($a['bom']['lines'], 'code');
         foreach (['CAB', 'CUM', 'CLA', 'CUB', 'HAS'] as $c) {
-            self::assertContains($c, $codes);
+            self::assertNotEmpty(array_filter($codes, static fn (string $code): bool => str_starts_with($code, $c)), $c);
         }
-        self::assertSame('gable', $a['telemetry']['roof']['type']);
+        self::assertSame('gable', $a['telemetry']['roof']['count'] > 0 ? 'gable' : 'none');
     }
 
     #[Test]
@@ -96,8 +96,8 @@ final class RoofFloorTest extends TestCase
     {
         $a = $this->analyze(Fixtures::room());
 
-        self::assertSame('none', $a['roof']['type']);
-        self::assertNotContains('CAB', array_column($a['bom']['lines'], 'code'));
+        self::assertSame([], $a['roof']['parts']);
+        self::assertEmpty(array_filter(array_column($a['bom']['lines'], 'code'), static fn (string $c): bool => str_starts_with($c, 'CAB')));
     }
 
     #[Test]
@@ -205,5 +205,62 @@ final class RoofFloorTest extends TestCase
         $data = Fixtures::room()->stair(0, 1, 1, 'N', 'straight', 4)->build(); // 50 cm de ancho: demasiado angosta
         $this->expectException(InvalidProjectException::class);
         ProjectFactory::fromArray($data);
+    }
+
+    #[Test]
+    public function roofsAreIndependentRectanglesOnDifferentLevels(): void
+    {
+        // Planta baja 40×30 y planta alta sólo sobre la mitad izquierda: un techo sobre la parte baja y otro sobre la alta.
+        $b = Fixtures::room(40, 30)->room(1, 0, 0, 20, 30)
+            ->roofPart(1, 0, 0, 20, 30, 'gable', 'y')
+            ->roofPart(0, 20, 0, 20, 30, 'shed', 'E');
+        $a = $this->analyze($b);
+        $parts = $a['roof']['parts'];
+
+        self::assertCount(2, $parts);
+        self::assertEqualsWithDelta(600.0, $parts[0]['geometry']['zTop'], 0.01);
+        self::assertEqualsWithDelta(300.0, $parts[1]['geometry']['zTop'], 0.01);
+        self::assertSame(2, $a['telemetry']['roof']['count']);
+        self::assertEqualsWithDelta($parts[0]['bom']['coverM2'] + $parts[1]['bom']['coverM2'], $a['roof']['bom']['coverM2'], 0.02);
+    }
+
+    #[Test]
+    public function gablesCanBeRemovedAndTheirBlocksFollowTheThickness(): void
+    {
+        $full = $this->analyze(Fixtures::room(40, 30)->roofPart(0, 0, 0, 40, 30));
+        $noA = $this->analyze(Fixtures::room(40, 30)->roofPart(0, 0, 0, 40, 30, more: ['gableA' => false, 'gableT' => 15]));
+
+        $g = $noA['roof']['parts'][0]['geometry']['gables'];
+        self::assertFalse($g[0]['enabled']);
+        self::assertSame(0, $g[0]['blocks']);
+        self::assertTrue($g[1]['enabled']);
+        self::assertEqualsWithDelta($full['roof']['bom']['gableMasonryM2'] / 2, $noA['roof']['bom']['gableMasonryM2'], 0.01);
+        self::assertContains('HAS-15', array_column($noA['bom']['lines'], 'code'));
+        self::assertContains('HAS-20', array_column($full['bom']['lines'], 'code'));
+    }
+
+    #[Test]
+    public function legacySingleRoofIsConvertedToARectangleOverTheTopLevel(): void
+    {
+        $p = Fixtures::project(Fixtures::room(40, 30)->roof('gable', 'x')->build());
+
+        self::assertCount(1, $p->roofs);
+        self::assertSame([0, 0, 40, 30, 0], [$p->roofs[0]->x, $p->roofs[0]->y, $p->roofs[0]->w, $p->roofs[0]->h, $p->roofs[0]->level]);
+    }
+
+    #[Test]
+    public function roomsExposeTheirFillAndCornersForEditing(): void
+    {
+        $a = $this->analyze(Fixtures::room(40, 30));
+        $room = $a['levels'][0]['rooms'][0];
+
+        self::assertSame([[0, 0, 40, 30]], $room['fill']);
+        self::assertEqualsCanonicalizing([[0, 0], [40, 0], [40, 30], [0, 30]], $room['corners']);
+
+        // Habitación en L: 6 esquinas y el relleno cubre exactamente las celdas.
+        $l = (new TemplateBuilder('l'))->wall(0, 0, 0, 40, 0, 20.0)->wall(0, 40, 0, 40, 15, 20.0)->wall(0, 40, 15, 20, 15, 20.0)->wall(0, 20, 15, 20, 30, 20.0)->wall(0, 20, 30, 0, 30, 20.0)->wall(0, 0, 30, 0, 0, 20.0);
+        $r = $this->analyze($l)['levels'][0]['rooms'][0];
+        self::assertCount(6, $r['corners']);
+        self::assertSame(40 * 15 + 20 * 15, array_sum(array_map(static fn (array $f): int => $f[2] * $f[3], $r['fill'])));
     }
 }

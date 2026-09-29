@@ -20,7 +20,7 @@ const cam = new Camera();
 const renderer = new Renderer(canvas);
 
 const UI_KEY = 'blockk.ui.v1';
-const TOOL_ORDER = ['select', 'room', 'wall', 'block', '|', 'door', 'window', 'ubeam', '|', 'floor', 'beam', '|', 'slab', 'stair'];
+const TOOL_ORDER = ['select', 'room', 'wall', 'block', '|', 'door', 'window', 'ubeam', '|', 'floor', 'beam', '|', 'slab', 'stair', '|', 'roof'];
 const ROOF_LEVEL = 2;
 
 let dirty = true;
@@ -245,6 +245,10 @@ document.addEventListener('keyup', (e) => { if (e.key === ' ') spaceDown = false
 function setTool(id) {
     const tool = app.tools[id];
     if (!tool) return;
+    if (id === 'roof' && store.ui.level !== ROOF_LEVEL) {
+        setLevel(ROOF_LEVEL);
+        return;
+    }
     const reason = toolDisabled(tool);
     if (reason) {
         toast(reason, 'error');
@@ -260,57 +264,18 @@ function setTool(id) {
 
 /** Motivo por el que una herramienta no está disponible ahora (null si lo está). */
 function toolDisabled(tool) {
-    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select') return 'En la pestaña Techo solo se elige y edita el techo: volvé a un nivel para dibujar.';
+    if (tool.id === 'roof') return null;
+    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select') return 'En la pestaña Techo solo se dibujan y editan techos: volvé a un nivel para dibujar muros, losas o escaleras.';
     return tool.disabled?.() ?? null;
 }
 
 function refreshOptions() {
-    if (store.ui.level === ROOF_LEVEL) {
-        const hint = 'Elegí el tipo de techo y ajustá pendiente y alero. Se apoya sobre el último nivel con muros.';
-        add(clear($('#tooloptions')), h('span', { class: 'title' }, 'Techo'), roofOptions(), h('span', { class: 'hint', title: hint }, hint));
-        app.setHint(hint);
-        return;
-    }
     const tool = activeTool();
-    add(clear($('#tooloptions')), h('span', { class: 'title' }, tool.label), tool.options?.(), h('span', { class: 'hint', title: tool.hint }, tool.hint));
+    // En la pestaña Techo, tanto Seleccionar como Techo muestran las opciones del techo (elegido o de los nuevos).
+    const opts = store.ui.level === ROOF_LEVEL ? app.roofOptions() : tool.options?.();
+    const title = store.ui.level === ROOF_LEVEL ? 'Techo' : tool.label;
+    add(clear($('#tooloptions')), h('span', { class: 'title' }, title), opts, h('span', { class: 'hint', title: tool.hint }, tool.hint));
     app.setHint(tool.hint);
-}
-
-const FALL_SIDES = [['S', 'Sur (abajo)'], ['N', 'Norte (arriba)'], ['E', 'Este (derecha)'], ['W', 'Oeste (izquierda)']];
-
-/** Lado largo del rectángulo que envuelve al último nivel con muros: por defecto la cumbrera va paralela a él. */
-function longerAxis() {
-    const walls = store.project.levels[store.topLevel].walls;
-    if (!walls.length) return 'x';
-    const w = Math.max(...walls.map((x) => x.x2)) - Math.min(...walls.map((x) => x.x1));
-    const d = Math.max(...walls.map((x) => x.y2)) - Math.min(...walls.map((x) => x.y1));
-    return w >= d ? 'x' : 'y';
-}
-
-function roofOptions() {
-    const r = store.project.roof ?? { type: 'none', dir: 'x', slope: 30, overhang: 40, section: '3x8', spacing: 50 };
-    const set = (label, patch) => store.commit(label, (d) => { d.roof = { ...d.roof, ...patch }; });
-    const sel = (label, value, items, onChange) =>
-        h('label', { class: 'field-inline' }, label, h('select', { onchange: (e) => onChange(e.target.value) }, items.map(([v, t]) => h('option', { value: v, selected: String(v) === String(value) }, t))));
-    const numIn = (label, value, min, max, step, onChange, unit) =>
-        h('label', { class: 'field-inline' }, label, h('input', { type: 'number', value, min, max, step, class: 'w-narrow', onchange: (e) => { const v = Number(e.target.value); if (Number.isFinite(v)) onChange(Math.min(max, Math.max(min, v))); } }), unit);
-    const types = h('span', { class: 'seg', role: 'group', 'aria-label': 'Tipo de techo' }, [['none', 'Sin techo'], ['shed', 'A un agua'], ['gable', 'A dos aguas']].map(([v, t]) =>
-        h('button', {
-            type: 'button',
-            class: 'seg-btn',
-            'aria-pressed': String(r.type === v),
-            onclick: () => set('Tipo de techo', { type: v, dir: v === 'shed' ? (r.type === 'shed' ? r.dir : 'S') : v === 'gable' ? (['x', 'y'].includes(r.dir) ? r.dir : longerAxis()) : r.dir }),
-        }, t)));
-    if (r.type === 'none') return h('span', { class: 'row' }, types);
-
-    return h('span', { class: 'row' }, types,
-        r.type === 'gable'
-            ? sel('Cumbrera', r.dir, [['x', '↔ horizontal'], ['y', '↕ vertical']], (v) => set('Dirección de cumbrera', { dir: v }))
-            : sel('Cae hacia', r.dir, FALL_SIDES, (v) => set('Caída del techo', { dir: v })),
-        numIn('Pendiente', r.slope, 10, 100, 5, (v) => set('Pendiente', { slope: v }), '%'),
-        numIn('Alero', r.overhang, 0, 100, 5, (v) => set('Alero', { overhang: v }), 'cm'),
-        sel('Cabios', r.section, Object.entries(config.timberSections).map(([k, x]) => [k, x.label.replace('Pino tratado ', '')]), (v) => set('Sección de cabios', { section: v })),
-        sel('Separación', r.spacing, [30, 40, 50, 60].map((v) => [v, `${v} cm`]), (v) => set('Separación de cabios', { spacing: Number(v) })));
 }
 
 function renderToolbar() {
@@ -379,7 +344,8 @@ function setLevel(i) {
     activeTool().reset?.();
     store.setUi({ level: i, selection: null });
     app.hover = null;
-    if (toolDisabled(activeTool())) store.setUi({ tool: 'select' });
+    if (i === ROOF_LEVEL) store.setUi({ tool: 'roof' });
+    else if (store.ui.tool === 'roof' || toolDisabled(activeTool())) store.setUi({ tool: 'select' });
     renderLevels();
     renderToolbar();
     refreshOptions();
@@ -415,7 +381,8 @@ function focusIssue(issue) {
     }
     const level = store.project.levels[issue.level ?? 0] ?? store.level();
     let selection = null;
-    if (level.slabs?.some((x) => x.id === issue.ref)) selection = { type: 'slab', id: issue.ref };
+    if (store.project.roofs?.some((x) => x.id === issue.ref)) selection = { type: 'roof', id: issue.ref };
+    else if (level.slabs?.some((x) => x.id === issue.ref)) selection = { type: 'slab', id: issue.ref };
     else if (store.project.levels[0].stairs?.some((x) => x.id === issue.ref)) selection = { type: 'stair', id: issue.ref };
     else if (level.walls.some((w) => w.id === issue.ref)) selection = { type: 'wall', id: issue.ref };
     else if (level.openings.some((o) => o.id === issue.ref)) selection = { type: 'opening', id: issue.ref };
@@ -440,6 +407,13 @@ function selectionBox(sel) {
         const w = o && lv.walls.find((x) => x.id === o.wall);
         return o && w ? openingBox(w, o.pos, o.w, o.sill, o.h, base) : null;
     }
+    if (sel.type === 'roof' || sel.type === 'gable') {
+        const part = store.analysis?.roof?.parts?.find((p) => p.id === (sel.type === 'roof' ? sel.id : String(sel.id).split(':')[0]));
+        if (!part || sel.type === 'gable') return null;
+        const g = part.geometry;
+        const o = g.overhang ?? 0;
+        return { x0: g.rect.x0 - o, y0: g.rect.y0 - o, x1: g.rect.x1 + o, y1: g.rect.y1 + o, z0: g.zTop - 10, z1: g.zTop + g.riseCm };
+    }
     if (sel.type === 'slab') {
         const sl = store.analysis?.floors?.slabs?.find((x) => x.id === sel.id);
         return sl ? { x0: sl.rect.x, y0: sl.rect.y, x1: sl.rect.x + sl.rect.w, y1: sl.rect.y + sl.rect.h, z0: config.levelHeight, z1: config.levelHeight + sl.thickness } : null;
@@ -462,15 +436,54 @@ function overlay(ctx) {
     const sel = selectionBox(store.ui.selection);
     if (hover && JSON.stringify(app.hover) !== JSON.stringify(store.ui.selection)) wireBox(ctx, cam, hover, { stroke: 'rgba(30,41,59,.65)', width: 1.5, dash: [4, 3] });
     if (sel) wireBox(ctx, cam, sel, { stroke: '#8bc53f', width: 3 });
+    drawSelectionExtras(ctx);
     activeTool().draw?.(ctx, cam);
     drawAssist(ctx);
+}
+
+/** Habitación elegida (piso resaltado) y hastial elegido (contorno). */
+function drawSelectionExtras(ctx) {
+    const sel = store.ui.selection;
+    if (!sel) return;
+    if (sel.type === 'room') {
+        const room = store.analysis?.levels?.[store.ui.level]?.rooms?.find((r) => r.id === sel.id);
+        if (!room?.fill) return;
+        const z = store.ui.level * config.levelHeight;
+        ctx.save();
+        ctx.fillStyle = 'rgba(37,99,235,.20)';
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 2;
+        for (const [x, y, w, h] of room.fill) {
+            const pts = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]].map(([a, b]) => cam.project(a * G, b * G, z));
+            ctx.beginPath();
+            pts.forEach(([sx, sy], i) => (i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)));
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.restore();
+    } else if (sel.type === 'gable') {
+        const gb = store.analysis?.roof?.parts?.flatMap((p) => p.geometry.gables).find((x) => x.id === sel.id);
+        if (!gb) return;
+        ctx.save();
+        ctx.strokeStyle = '#8bc53f';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        gb.pts.forEach((pt, i) => {
+            const [sx, sy] = cam.project(pt[0], pt[1], pt[2]);
+            if (i) ctx.lineTo(sx, sy);
+            else ctx.moveTo(sx, sy);
+        });
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 /** Ayudas de puntería: puntos de ajuste alrededor del cursor e imán a paredes. */
 function drawAssist(ctx) {
     const tool = activeTool();
     const p = app.pointer;
-    if (!tool.magnet || !p || store.ui.level === ROOF_LEVEL) return;
+    if (!tool.magnet || !p) return;
     const z = planeZ();
     snapDots(ctx, cam, p.gx, p.gy, store.ui.snap, z);
     if (p.hit) {

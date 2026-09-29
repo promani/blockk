@@ -25,7 +25,8 @@ final readonly class Project
         public int $lotW = 24,
         public int $lotD = 20,
         public bool $upper = false,
-        public Roof $roof = new Roof(),
+        /** @var list<RoofPart> */
+        public array $roofs = [],
     ) {
         if (count($levels) > Hcca::MAX_LEVELS) {
             throw new \InvalidArgumentException('La mampostería autoportante HCCA admite como máximo 2 niveles (PB + PA).');
@@ -56,7 +57,7 @@ final readonly class Project
     /** @param list<Level> $levels */
     public function withLevels(array $levels): self
     {
-        return new self($this->name, $levels, $this->settings, $this->north, $this->latitude, $this->lotW, $this->lotD, $this->upper, $this->roof);
+        return new self($this->name, $levels, $this->settings, $this->north, $this->latitude, $this->lotW, $this->lotD, $this->upper, $this->roofs);
     }
 
     public function withLevel(int $index, Level $level): self
@@ -77,7 +78,7 @@ final readonly class Project
             'lat' => $this->latitude,
             'lot' => ['w' => $this->lotW, 'd' => $this->lotD],
             'upper' => $this->upperEnabled(),
-            'roof' => $this->roof->toArray(),
+            'roofs' => array_map(static fn (RoofPart $r): array => $r->toArray(), $this->roofs),
             'settings' => $this->settings->toArray(),
             'levels' => array_map(static fn (Level $l): array => $l->toArray(), $this->levels),
         ];

@@ -49,6 +49,42 @@ export function createTools(app) {
 
     const T = {};
 
+    /** Mueve una esquina de un ambiente: corre el muro horizontal y el vertical que se cruzan allí (y los muros que llegan a ellos se estiran). */
+    const cornerWalls = (level, vx, vy) => ({
+        horizontal: level.walls.find((w) => w.y1 === w.y2 && w.y1 === vy && w.x1 <= vx && vx <= w.x2),
+        vertical: level.walls.find((w) => w.x1 === w.x2 && w.x1 === vx && w.y1 <= vy && vy <= w.y2),
+    });
+    const cornerMoveCommit = (vx, vy, nx, ny) => {
+        const li = store.ui.level;
+        const probe = structuredClone(store.level());
+        const { horizontal, vertical } = cornerWalls(probe, vx, vy);
+        const steps = [];
+        if (nx !== vx) {
+            if (!vertical) { app.toast('No hay un muro vertical en esa esquina para moverlo.', 'error'); return false; }
+            steps.push([vertical.id, nx, vertical.x1, 'v']);
+        }
+        if (ny !== vy) {
+            if (!horizontal) { app.toast('No hay un muro horizontal en esa esquina para moverlo.', 'error'); return false; }
+            steps.push([horizontal.id, ny, horizontal.y1, 'h']);
+        }
+        const before = steps.map(([id]) => structuredClone(probe.walls.find((w) => w.id === id)));
+        let dropped = 0;
+        for (const [id, line, , kind] of steps) {
+            const r = moveWallLine(probe, id, line, { maxLine: kind === 'h' ? lot().d : lot().w });
+            if (!r.ok) { app.toast(r.reason, 'error'); return false; }
+            dropped += r.dropped ?? 0;
+        }
+        store.commit('Mover esquina', (d) => {
+            steps.forEach(([id, line, , kind], k) => {
+                const maxLine = kind === 'h' ? lot().d : lot().w;
+                moveWallLine(d.levels[li], id, line, { maxLine });
+                if (li === 0 && d.upper) mirrorMove(d.levels[1], before[k], line, { maxLine });
+            });
+        });
+        if (dropped) app.toast(`${dropped} vano(s) o viga(s) quedaron fuera del muro estirado y se quitaron.`);
+        return true;
+    };
+
     // ---------------- mover un muro (agrandar / achicar la habitación) ----------------
     const wallMoveCommit = (wallId, newLine) => {
         const li = store.ui.level;
@@ -77,98 +113,78 @@ export function createTools(app) {
         wallMoveCommit(wallId, (w.y1 === w.y2 ? w.y1 : w.x1) + delta);
     };
 
-    // ---------------- seleccionar ----------------
-    let drag = null;
-    const handleAt = (cam) => {
+    /** Rectángulo de un techo (con su cota de apoyo) o null. */
+    const roofRect = (id) => store.project.roofs?.find((r) => r.id === id) ?? null;
+
+    /** Manijas de la selección: muro (perpendicular), esquinas de un ambiente o esquinas de un techo. */
+    const handlesOf = (cam) => {
         const sel = store.ui.selection;
-        if (sel?.type !== 'wall' || store.ui.level > 1) return null;
-        const w = store.level().walls.find((x) => x.id === sel.id);
-        if (!w) return null;
-        const [sx, sy] = cam.project(((w.x1 + w.x2) / 2) * G, ((w.y1 + w.y2) / 2) * G, base() + cfg.levelHeight);
-        return { w, sx, sy };
+        const out = [];
+        if (!sel) return out;
+        if (sel.type === 'wall' && store.ui.level <= 1) {
+            const w = store.level().walls.find((x) => x.id === sel.id);
+            if (w) {
+                const [sx, sy] = cam.project(((w.x1 + w.x2) / 2) * G, ((w.y1 + w.y2) / 2) * G, base() + cfg.levelHeight);
+                out.push({ kind: 'wall', sx, sy, w });
+            }
+        } else if (sel.type === 'room' && store.ui.level <= 1) {
+            const room = store.analysis?.levels?.[store.ui.level]?.rooms?.find((r) => r.id === sel.id);
+            for (const [vx, vy] of room?.corners ?? []) {
+                const [sx, sy] = cam.project(vx * G, vy * G, base());
+                out.push({ kind: 'corner', sx, sy, vx, vy });
+            }
+        } else if ((sel.type === 'roof' || sel.type === 'gable') && store.ui.level === 2) {
+            const r = roofRect(sel.type === 'roof' ? sel.id : String(sel.id).split(':')[0]);
+            if (r) {
+                const z = (r.level + 1) * cfg.levelHeight;
+                for (const [cx, cy] of [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]]) {
+                    const [sx, sy] = cam.project(cx * G, cy * G, z);
+                    out.push({ kind: 'rcorner', sx, sy, cx, cy, r });
+                }
+            }
+        }
+        return out;
     };
+    const handleHit = (p) => handlesOf(app.cam).find((hd) => Math.hypot(p.sx - hd.sx, p.sy - hd.sy) < 14);
+
+    let drag = null;
+    const stepU = () => Math.max(1, store.ui.snap);
+    const snapNear = (v, axis) => {
+        const lines = wallLines(store);
+        const near = nearestLine(axis === 'x' ? lines.xs : lines.ys, v, 1);
+        return near ?? v;
+    };
+    const dragDelta = (p, axis) => Math.round(((axis === 'x' ? p.wx - drag.x0 : p.wy - drag.y0) / G) / stepU()) * stepU();
     const dragLine = (p) => {
         const horizontal = drag.w.y1 === drag.w.y2;
-        const step = Math.max(1, store.ui.snap);
-        const d = Math.round(((horizontal ? p.wy - drag.y0 : p.wx - drag.x0) / G) / step) * step;
-        let line = drag.line0 + d;
-        const lines = wallLines(store);
-        const near = nearestLine(horizontal ? lines.ys : lines.xs, line, 1);
-        if (near !== null && near !== drag.line0) line = near;
+        let line = drag.line0 + dragDelta(p, horizontal ? 'y' : 'x');
+        const near = snapNear(line, horizontal ? 'y' : 'x');
+        if (near !== drag.line0) line = near;
         const lim = horizontal ? lot().d : lot().w;
         return Math.min(lim, Math.max(0, line));
     };
-    T.select = {
-        hotkey: 'v',
-        label: 'Seleccionar',
-        hint: 'Clic en un muro, vano, losa o escalera. Con un muro elegido, arrastrá su manija para agrandar o achicar la habitación.',
-        reset() { drag = null; },
-        move(p) {
-            if (drag) {
-                drag.line = dragLine(p);
-                app.render();
-                return;
-            }
-            const hd = handleAt(app.cam);
-            app.canvas.style.cursor = hd && Math.hypot(p.sx - hd.sx, p.sy - hd.sy) < 16 ? 'grab' : '';
-            const hit = pickAt(app, p.sx, p.sy);
-            if (JSON.stringify(hit) !== JSON.stringify(app.hover)) {
-                app.hover = hit;
-                app.render();
-            }
-        },
-        down(p) {
-            const hd = handleAt(app.cam);
-            if (hd && Math.hypot(p.sx - hd.sx, p.sy - hd.sy) < 16) {
-                const horizontal = hd.w.y1 === hd.w.y2;
-                drag = { w: hd.w, line0: horizontal ? hd.w.y1 : hd.w.x1, line: horizontal ? hd.w.y1 : hd.w.x1, x0: p.wx, y0: p.wy };
-                app.canvas.style.cursor = 'grabbing';
-                return;
-            }
-            app.hover = pickAt(app, p.sx, p.sy);
-            store.setUi({ selection: app.hover });
-        },
-        up() {
-            if (!drag) return;
-            const d = drag;
-            drag = null;
-            app.canvas.style.cursor = '';
-            if (d.line !== d.line0) wallMoveCommit(d.w.id, d.line);
-        },
-        keyDown(e) {
-            if (e.key === 'Escape' && drag) {
-                drag = null;
-                app.canvas.style.cursor = '';
-                app.render();
-                return true;
-            }
-            return false;
-        },
-        draw(ctx, cam) {
-            if (drag) {
-                const horizontal = drag.w.y1 === drag.w.y2;
-                const delta = drag.line - drag.line0;
-                const z = base();
-                const chain = collinearChain(store.level().walls, drag.w);
-                for (const w of chain) {
-                    const t = w.t / 2;
-                    const box = horizontal
-                        ? { x0: w.x1 * G, x1: w.x2 * G, y0: drag.line * G - t, y1: drag.line * G + t, z0: z, z1: z + cfg.levelHeight }
-                        : { x0: drag.line * G - t, x1: drag.line * G + t, y0: w.y1 * G, y1: w.y2 * G, z0: z, z1: z + cfg.levelHeight };
-                    ghostBox(ctx, cam, box, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
-                }
-                const mid = chain[Math.floor(chain.length / 2)];
-                const [sx, sy] = cam.project(horizontal ? ((mid.x1 + mid.x2) / 2) * G : drag.line * G, horizontal ? drag.line * G : ((mid.y1 + mid.y2) / 2) * G, z + cfg.levelHeight);
-                label(ctx, `${delta >= 0 ? '+' : '−'}${fmt(Math.abs(delta) * G, 1)} cm · ${horizontal ? 'y' : 'x'} = ${fmt((drag.line * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
-                return;
-            }
-            const hd = handleAt(cam);
-            if (!hd) return;
+    const clampLot = (v, lim) => Math.min(lim, Math.max(0, v));
+
+    /** Fantasma de una cadena de muros colineales corrida a otra recta. */
+    const ghostChain = (ctx, cam, wall, newLine) => {
+        const horizontal = wall.y1 === wall.y2;
+        const z = base();
+        for (const w of collinearChain(store.level().walls, wall)) {
+            const t = w.t / 2;
+            const box = horizontal
+                ? { x0: w.x1 * G, x1: w.x2 * G, y0: newLine * G - t, y1: newLine * G + t, z0: z, z1: z + cfg.levelHeight }
+                : { x0: newLine * G - t, x1: newLine * G + t, y0: w.y1 * G, y1: w.y2 * G, z0: z, z1: z + cfg.levelHeight };
+            ghostBox(ctx, cam, box, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
+        }
+    };
+
+    const drawHandle = (ctx, hd, cam) => {
+        ctx.save();
+        ctx.fillStyle = '#2563eb';
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        if (hd.kind === 'wall') {
             const horizontal = hd.w.y1 === hd.w.y2;
-            ctx.save();
-            ctx.fillStyle = '#2563eb';
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.arc(hd.sx, hd.sy, 11, 0, Math.PI * 2);
             ctx.fill();
@@ -182,7 +198,6 @@ export function createTools(app) {
             const uy = dir[1] / len;
             ctx.strokeStyle = '#fff';
             ctx.fillStyle = '#fff';
-            ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(hd.sx - ux * 6, hd.sy - uy * 6);
             ctx.lineTo(hd.sx + ux * 6, hd.sy + uy * 6);
@@ -197,7 +212,121 @@ export function createTools(app) {
                 ctx.closePath();
                 ctx.fill();
             }
-            ctx.restore();
+        } else {
+            // esquina: cuadrado azul
+            ctx.fillRect(hd.sx - 7, hd.sy - 7, 14, 14);
+            ctx.strokeRect(hd.sx - 7, hd.sy - 7, 14, 14);
+        }
+        ctx.restore();
+    };
+
+    // ---------------- seleccionar ----------------
+    T.select = {
+        hotkey: 'v',
+        label: 'Seleccionar',
+        hint: 'Clic en un muro, vano, habitación (piso de color), losa, escalera o techo. Arrastrá las manijas azules para cambiar el tamaño.',
+        reset() { drag = null; },
+        move(p) {
+            if (drag) {
+                if (drag.kind === 'wall') drag.line = dragLine(p);
+                else if (drag.kind === 'corner') {
+                    drag.nx = clampLot(snapNear(drag.vx + dragDelta(p, 'x'), 'x'), lot().w);
+                    drag.ny = clampLot(snapNear(drag.vy + dragDelta(p, 'y'), 'y'), lot().d);
+                } else {
+                    drag.nx = clampLot(drag.cx + dragDelta(p, 'x'), lot().w);
+                    drag.ny = clampLot(drag.cy + dragDelta(p, 'y'), lot().d);
+                }
+                app.render();
+                return;
+            }
+            app.canvas.style.cursor = handleHit(p) ? 'grab' : '';
+            const hit = pickAt(app, p.sx, p.sy);
+            if (JSON.stringify(hit) !== JSON.stringify(app.hover)) {
+                app.hover = hit;
+                app.render();
+            }
+        },
+        down(p) {
+            const hd = handleHit(p);
+            if (hd) {
+                app.canvas.style.cursor = 'grabbing';
+                if (hd.kind === 'wall') {
+                    const horizontal = hd.w.y1 === hd.w.y2;
+                    const line0 = horizontal ? hd.w.y1 : hd.w.x1;
+                    drag = { kind: 'wall', w: hd.w, line0, line: line0, x0: p.wx, y0: p.wy };
+                } else if (hd.kind === 'corner') {
+                    drag = { kind: 'corner', vx: hd.vx, vy: hd.vy, nx: hd.vx, ny: hd.vy, x0: p.wx, y0: p.wy };
+                } else {
+                    drag = { kind: 'rcorner', r: hd.r, cx: hd.cx, cy: hd.cy, nx: hd.cx, ny: hd.cy, x0: p.wx, y0: p.wy };
+                }
+                return;
+            }
+            app.hover = pickAt(app, p.sx, p.sy);
+            store.setUi({ selection: app.hover });
+        },
+        up() {
+            if (!drag) return;
+            const d = drag;
+            drag = null;
+            app.canvas.style.cursor = '';
+            if (d.kind === 'wall') {
+                if (d.line !== d.line0) wallMoveCommit(d.w.id, d.line);
+            } else if (d.kind === 'corner') {
+                if (d.nx !== d.vx || d.ny !== d.vy) cornerMoveCommit(d.vx, d.vy, d.nx, d.ny);
+            } else if (d.nx !== d.cx || d.ny !== d.cy) {
+                // el vértice opuesto queda fijo; el rectángulo se recalcula entre él y la esquina arrastrada
+                const r = d.r;
+                const fx = d.cx === r.x ? r.x + r.w : r.x;
+                const fy = d.cy === r.y ? r.y + r.h : r.y;
+                const x = Math.min(fx, d.nx);
+                const y = Math.min(fy, d.ny);
+                const w = Math.abs(d.nx - fx);
+                const hh = Math.abs(d.ny - fy);
+                if (w < 2 || hh < 2) {
+                    app.toast('El techo debe medir al menos 25 × 25 cm.', 'error');
+                    return;
+                }
+                store.commit('Cambiar tamaño del techo', (dr) => Object.assign(dr.roofs.find((q) => q.id === r.id), { x, y, w, h: hh }));
+            }
+        },
+        keyDown(e) {
+            if (e.key === 'Escape' && drag) {
+                drag = null;
+                app.canvas.style.cursor = '';
+                app.render();
+                return true;
+            }
+            return false;
+        },
+        draw(ctx, cam) {
+            if (drag) {
+                const z = base();
+                if (drag.kind === 'wall') {
+                    const horizontal = drag.w.y1 === drag.w.y2;
+                    const delta = drag.line - drag.line0;
+                    ghostChain(ctx, cam, drag.w, drag.line);
+                    const chain = collinearChain(store.level().walls, drag.w);
+                    const mid = chain[Math.floor(chain.length / 2)];
+                    const [sx, sy] = cam.project(horizontal ? ((mid.x1 + mid.x2) / 2) * G : drag.line * G, horizontal ? drag.line * G : ((mid.y1 + mid.y2) / 2) * G, z + cfg.levelHeight);
+                    label(ctx, `${delta >= 0 ? '+' : '−'}${fmt(Math.abs(delta) * G, 1)} cm · ${horizontal ? 'y' : 'x'} = ${fmt((drag.line * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
+                } else if (drag.kind === 'corner') {
+                    const { horizontal, vertical } = cornerWalls(store.level(), drag.vx, drag.vy);
+                    if (drag.nx !== drag.vx && vertical) ghostChain(ctx, cam, vertical, drag.nx);
+                    if (drag.ny !== drag.vy && horizontal) ghostChain(ctx, cam, horizontal, drag.ny);
+                    const [sx, sy] = cam.project(drag.nx * G, drag.ny * G, z + cfg.levelHeight);
+                    label(ctx, `esquina → x ${fmt((drag.nx * G) / 100)} m · y ${fmt((drag.ny * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
+                } else {
+                    const r = drag.r;
+                    const fx = drag.cx === r.x ? r.x + r.w : r.x;
+                    const fy = drag.cy === r.y ? r.y + r.h : r.y;
+                    const zr = (r.level + 1) * cfg.levelHeight;
+                    outlineRect(ctx, cam, Math.min(fx, drag.nx) * G, Math.min(fy, drag.ny) * G, Math.max(fx, drag.nx) * G, Math.max(fy, drag.ny) * G, zr, { stroke: '#2563eb', fill: 'rgba(37,99,235,.18)', width: 2.5, dash: [6, 4] });
+                    const [sx, sy] = cam.project(drag.nx * G, drag.ny * G, zr);
+                    label(ctx, `${fmt((Math.abs(drag.nx - fx) * G) / 100)} × ${fmt((Math.abs(drag.ny - fy) * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
+                }
+                return;
+            }
+            for (const hd of handlesOf(cam)) drawHandle(ctx, hd, cam);
         },
     };
 
@@ -783,6 +912,123 @@ export function createTools(app) {
             for (const r of g.landings) ghostBox(ctx, cam, { x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: 0, z1: 14 }, inside ? ok : bad);
             const [sx, sy] = cam.project(p.gx * G + g.w / 2, p.gy * G + g.h / 2, 30);
             label(ctx, `${g.n} contrahuellas de ${fmt(g.rise, 1)} cm · ${fmt(g.w / 100)} × ${fmt(g.h / 100)} m${inside ? '' : ' · fuera de la habitación'}`, sx, sy - 18);
+        },
+    };
+
+    // ---------------- techo (rectángulo, como una habitación) ----------------
+    const roofDefaults = { type: 'gable', dir: 'x', slope: 30, overhang: 40, section: '3x8', spacing: 50, gableT: 20 };
+    const FALL_SIDES = [['S', 'Sur (abajo)'], ['N', 'Norte (arriba)'], ['E', 'Este (derecha)'], ['W', 'Oeste (izquierda)']];
+    /** Nivel sobre el que apoyan los techos nuevos: por defecto el más alto con muros. */
+    const roofLevel = () => Math.min(store.ui.roofLevel ?? store.topLevel, store.topLevel);
+    const selectedRoof = () => {
+        const sel = store.ui.selection;
+        if (!sel || (sel.type !== 'roof' && sel.type !== 'gable')) return null;
+        return store.project.roofs?.find((r) => r.id === (sel.type === 'roof' ? sel.id : String(sel.id).split(':')[0])) ?? null;
+    };
+    let roofDraw = null;
+    const newRoof = (d, r) => {
+        const spec = { ...roofDefaults };
+        if (spec.type === 'gable') spec.dir = r.w >= r.h ? 'x' : 'y';
+        else if (!FALL_SIDES.some(([v]) => v === spec.dir)) spec.dir = 'S';
+        d.roofs.push({ id: nextId(d, 'r'), level: roofLevel(), x: r.x, y: r.y, w: r.w, h: r.h, type: spec.type, dir: spec.dir, slope: spec.slope, overhang: spec.overhang, section: spec.section, spacing: spec.spacing, gableA: true, gableB: true, gableT: spec.gableT });
+    };
+    const roofRoomAt = (a) => {
+        const rooms = store.analysis?.levels?.[roofLevel()]?.rooms ?? [];
+        return rooms.find((rm) => rm.fill?.some(([x, y, w, h]) => a.gx >= x && a.gx < x + w && a.gy >= y && a.gy < y + h)) ?? null;
+    };
+
+    /** Barra de opciones del techo: edita el techo elegido o, si no hay, los valores de los techos nuevos. */
+    const roofOptions = () => {
+        const target = selectedRoof();
+        const cur = target ? { type: target.type, dir: target.dir, slope: target.slope, overhang: target.overhang, section: target.section, spacing: target.spacing } : roofDefaults;
+        const set = (label_, patch) => {
+            if (target) store.commit(label_, (d) => Object.assign(d.roofs.find((r) => r.id === target.id), patch));
+            else {
+                Object.assign(roofDefaults, patch);
+                app.refreshOptions();
+            }
+        };
+        const numIn = (label_, value, min, max, step, key, unit) =>
+            h('label', { class: 'field-inline' }, label_, h('input', { type: 'number', value, min, max, step, class: 'w-narrow', onchange: (e) => { const v = Number(e.target.value); if (Number.isFinite(v)) set(label_, { [key]: clamp(v, min, max) }); } }), unit);
+        const longer = target ? (target.w >= target.h ? 'x' : 'y') : 'x';
+        const types = h('span', { class: 'seg', role: 'group', 'aria-label': 'Tipo de techo' }, [['shed', 'A un agua'], ['gable', 'A dos aguas']].map(([v, t]) =>
+            h('button', {
+                type: 'button',
+                class: 'seg-btn',
+                'aria-pressed': String(cur.type === v),
+                onclick: () => set('Tipo de techo', { type: v, dir: v === 'shed' ? (['N', 'S', 'E', 'W'].includes(cur.dir) ? cur.dir : 'S') : (['x', 'y'].includes(cur.dir) ? cur.dir : longer) }),
+            }, t)));
+        const levels = store.project.upper ? [[0, 'Sobre el Nivel 1'], [1, 'Sobre el Nivel 2']] : null;
+
+        return h('span', { class: 'row' }, target ? h('span', { class: 'tag' }, `Techo ${target.id}`) : null, types,
+            cur.type === 'gable'
+                ? selectT('Cumbrera', cur.dir, [['x', '↔ horizontal'], ['y', '↕ vertical']], (v) => set('Dirección de cumbrera', { dir: v }))
+                : selectT('Cae hacia', cur.dir, FALL_SIDES, (v) => set('Caída del techo', { dir: v })),
+            numIn('Pendiente', cur.slope, 10, 100, 5, 'slope', '%'),
+            numIn('Alero', cur.overhang, 0, 100, 5, 'overhang', 'cm'),
+            selectT('Cabios', cur.section, Object.entries(cfg.timberSections).map(([k, x]) => [k, x.label.replace('Pino tratado ', '')]), (v) => set('Sección de cabios', { section: v })),
+            selectT('Separación', cur.spacing, [30, 40, 50, 60].map((v) => [v, `${v} cm`]), (v) => set('Separación de cabios', { spacing: Number(v) })),
+            levels && !target ? selectT('Apoya', roofLevel(), levels, (v) => { store.setUi({ roofLevel: Number(v) }); app.refreshOptions(); }) : null);
+    };
+    app.roofOptions = roofOptions;
+
+    T.roof = {
+        magnet: true,
+        hotkey: 'h',
+        label: 'Techo',
+        hint: 'Arrastrá un rectángulo sobre los muros (o clic dentro de una habitación): cada techo se configura aparte. Los techos se editan con Seleccionar.',
+        planeZ: () => (roofLevel() + 1) * cfg.levelHeight,
+        options: roofOptions,
+        reset() { roofDraw = null; },
+        down(p) {
+            roofDraw = { a: { gx: p.gx, gy: p.gy }, rect: null, dragged: false, at: { x: p.sx, y: p.sy } };
+        },
+        move(p) {
+            if (!roofDraw) return;
+            if (Math.hypot(p.sx - roofDraw.at.x, p.sy - roofDraw.at.y) > DRAG_PX) roofDraw.dragged = true;
+            roofDraw.rect = roofDraw.dragged ? floorRect(roofDraw.a, p) : null;
+            app.render();
+        },
+        up() {
+            if (!roofDraw) return;
+            let r = roofDraw.rect;
+            const a = roofDraw.a;
+            roofDraw = null;
+            if (!r) {
+                const room = roofRoomAt(a);
+                if (!room) {
+                    app.toast('Clic dentro de una habitación cerrada del nivel, o arrastrá un rectángulo sobre los muros.', 'error');
+                    return;
+                }
+                r = { x: room.bbox.x, y: room.bbox.y, w: room.bbox.w, h: room.bbox.h };
+            }
+            if (r.w < 4 || r.h < 4) {
+                app.toast('El techo debe medir al menos 50 × 50 cm.', 'error');
+                return;
+            }
+            store.commit('Agregar techo', (d) => newRoof(d, r));
+        },
+        keyDown(e) {
+            if (e.key === 'Escape' && roofDraw) {
+                roofDraw = null;
+                app.render();
+                return true;
+            }
+            return false;
+        },
+        draw(ctx, cam) {
+            const z = (roofLevel() + 1) * cfg.levelHeight;
+            if (roofDraw?.rect) {
+                const { x, y, w, h: hh } = roofDraw.rect;
+                outlineRect(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, { stroke: '#7a3b25', fill: 'rgba(196,99,63,.30)', width: 2.5, dash: [6, 4] });
+                dimLabel(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, `${fmt((w * G) / 100)} × ${fmt((hh * G) / 100)} m · ${fmt(((w * G) / 100) * ((hh * G) / 100))} m² de planta`);
+                return;
+            }
+            const p = app.pointer;
+            if (!p) return;
+            const room = roofRoomAt({ gx: p.gx, gy: p.gy });
+            if (room) outlineRect(ctx, cam, room.bbox.x * G, room.bbox.y * G, (room.bbox.x + room.bbox.w) * G, (room.bbox.y + room.bbox.h) * G, z, { stroke: '#7a3b25', fill: 'rgba(196,99,63,.22)', width: 2 });
+            else if (inLot(p.gx, p.gy)) nodeMarker(ctx, cam, p.gx * G, p.gy * G, z, '#7a3b25');
         },
     };
 

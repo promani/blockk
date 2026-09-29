@@ -64,6 +64,7 @@ final class Hcca
     public const int MAX_TIMBER_PER_LEVEL = 40;
     public const int MAX_SLABS_PER_LEVEL = 20;
     public const int MAX_STAIRS_PER_LEVEL = 10;
+    public const int MAX_ROOFS = 20;
     /** Presupuesto de complejidad tras normalizar (una vivienda real usa < 150 tramos por nivel). */
     public const int MAX_SEGMENTS_PER_LEVEL = 800;
 

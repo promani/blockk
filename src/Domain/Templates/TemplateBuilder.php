@@ -20,6 +20,8 @@ final class TemplateBuilder
     ];
     /** @var array<string, mixed> */
     private array $roof = ['type' => 'none'];
+    /** @var list<array<string, mixed>>|null */
+    private ?array $roofs = null;
     private bool $upper = false;
     private int $seq = 0;
 
@@ -70,6 +72,15 @@ final class TemplateBuilder
     }
 
     /** Techo: $type 'gable' | 'shed'; $dir eje de la cumbrera ('x'|'y') o hacia dónde cae el agua ('N'|'S'|'E'|'W'). */
+    /** Techo rectangular sobre el nivel `$level` (x, y, w, h en unidades de 12,5 cm). */
+    public function roofPart(int $level, int $x, int $y, int $w, int $h, string $type = 'gable', string $dir = 'x', int $slope = 30, string $section = '3x8', int $extra = 0, array $more = []): self
+    {
+        $this->roofs ??= [];
+        $this->roofs[] = ['id' => 'r'.(++$this->seq), 'level' => $level, 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h, 'type' => $type, 'dir' => $dir, 'slope' => $slope, 'section' => $section, 'overhang' => 40, 'spacing' => 50] + $more;
+
+        return $this;
+    }
+
     public function roof(string $type, string $dir = 'x', int $slope = 30, string $section = '3x8', int $spacing = 50): self
     {
         $this->roof = ['type' => $type, 'dir' => $dir, 'slope' => $slope, 'section' => $section, 'spacing' => $spacing, 'overhang' => 40];
@@ -109,7 +120,7 @@ final class TemplateBuilder
             'lot' => ['w' => 24, 'd' => 20],
             'settings' => ['defaultT' => 20, 'reservePct' => 3, 'currency' => 'USD'],
             'upper' => $this->upper,
-            'roof' => $this->roof,
+            ...(null === $this->roofs ? ['roof' => $this->roof] : ['roofs' => $this->roofs]),
             'levels' => [$this->levels[0], $this->levels[1]],
         ];
     }
