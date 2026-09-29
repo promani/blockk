@@ -9,7 +9,7 @@ import { outlineRect, ghostBox, label, nodeMarker } from './overlay.js';
 import { nextId } from '../lib/storage.js';
 import { ICONS } from './icons.js';
 import { moveWallLine, collinearChain, mirrorMove } from './wallmove.js';
-import { wallLines, nearestLine } from './snap.js';
+import { wallLines, nearestLine, anchorLines, nearestAnchor, ANCHOR_LABEL } from './snap.js';
 
 const DRAG_PX = 6;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -162,6 +162,11 @@ export function createTools(app) {
                     const [sx, sy] = cam.project(cx * G, cy * G, z);
                     out.push({ kind: 'rcorner', sx, sy, cx, cy, r });
                 }
+                // bordes: se estiran de a un lado, como una pared de habitación
+                for (const [side, cx, cy] of [['y0', r.x + r.w / 2, r.y], ['x1', r.x + r.w, r.y + r.h / 2], ['y1', r.x + r.w / 2, r.y + r.h], ['x0', r.x, r.y + r.h / 2]]) {
+                    const [sx, sy] = cam.project(cx * G, cy * G, z);
+                    out.push({ kind: 'rside', sx, sy, side, r });
+                }
             }
         }
         return out;
@@ -170,21 +175,49 @@ export function createTools(app) {
 
     let drag = null;
     const stepU = () => Math.max(1, store.ui.snap);
-    const snapNear = (v, axis) => {
-        const lines = wallLines(store);
-        const near = nearestLine(axis === 'x' ? lines.xs : lines.ys, v, 1);
-        return near ?? v;
-    };
     const dragDelta = (p, axis) => Math.round(((axis === 'x' ? p.wx - drag.x0 : p.wy - drag.y0) / G) / stepU()) * stepU();
-    const dragLine = (p) => {
-        const horizontal = drag.w.y1 === drag.w.y2;
-        let line = drag.line0 + dragDelta(p, horizontal ? 'y' : 'x');
-        const near = snapNear(line, horizontal ? 'y' : 'x');
-        if (near !== drag.line0) line = near;
-        const lim = horizontal ? lot().d : lot().w;
-        return Math.min(lim, Math.max(0, line));
-    };
     const clampLot = (v, lim) => Math.min(lim, Math.max(0, v));
+    /**
+     * Valor arrastrado sobre un eje con imán a los anclajes (muros de abajo, de arriba o vecinos): a menos de 25 cm se pega
+     * y deja registrado a cuál, para mostrarlo. `key` = 'ax' (rectas verticales, coordenada x) o 'ay' (horizontales, y).
+     */
+    const snapAxis = (p, key, v0) => {
+        const axis = key === 'ax' ? 'x' : 'y';
+        const v = clampLot(v0 + dragDelta(p, axis), axis === 'x' ? lot().w : lot().d);
+        const a = nearestAnchor(drag[key] ?? [], v, 2, v0);
+        drag[`${key}Hit`] = a;
+        return a ? a.v : v;
+    };
+    /** Anclajes para un drag: rectas verticales (ax) y horizontales (ay). */
+    const anchorsFor = (opts) => ({ ax: anchorLines(store, 'y', opts), ay: anchorLines(store, 'x', opts) });
+
+    /** Guías de anclaje: rectas cercanas punteadas y la elegida en azul con su rótulo. */
+    const drawAnchors = (ctx, cam, list, key, current, from, to, z) => {
+        if (!list?.length) return;
+        const P = (v, u) => (key === 'ax' ? cam.project(v * G, u * G, z) : cam.project(u * G, v * G, z));
+        const hit = drag[`${key}Hit`];
+        ctx.save();
+        for (const a of list) {
+            if (Math.abs(a.v - current) > 48) continue;
+            const on = hit && a.v === hit.v;
+            const lo = Math.min(from, a.from) - 6;
+            const hi = Math.max(to, a.to) + 6;
+            const [x0, y0] = P(a.v, lo);
+            const [x1, y1] = P(a.v, hi);
+            ctx.strokeStyle = on ? '#2563eb' : (a.kind === 'vecino' ? 'rgba(37,99,235,.28)' : 'rgba(217,119,6,.55)');
+            ctx.lineWidth = on ? 2.5 : 1.3;
+            ctx.setLineDash(on ? [] : [6, 5]);
+            ctx.beginPath();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(x1, y1);
+            ctx.stroke();
+        }
+        ctx.restore();
+        if (hit) {
+            const [sx, sy] = P(hit.v, (from + to) / 2);
+            label(ctx, ANCHOR_LABEL[hit.kind] ?? 'Alineado', sx, sy + 22, { bg: 'rgba(37,99,235,.92)' });
+        }
+    };
 
     /** Fantasma de una cadena de muros colineales corrida a otra recta. */
     const ghostChain = (ctx, cam, wall, newLine) => {
@@ -233,6 +266,12 @@ export function createTools(app) {
                 ctx.closePath();
                 ctx.fill();
             }
+        } else if (hd.kind === 'rside') {
+            // borde de techo: círculo azul chico
+            ctx.beginPath();
+            ctx.arc(hd.sx, hd.sy, 7, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
         } else {
             // esquina: cuadrado azul
             ctx.fillRect(hd.sx - 7, hd.sy - 7, 14, 14);
@@ -245,17 +284,20 @@ export function createTools(app) {
     T.select = {
         hotkey: 'v',
         label: 'Elegir',
-        hint: 'Clic en un muro, vano, habitación (piso de color), losa, escalera o techo. Arrastrá las manijas azules para cambiar el tamaño.',
+        hint: 'Clic en un muro, vano, losa, escalera o techo; doble clic elige la habitación. Arrastrá las manijas azules para cambiar el tamaño.',
         reset() { drag = null; },
         move(p) {
             if (drag) {
-                if (drag.kind === 'wall') drag.line = dragLine(p);
+                if (drag.kind === 'wall') drag.line = snapAxis(p, drag.horizontal ? 'ay' : 'ax', drag.line0);
                 else if (drag.kind === 'corner') {
-                    drag.nx = clampLot(snapNear(drag.vx + dragDelta(p, 'x'), 'x'), lot().w);
-                    drag.ny = clampLot(snapNear(drag.vy + dragDelta(p, 'y'), 'y'), lot().d);
+                    drag.nx = snapAxis(p, 'ax', drag.vx);
+                    drag.ny = snapAxis(p, 'ay', drag.vy);
+                } else if (drag.kind === 'rside') {
+                    const key = drag.side[0] === 'x' ? 'ax' : 'ay';
+                    drag.nv = snapAxis(p, key, drag.v0);
                 } else {
-                    drag.nx = clampLot(drag.cx + dragDelta(p, 'x'), lot().w);
-                    drag.ny = clampLot(drag.cy + dragDelta(p, 'y'), lot().d);
+                    drag.nx = snapAxis(p, 'ax', drag.cx);
+                    drag.ny = snapAxis(p, 'ay', drag.cy);
                 }
                 app.render();
                 return;
@@ -267,22 +309,38 @@ export function createTools(app) {
                 app.render();
             }
         },
-        down(p) {
+        down(p, e) {
             const hd = handleHit(p);
             if (hd) {
                 app.canvas.style.cursor = 'grabbing';
                 if (hd.kind === 'wall') {
                     const horizontal = hd.w.y1 === hd.w.y2;
                     const line0 = horizontal ? hd.w.y1 : hd.w.x1;
-                    drag = { kind: 'wall', w: hd.w, line0, line: line0, x0: p.wx, y0: p.wy };
+                    const chain = new Set(collinearChain(store.level().walls, hd.w).map((w) => w.id));
+                    drag = { kind: 'wall', w: hd.w, horizontal, line0, line: line0, x0: p.wx, y0: p.wy, ...anchorsFor({ exclude: chain }) };
                 } else if (hd.kind === 'corner') {
-                    drag = { kind: 'corner', vx: hd.vx, vy: hd.vy, nx: hd.vx, ny: hd.vy, x0: p.wx, y0: p.wy };
+                    drag = { kind: 'corner', vx: hd.vx, vy: hd.vy, nx: hd.vx, ny: hd.vy, x0: p.wx, y0: p.wy, ...anchorsFor({}) };
                 } else {
-                    drag = { kind: 'rcorner', r: hd.r, cx: hd.cx, cy: hd.cy, nx: hd.cx, ny: hd.cy, x0: p.wx, y0: p.wy };
+                    // Techos: se alinean con los muros del nivel donde apoyan (y los del otro nivel).
+                    const anchors = anchorsFor({ level: hd.r.level });
+                    for (const k of ['ax', 'ay']) for (const a of anchors[k]) if (a.kind === 'vecino') a.kind = 'muro';
+                    if (hd.kind === 'rside') {
+                        const r = hd.r;
+                        const v0 = { x0: r.x, x1: r.x + r.w, y0: r.y, y1: r.y + r.h }[hd.side];
+                        drag = { kind: 'rside', r, side: hd.side, v0, nv: v0, x0: p.wx, y0: p.wy, ...anchors };
+                    } else {
+                        drag = { kind: 'rcorner', r: hd.r, cx: hd.cx, cy: hd.cy, nx: hd.cx, ny: hd.cy, x0: p.wx, y0: p.wy, ...anchors };
+                    }
                 }
                 return;
             }
             app.hover = pickAt(app, p.sx, p.sy);
+            // Doble clic: la habitación de ese lugar (aunque un muro de adelante tape el piso en la vista isométrica).
+            if (e?.detail >= 2 && store.ui.level <= 1) {
+                const [wx, wy] = app.cam.unproject(p.sx, p.sy, base());
+                const room = store.analysis?.levels?.[store.ui.level]?.rooms?.find((r) => r.fill?.some(([x, y, w, h]) => wx / G >= x && wx / G < x + w && wy / G >= y && wy / G < y + h));
+                if (room) app.hover = { type: 'room', id: room.id };
+            }
             store.setUi({ selection: app.hover });
         },
         up() {
@@ -294,6 +352,20 @@ export function createTools(app) {
                 if (d.line !== d.line0) wallMoveCommit(d.w.id, d.line);
             } else if (d.kind === 'corner') {
                 if (d.nx !== d.vx || d.ny !== d.vy) cornerMoveCommit(d.vx, d.vy, d.nx, d.ny);
+            } else if (d.kind === 'rside') {
+                if (d.nv === d.v0) return;
+                const r = d.r;
+                const e = { x0: r.x, x1: r.x + r.w, y0: r.y, y1: r.y + r.h };
+                e[d.side] = d.nv;
+                const x = Math.min(e.x0, e.x1);
+                const y = Math.min(e.y0, e.y1);
+                const w = Math.abs(e.x1 - e.x0);
+                const hh = Math.abs(e.y1 - e.y0);
+                if (w < 2 || hh < 2) {
+                    app.toast('El techo debe medir al menos 25 × 25 cm.', 'error');
+                    return;
+                }
+                store.commit('Estirar techo', (dr) => Object.assign(dr.roofs.find((q) => q.id === r.id), { x, y, w, h: hh }));
             } else if (d.nx !== d.cx || d.ny !== d.cy) {
                 // el vértice opuesto queda fijo; el rectángulo se recalcula entre él y la esquina arrastrada
                 const r = d.r;
@@ -327,6 +399,8 @@ export function createTools(app) {
                     const delta = drag.line - drag.line0;
                     ghostChain(ctx, cam, drag.w, drag.line);
                     const chain = collinearChain(store.level().walls, drag.w);
+                    const span = horizontal ? [Math.min(...chain.map((w) => w.x1)), Math.max(...chain.map((w) => w.x2))] : [Math.min(...chain.map((w) => w.y1)), Math.max(...chain.map((w) => w.y2))];
+                    drawAnchors(ctx, cam, horizontal ? drag.ay : drag.ax, horizontal ? 'ay' : 'ax', drag.line, span[0], span[1], z);
                     const mid = chain[Math.floor(chain.length / 2)];
                     const [sx, sy] = cam.project(horizontal ? ((mid.x1 + mid.x2) / 2) * G : drag.line * G, horizontal ? drag.line * G : ((mid.y1 + mid.y2) / 2) * G, z + cfg.levelHeight);
                     label(ctx, `${delta >= 0 ? '+' : '−'}${fmt(Math.abs(delta) * G, 1)} cm · ${horizontal ? 'y' : 'x'} = ${fmt((drag.line * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
@@ -334,14 +408,28 @@ export function createTools(app) {
                     const { horizontal, vertical } = cornerWalls(store.level(), drag.vx, drag.vy);
                     if (drag.nx !== drag.vx && vertical) ghostChain(ctx, cam, vertical, drag.nx);
                     if (drag.ny !== drag.vy && horizontal) ghostChain(ctx, cam, horizontal, drag.ny);
+                    drawAnchors(ctx, cam, drag.ax, 'ax', drag.nx, drag.ny - 8, drag.ny + 8, z);
+                    drawAnchors(ctx, cam, drag.ay, 'ay', drag.ny, drag.nx - 8, drag.nx + 8, z);
                     const [sx, sy] = cam.project(drag.nx * G, drag.ny * G, z + cfg.levelHeight);
                     label(ctx, `esquina → x ${fmt((drag.nx * G) / 100)} m · y ${fmt((drag.ny * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
+                } else if (drag.kind === 'rside') {
+                    const r = drag.r;
+                    const e = { x0: r.x, x1: r.x + r.w, y0: r.y, y1: r.y + r.h };
+                    e[drag.side] = drag.nv;
+                    const zr = (r.level + 1) * cfg.levelHeight;
+                    outlineRect(ctx, cam, Math.min(e.x0, e.x1) * G, Math.min(e.y0, e.y1) * G, Math.max(e.x0, e.x1) * G, Math.max(e.y0, e.y1) * G, zr, { stroke: '#2563eb', fill: 'rgba(37,99,235,.18)', width: 2.5, dash: [6, 4] });
+                    const key = drag.side[0] === 'x' ? 'ax' : 'ay';
+                    drawAnchors(ctx, cam, drag[key], key, drag.nv, key === 'ax' ? e.y0 : e.x0, key === 'ax' ? e.y1 : e.x1, zr);
+                    const [sx, sy] = cam.project(((e.x0 + e.x1) / 2) * G, ((e.y0 + e.y1) / 2) * G, zr);
+                    label(ctx, `${fmt((Math.abs(e.x1 - e.x0) * G) / 100)} × ${fmt((Math.abs(e.y1 - e.y0) * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
                 } else {
                     const r = drag.r;
                     const fx = drag.cx === r.x ? r.x + r.w : r.x;
                     const fy = drag.cy === r.y ? r.y + r.h : r.y;
                     const zr = (r.level + 1) * cfg.levelHeight;
                     outlineRect(ctx, cam, Math.min(fx, drag.nx) * G, Math.min(fy, drag.ny) * G, Math.max(fx, drag.nx) * G, Math.max(fy, drag.ny) * G, zr, { stroke: '#2563eb', fill: 'rgba(37,99,235,.18)', width: 2.5, dash: [6, 4] });
+                    drawAnchors(ctx, cam, drag.ax, 'ax', drag.nx, Math.min(fy, drag.ny), Math.max(fy, drag.ny), zr);
+                    drawAnchors(ctx, cam, drag.ay, 'ay', drag.ny, Math.min(fx, drag.nx), Math.max(fx, drag.nx), zr);
                     const [sx, sy] = cam.project(drag.nx * G, drag.ny * G, zr);
                     label(ctx, `${fmt((Math.abs(drag.nx - fx) * G) / 100)} × ${fmt((Math.abs(drag.ny - fy) * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
                 }

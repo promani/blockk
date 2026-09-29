@@ -7,6 +7,7 @@
 import { Camera } from './camera.js';
 import { KIND, sortedItems, visibleFaces } from './scene.js';
 import { fmt } from '../lib/format.js';
+import { planeEq, planeHoles, gableHoles, withHoles } from './roofclip.js';
 
 const G = 12.5;
 
@@ -203,6 +204,10 @@ export class Renderer {
         const { ctx } = this;
         const { cam } = f;
         const g = part.geometry;
+        const parts = f.analysis.roof?.parts ?? [];
+        const idx = parts.indexOf(part);
+        // Huecos de un faldón (lo que queda debajo de otro techo más alto), llevados a pantalla sobre el mismo faldón.
+        const holesOf = (eq) => planeHoles(parts, idx, eq).map((hp) => hp.map(([x, y]) => cam.project(x, y, eq[0] * x + eq[1] * y + eq[2])));
         const P = (pt) => cam.project(pt[0], pt[1], pt[2]);
         const poly = (pts, fill, stroke) => {
             ctx.beginPath();
@@ -223,7 +228,8 @@ export class Renderer {
             const { axis, at } = gb.plane;
             const d = Math.min(gb.thickness / 2, g.overhang ?? 0) * Math.sign(at - (axis === 'y' ? cx : cy));
             const pts = gb.pts.map(([x, y, z]) => (axis === 'y' ? [x + d, y, z] : [x, y + d, z]));
-            this.drawGable(ctx, cam, { ...gb, pts, plane: { ...gb.plane, at: at + d } }, poly);
+            const holes = gableHoles(parts, idx, axis, at).map((hp) => hp.map(([u, z]) => (axis === 'y' ? cam.project(at + d, u, z) : cam.project(u, at + d, z))));
+            withHoles(ctx, holes, () => this.drawGable(ctx, cam, { ...gb, pts, plane: { ...gb.plane, at: at + d } }, poly));
         }
         // Faldones opacos del más lejano al más cercano, sombreados según hacia dónde miran; cada uno con sus propios cabios.
         const depth = (pl) => pl.pts.reduce((a, p) => { const [X, Y] = Camera.rotate(p[0], p[1], cam.rot); return a + X + Y; }, 0);
@@ -236,6 +242,19 @@ export class Renderer {
             if (n[2] < 0) n = n.map((c) => -c);
             const len = Math.hypot(...n) || 1;
             const light = (-0.35 * n[0] - 0.55 * n[1] + 0.76 * n[2]) / len; // luz desde arriba a la izquierda
+            const eq = planeEq(pl.pts);
+            pl.eq = eq;
+            const holes = holesOf(eq);
+            if (holes.length) {
+                ctx.save();
+                for (const hl of holes) {
+                    ctx.beginPath();
+                    ctx.rect(-1e5, -1e5, 2e5, 2e5);
+                    hl.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+                    ctx.closePath();
+                    ctx.clip('evenodd');
+                }
+            }
             poly(pl.pts, shade('#c4633f', 0.78 + 0.3 * Math.max(0, light)), '#7a3b25');
             const xs = pl.pts.map((q) => q[0]);
             const ys = pl.pts.map((q) => q[1]);
@@ -261,8 +280,14 @@ export class Renderer {
             }
             ctx.stroke();
             ctx.restore();
+            if (holes.length) ctx.restore();
         }
         if (g.ridge) {
+            const rh = holesOf(planeEq(g.planes[0].pts));
+            if (rh.length) {
+                withHoles(ctx, rh, () => this.drawRidge(ctx, P, g.ridge));
+                return;
+            }
             const a = P(g.ridge.from);
             const b = P(g.ridge.to);
             ctx.strokeStyle = '#4a2110';
@@ -272,6 +297,17 @@ export class Renderer {
             ctx.lineTo(b[0], b[1]);
             ctx.stroke();
         }
+    }
+
+    drawRidge(ctx, P, ridge) {
+        const a = P(ridge.from);
+        const b = P(ridge.to);
+        ctx.strokeStyle = '#4a2110';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(b[0], b[1]);
+        ctx.stroke();
     }
 
     /** Hastial de bloque: polígono con las hiladas y las juntas verticales del despiece del servidor. */
@@ -441,7 +477,7 @@ export class Renderer {
             ctx.fillStyle = fill;
             for (const [x0, y0, x1, y1] of rects.values()) this.fillRectPlan(cam, x0, y0, x1, y1);
             ctx.globalAlpha = 1;
-            if (!ghost) this.drawPlanRooms(f, li);
+            if (!ghost && ui.level !== 2) this.drawPlanRooms(f, li);
             this.drawPlanOpenings(f, project.levels[li], ghost);
             if (li === 1 && !ghost) this.drawPlanTimber(f, false);
             if (li === 0) this.drawPlanStairs(f, ghost);
@@ -528,10 +564,13 @@ export class Renderer {
         const { ctx } = this;
         const { cam, analysis } = f;
         ctx.save();
-        for (const part of analysis.roof?.parts ?? []) {
+        const parts = analysis.roof?.parts ?? [];
+        for (const [idx, part] of parts.entries()) {
         const g = part.geometry;
         ctx.lineJoin = 'round';
         for (const pl of g.planes) {
+            const holes = planeHoles(parts, idx, planeEq(pl.pts)).map((hp) => hp.map(([x, y]) => cam.project(x, y, 0)));
+            withHoles(ctx, holes, () => {
             ctx.beginPath();
             pl.pts.forEach((pt, i) => {
                 const [x, y] = cam.project(pt[0], pt[1], 0);
@@ -544,6 +583,7 @@ export class Renderer {
             ctx.strokeStyle = '#7a3b25';
             ctx.lineWidth = 1.6;
             ctx.stroke();
+            });
         }
         if (g.ridge) {
             const a = cam.project(g.ridge.from[0], g.ridge.from[1], 0);
@@ -588,7 +628,7 @@ export class Renderer {
                 ctx.font = '600 11px system-ui, sans-serif';
                 ctx.textAlign = 'center';
                 const [mx, my] = cam.project((Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2, 0);
-                ctx.fillText(`${fmt(pl.areaM2, 1)} m²`, mx, my - 8);
+                ctx.fillText(`${fmt(pl.areaM2 * (pl.visible ?? 1), 1)} m²`, mx, my - 8);
             }
         }
         }

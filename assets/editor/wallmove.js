@@ -54,24 +54,47 @@ export function moveWallLine(level, wallId, newLine, { maxLine = Infinity } = {}
         if (startsOn) stretch.push([v, 'start']);
         if (endsOn) stretch.push([v, 'end']);
     }
-    // Ningún muro puede quedar con largo < 25 cm ni invertido.
+    // Cada muro que llega a la recta estira o acorta ese extremo. Si queda con largo 0 (la recta llegó justo a su otro extremo,
+    // p. ej. al alinear con la pared de la habitación vecina) se absorbe; si la recta lo pasa de largo, se da vuelta y se estira
+    // del otro lado. Sólo se rechaza un tramo suelto de menos de 25 cm.
+    const plan = [];
     for (const [v, which] of stretch) {
         const s = which === 'start' ? startOf(v) + delta : startOf(v);
         const e = which === 'end' ? endOf(v) + delta : endOf(v);
-        if (e - s < 2) return { ok: false, reason: 'Un muro vecino quedaría demasiado corto (mín. 25 cm).' };
+        const len = Math.abs(e - s);
+        if (len > 0 && len < 2) return { ok: false, reason: 'Un muro vecino quedaría con un tramo de menos de 25 cm: movelo un poco más o un poco menos.' };
+        plan.push([v, which, s, e]);
     }
-
     let dropped = 0;
     for (const w of chain) {
         if (axis === 'x') { w.y1 += delta; w.y2 += delta; } else { w.x1 += delta; w.x2 += delta; }
     }
-    for (const [v, which] of stretch) {
-        const horizontal = axisOf(v) === 'x'; // v es paralelo a la recta perpendicular: se mueve su coordenada "along"
-        if (horizontal) {
-            if (which === 'start') v.x1 += delta; else v.x2 += delta;
-        } else if (which === 'start') v.y1 += delta; else v.y2 += delta;
+    const dropOn = (id) => {
+        for (const list of [level.openings, level.ubeams ?? []]) {
+            for (let i = list.length - 1; i >= 0; i--) {
+                if (list[i].wall === id) { list.splice(i, 1); dropped++; }
+            }
+        }
+    };
+    const removed = new Set();
+    for (const [v, which, s, e] of plan) {
+        const along = axisOf(v) === 'x' ? ['x1', 'x2'] : ['y1', 'y2'];
+        if (s === e) {
+            removed.add(v.id);
+            dropOn(v.id);
+            continue;
+        }
+        if (e < s) {
+            // se dio vuelta: el tramo ahora va de la recta nueva a su otro extremo
+            v[along[0]] = e;
+            v[along[1]] = s;
+            dropOn(v.id);
+            continue;
+        }
+        v[along[0]] = s;
+        v[along[1]] = e;
         const shift = which === 'start' ? -delta : 0; // si se mueve el inicio, las posiciones relativas cambian
-        const len = endOf(v) - startOf(v);
+        const len = e - s;
         for (const list of [level.openings, level.ubeams ?? []]) {
             for (let i = list.length - 1; i >= 0; i--) {
                 const it = list[i];
@@ -82,6 +105,7 @@ export function moveWallLine(level, wallId, newLine, { maxLine = Infinity } = {}
             }
         }
     }
+    if (removed.size) level.walls = level.walls.filter((w) => !removed.has(w.id));
     return { ok: true, dropped };
 }
 

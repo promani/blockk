@@ -157,6 +157,7 @@ function pointerInfo(e) {
 }
 
 let pan = null;
+let lastDown = null;
 let spaceDown = false;
 
 canvas.addEventListener('pointerdown', (e) => {
@@ -176,7 +177,11 @@ canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
     const p = pointerInfo(e);
     app.pointer = p;
-    activeTool().down?.(p, e);
+    // Los eventos de puntero no cuentan clics: el doble clic se detecta acá (dos pulsaciones cercanas en < 400 ms).
+    const now = performance.now();
+    const double = lastDown && now - lastDown.t < 400 && Math.hypot(e.clientX - lastDown.x, e.clientY - lastDown.y) < 8;
+    lastDown = double ? null : { t: now, x: e.clientX, y: e.clientY };
+    activeTool().down?.(p, { detail: double ? 2 : 1, shiftKey: e.shiftKey, altKey: e.altKey, button: e.button });
     app.render();
 });
 

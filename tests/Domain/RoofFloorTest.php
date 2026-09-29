@@ -310,4 +310,29 @@ final class RoofFloorTest extends TestCase
         self::assertSame(8, count(array_filter(array_slice($h['pieces'], 0, 8), static fn (int $l): bool => 1250 === $l)));
         self::assertGreaterThan(30, $h['blocks']);
     }
+
+    #[Test]
+    public function crossingRoofsKeepOnlyTheHigherSurface(): void
+    {
+        // Dos techos a dos aguas cruzados sobre la misma planta: forman una cruz; no se cuenta cubierta dos veces.
+        $one = $this->analyze(Fixtures::room(40, 40)->roofPart(0, 0, 0, 40, 40, 'gable', 'x'));
+        $cross = $this->analyze(Fixtures::room(40, 40)->roofPart(0, 0, 0, 40, 40, 'gable', 'x')->roofPart(0, 0, 0, 40, 40, 'gable', 'y'));
+
+        foreach ($cross['roof']['parts'] as $p) {
+            self::assertEqualsWithDelta(50.0, $p['bom']['visiblePct'], 3.0);
+        }
+        self::assertEqualsWithDelta($one['roof']['bom']['coverM2'], $cross['roof']['bom']['coverM2'], 0.5);
+    }
+
+    #[Test]
+    public function aLowerRoofInsideAHigherOneDisappears(): void
+    {
+        $a = $this->analyze(Fixtures::room(40, 30)->roofPart(0, 0, 0, 40, 30, 'gable', 'x')->roofPart(0, 10, 10, 10, 10, 'shed', 'S', 10));
+        [$big, $small] = $a['roof']['parts'];
+
+        self::assertSame(100.0, (float) $big['bom']['visiblePct']);
+        self::assertSame(0.0, (float) $small['bom']['coverM2']);
+        self::assertSame(0, $small['bom']['raftersCount']);
+        self::assertSame(0, array_sum(array_map(static fn (array $g): int => $g['blocks'], $small['geometry']['gables'])), 'Sus hastiales quedan debajo del techo alto: no se construyen');
+    }
 }

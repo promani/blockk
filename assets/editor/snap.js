@@ -73,3 +73,46 @@ export function nearestLine(lines, v, tol = 2) {
 
     return best;
 }
+
+/**
+ * Anclajes típicos para agrandar o achicar: rectas de muros paralelos del mismo nivel, del nivel de abajo (para que la
+ * Planta Alta apoye sobre los muros de la Planta Baja) o del de arriba. `axis` 'x' = rectas horizontales (y constante),
+ * 'y' = rectas verticales (x constante). Devuelve [{ v, kind, from, to }] sin repetir recta (gana la del otro nivel).
+ */
+export function anchorLines(store, axis, { level = store.ui.level, exclude = new Set(), sameLevel = true } = {}) {
+    const p = store.project;
+    const sources = [];
+    if (sameLevel) sources.push([level, 'vecino']);
+    if (level === 1) sources.push([0, 'abajo']);
+    if (level === 0 && p.upper) sources.push([1, 'arriba']);
+    const byV = new Map();
+    for (const [li, kind] of sources) {
+        for (const w of p.levels[li]?.walls ?? []) {
+            if (exclude.has(w.id)) continue;
+            const horizontal = w.y1 === w.y2;
+            if ((axis === 'x') !== horizontal) continue;
+            const v = horizontal ? w.y1 : w.x1;
+            const from = horizontal ? w.x1 : w.y1;
+            const to = horizontal ? w.x2 : w.y2;
+            const cur = byV.get(v);
+            if (!cur || (cur.kind === 'vecino' && kind !== 'vecino')) byV.set(v, { v, kind, from, to });
+            else if (cur.kind === kind) { cur.from = Math.min(cur.from, from); cur.to = Math.max(cur.to, to); }
+        }
+    }
+
+    return [...byV.values()];
+}
+
+/** Anclaje más cercano a `v` a menos de `tol` unidades (distinto de `skip`), o null. */
+export function nearestAnchor(anchors, v, tol = 2, skip = null) {
+    let best = null;
+    for (const a of anchors) {
+        if (a.v === skip) continue;
+        const d = Math.abs(a.v - v);
+        if (d <= tol && (!best || d < Math.abs(best.v - v))) best = a;
+    }
+
+    return best;
+}
+
+export const ANCHOR_LABEL = { abajo: 'Alineado con el muro de abajo', arriba: 'Alineado con el muro de arriba', vecino: 'Alineado con otra pared', muro: 'Sobre el muro' };

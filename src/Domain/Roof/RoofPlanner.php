@@ -35,8 +35,139 @@ final class RoofPlanner
             $parts[] = $built;
             array_push($issues, ...$built['issues']);
         }
+        if (count($parts) > 1) {
+            $parts = $this->resolveOverlaps($project, $parts);
+        }
 
         return new RoofPlan($parts, $issues);
+    }
+
+    /**
+     * Techos que se superponen: donde uno queda debajo de otro más alto (p. ej. dos techos a dos aguas cruzados), esa parte no
+     * existe. Se descuenta de la cubierta, los cabios y las correas (por la fracción visible de cada faldón) y de los hastiales
+     * (hilada por hilada). El dibujo recorta lo mismo en el navegador.
+     *
+     * @param list<array<string, mixed>> $parts
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function resolveOverlaps(Project $project, array $parts): array
+    {
+        $surfaces = array_map(fn (array $p): \Closure => $this->surface($p['geometry']['planes']), $parts);
+        $above = static function (int $i, float $x, float $y, float $z) use ($surfaces): bool {
+            foreach ($surfaces as $j => $sf) {
+                if ($j === $i) {
+                    continue;
+                }
+                $h = $sf($x, $y);
+                if (null !== $h && ($h > $z + 0.01 || (abs($h - $z) <= 0.01 && $j < $i))) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+        $byId = [];
+        foreach ($project->roofs as $r) {
+            $byId[$r->id] = $r;
+        }
+
+        foreach ($parts as $i => &$part) {
+            // Fracción visible de cada faldón (muestreo cada 10 cm en planta).
+            $fracSum = 0.0;
+            $n = 0;
+            foreach ($part['geometry']['planes'] as &$pl) {
+                $eq = $this->planeEq($pl['pts']);
+                $xs = array_column($pl['pts'], 0);
+                $ys = array_column($pl['pts'], 1);
+                $tot = 0;
+                $vis = 0;
+                for ($x = min($xs) + 5; $x < max($xs); $x += 10) {
+                    for ($y = min($ys) + 5; $y < max($ys); $y += 10) {
+                        ++$tot;
+                        $vis += $above($i, $x, $y, $eq[0] * $x + $eq[1] * $y + $eq[2]) ? 0 : 1;
+                    }
+                }
+                $pl['visible'] = $tot > 0 ? round($vis / $tot, 3) : 1.0;
+                $fracSum += $pl['visible'];
+                ++$n;
+            }
+            unset($pl);
+            $frac = $n > 0 ? $fracSum / $n : 1.0;
+            $b = &$part['bom'];
+            $b['coverM2'] = round($b['coverM2'] * $frac, 2);
+            $b['battenMl'] = round($b['battenMl'] * $frac, 1);
+            $b['raftersCount'] = (int) ceil($b['raftersCount'] * $frac);
+            $b['visiblePct'] = round(100 * $frac, 1);
+
+            // Hastiales: se vuelven a trabar sin lo que queda debajo de otro techo.
+            $roof = $byId[$part['id']];
+            $hidden = static fn (float $x, float $y, float $z): bool => $above($i, $x, $y, $z);
+            $masonry = 0.0;
+            $byT = [];
+            foreach ($part['geometry']['gables'] as &$g) {
+                $full = $g['pieces'];
+                $new = $this->gable($roof, $g['side'], $g['pts'], $g['areaM2'] * 10000, $g['fixed'], $hidden);
+                $ratio = [] === $full ? 1.0 : array_sum($new['pieces']) / max(1, array_sum($full));
+                $new['areaM2'] = round($g['areaM2'] * $ratio, 2);
+                $g = $new;
+                if ($g['enabled']) {
+                    $masonry += $g['areaM2'];
+                    $byT[$g['thickness']] = ($byT[$g['thickness']] ?? 0.0) + $g['areaM2'];
+                }
+            }
+            unset($g);
+            $b['gableMasonryM2'] = round($masonry, 2);
+            $b['gableByThickness'] = array_map(static fn (float $m2): float => round($m2, 2), $byT);
+            unset($b);
+        }
+        unset($part);
+
+        return $parts;
+    }
+
+    /** z = a·x + b·y + c del plano que pasa por los tres primeros vértices. @param list<array{float, float, float}> $pts @return array{float, float, float} */
+    private function planeEq(array $pts): array
+    {
+        [$p, $q, $r] = [$pts[0], $pts[1], $pts[2]];
+        $ux = $q[0] - $p[0];
+        $uy = $q[1] - $p[1];
+        $uz = $q[2] - $p[2];
+        $vx = $r[0] - $p[0];
+        $vy = $r[1] - $p[1];
+        $vz = $r[2] - $p[2];
+        $nx = $uy * $vz - $uz * $vy;
+        $ny = $uz * $vx - $ux * $vz;
+        $nz = $ux * $vy - $uy * $vx;
+        if (abs($nz) < 1e-9) {
+            return [0.0, 0.0, $p[2]];
+        }
+        $a = -$nx / $nz;
+        $b = -$ny / $nz;
+
+        return [$a, $b, $p[2] - $a * $p[0] - $b * $p[1]];
+    }
+
+    /**
+     * Altura de la cubierta de un techo en (x, y), o null fuera de su planta (con alero). Dos aguas = el menor de los dos
+     * faldones (carpa); un agua = su único faldón.
+     *
+     * @param list<array{pts: list<array{float, float, float}>}> $planes
+     */
+    private function surface(array $planes): \Closure
+    {
+        $eqs = array_map(fn (array $pl): array => $this->planeEq($pl['pts']), $planes);
+        $xs = array_merge(...array_map(static fn (array $pl): array => array_column($pl['pts'], 0), $planes));
+        $ys = array_merge(...array_map(static fn (array $pl): array => array_column($pl['pts'], 1), $planes));
+        [$x0, $x1, $y0, $y1] = [min($xs), max($xs), min($ys), max($ys)];
+
+        return static function (float $x, float $y) use ($eqs, $x0, $x1, $y0, $y1): ?float {
+            if ($x < $x0 || $x > $x1 || $y < $y0 || $y > $y1) {
+                return null;
+            }
+
+            return min(array_map(static fn (array $e): float => $e[0] * $x + $e[1] * $y + $e[2], $eqs));
+        };
     }
 
     /** ¿El centro del techo cae dentro de la planta del Nivel 2 (caja envolvente de sus muros)? Entonces tiene muros encima. @param list<Wall> $upper */
@@ -222,10 +353,10 @@ final class RoofPlanner
      *
      * @return array<string, mixed>
      */
-    private function gable(RoofPart $roof, string $side, array $pts, float $areaCm2, bool $fixed = false): array
+    private function gable(RoofPart $roof, string $side, array $pts, float $areaCm2, bool $fixed = false, ?\Closure $hidden = null): array
     {
         $enabled = $fixed || ('A' === $side ? $roof->gableA : $roof->gableB);
-        $layout = $this->layGable($pts);
+        $layout = $this->layGable($pts, $hidden);
         $pieces = $enabled ? array_merge(...array_map(static fn (array $c): array => $c['pieces'], $layout['courses'] ?: [['pieces' => []]])) : [];
         $full = count(array_filter($pieces, static fn (int $l): bool => $l >= Hcca::BLOCK_L));
 
@@ -256,7 +387,7 @@ final class RoofPlanner
      *
      * @return array{plane: array{axis: string, at: float, z: float}, courses: list<array{v0: float, u0: float, joints: list<float>, pieces: list<int>}>}
      */
-    private function layGable(array $pts): array
+    private function layGable(array $pts, ?\Closure $hidden = null): array
     {
         $alongY = abs($pts[0][0] - $pts[1][0]) < 0.01 && abs($pts[1][0] - $pts[2][0]) < 0.01;
         $z0 = min(array_column($pts, 2));
@@ -270,17 +401,43 @@ final class RoofPlanner
                 continue;
             }
             [$uL, $uR] = $span;
-            $widthTicks = (int) round(($uR - $uL) * Hcca::TICKS_PER_CM);
+            // Tramos visibles de la hilada: lo que queda debajo de otro techo más alto no se construye.
+            $segs = [[$uL, $uR]];
+            if (null !== $hidden) {
+                $segs = [];
+                $zTopCourse = $z0 + $v0 + 25;
+                $step = 2.5;
+                $open = null;
+                for ($u = $uL; $u < $uR - 1e-6; $u += $step) {
+                    $um = min($u + $step / 2, $uR);
+                    $h = $hidden($alongY ? $pts[0][0] : $um, $alongY ? $um : $pts[0][1], $zTopCourse);
+                    if (!$h && null === $open) {
+                        $open = $u;
+                    } elseif ($h && null !== $open) {
+                        $segs[] = [$open, $u];
+                        $open = null;
+                    }
+                }
+                if (null !== $open) {
+                    $segs[] = [$open, $uR];
+                }
+            }
             $pieces = [];
             $joints = [];
-            $pos = 0;
-            $first = 1 === $k % 2 ? intdiv(Hcca::BLOCK_L, 2) : Hcca::BLOCK_L;
-            while ($pos < $widthTicks) {
-                $len = min(0 === $pos ? $first : Hcca::BLOCK_L, $widthTicks - $pos);
-                $pieces[] = $len;
-                $pos += $len;
-                if ($pos < $widthTicks) {
-                    $joints[] = round($uL + $pos / Hcca::TICKS_PER_CM, 2);
+            foreach ($segs as [$sL, $sR]) {
+                $widthTicks = (int) round(($sR - $sL) * Hcca::TICKS_PER_CM);
+                if ($widthTicks < 50) {
+                    continue;
+                }
+                $pos = 0;
+                $first = 1 === $k % 2 ? intdiv(Hcca::BLOCK_L, 2) : Hcca::BLOCK_L;
+                while ($pos < $widthTicks) {
+                    $len = min(0 === $pos ? $first : Hcca::BLOCK_L, $widthTicks - $pos);
+                    $pieces[] = $len;
+                    $pos += $len;
+                    if ($pos < $widthTicks) {
+                        $joints[] = round($sL + $pos / Hcca::TICKS_PER_CM, 2);
+                    }
                 }
             }
             $courses[] = ['v0' => $v0, 'u0' => round($uL, 2), 'joints' => $joints, 'pieces' => $pieces];

@@ -283,3 +283,5 @@ label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-
 .kpi-mini b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 .kpi-mini span { font-size: .75rem; color: var(--muted); }
 details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--graphite-700); padding: 4px 0; }
+.suggest-list { display: flex; flex-direction: column; gap: 4px; }
+.suggest-list .btn { text-align: left; white-space: normal; line-height: 1.3; }

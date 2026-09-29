@@ -3,6 +3,8 @@ import { fmt, int, m2, pct, cm } from '../lib/format.js';
 import { suggest } from '../lib/api.js';
 import { nextId } from '../lib/storage.js';
 import { roomColor } from './renderer.js';
+import { anchorLines } from './snap.js';
+import { collinearChain } from './wallmove.js';
 
 const G = 12.5;
 const COMPASS = [['NO', 315], ['N', 0], ['NE', 45], ['O', 270], null, ['E', 90], ['SO', 225], ['S', 180], ['SE', 135]];
@@ -114,6 +116,39 @@ export function mountPanels(app) {
             h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: `Mover ${fmt(Math.abs(d) * G, 1)} cm hacia el ${name}`, onclick: () => app.moveWallBy(w.id, d) }, text));
     }
 
+    /**
+     * Sugerencias para agrandar/achicar una habitación hasta anclajes típicos: el muro de abajo (en el Nivel 2) y la pared
+     * paralela más cercana hacia afuera. Cada una corre el muro de ese lado con un clic.
+     */
+    function roomSuggestions(room) {
+        const lv = store.level();
+        const b = room.bbox;
+        const sides = [
+            ['N', '▲ Norte', 'x', b.y, -1, b.x, b.x + b.w],
+            ['S', '▼ Sur', 'x', b.y + b.h, 1, b.x, b.x + b.w],
+            ['O', '◀ Oeste', 'y', b.x, -1, b.y, b.y + b.h],
+            ['E', '▶ Este', 'y', b.x + b.w, 1, b.y, b.y + b.h],
+        ];
+        const out = [];
+        for (const [, name, axis, v, outward, lo, hi] of sides) {
+            const wall = lv.walls.find((w) => (axis === 'x' ? w.y1 === w.y2 && w.y1 === v && w.x1 < hi && w.x2 > lo : w.x1 === w.x2 && w.x1 === v && w.y1 < hi && w.y2 > lo));
+            if (!wall) continue;
+            const chain = new Set(collinearChain(lv.walls, wall).map((w) => w.id));
+            const anchors = anchorLines(store, axis, { exclude: chain }).filter((a) => a.v !== v && Math.abs(a.v - v) <= 32 && a.from < hi + 8 && a.to > lo - 8);
+            const pick = (list) => list.sort((p, q) => Math.abs(p.v - v) - Math.abs(q.v - v))[0];
+            const below = pick(anchors.filter((a) => a.kind === 'abajo'));
+            const outer = pick(anchors.filter((a) => a.kind !== 'abajo' && Math.sign(a.v - v) === outward));
+            for (const a of [below, outer]) {
+                if (!a || out.some((o) => o.wall === wall.id && o.v === a.v)) continue;
+                const d = a.v - v;
+                const what = a.kind === 'abajo' ? 'hasta el muro de abajo' : a.kind === 'arriba' ? 'hasta el muro de arriba' : 'hasta la pared vecina';
+                out.push({ wall: wall.id, v: a.v, text: `${name} ${what} (${d * outward > 0 ? '+' : '−'}${fmt((Math.abs(d) * G) / 100, 2)} m)`, delta: d });
+            }
+        }
+
+        return out.slice(0, 6);
+    }
+
     function renderProps() {
         clear(el.props);
         if (store.ui.level === 2) {
@@ -135,6 +170,15 @@ export function mountPanels(app) {
                 h('div', { class: 'kv-title' }, bearing ? 'Muro portante' : 'Tabique no portante'),
                 h('dl', { class: 'dl' }, h('dt', {}, 'Longitud'), h('dd', {}, `${fmt(len / 100)} m`), h('dt', {}, 'Bloques a lo largo'), h('dd', {}, fmt(len / 62.5, 2)), h('dt', {}, 'Eje'), h('dd', {}, w.y1 === w.y2 ? 'horizontal' : 'vertical')),
                 field('Espesor', sel(w.t, cfg.thicknesses.map((t) => [t, `${cm(t)} cm`]), (v) => modify('Cambiar espesor', (l) => { l.walls.find((x) => x.id === w.id).t = Number(v); }))),
+                (() => {
+                    // Habitaciones que forma este muro (para elegirlas y estirarlas desde las esquinas).
+                    const horizontal = w.y1 === w.y2;
+                    const line = horizontal ? w.y1 : w.x1;
+                    const rooms = (store.analysis?.levels?.[store.ui.level]?.rooms ?? []).filter((r) => r.fill?.some(([x, y, fw, fh]) => (horizontal
+                        ? (y === line || y + fh === line) && x < w.x2 && x + fw > w.x1
+                        : (x === line || x + fw === line) && y < w.y2 && y + fh > w.y1)));
+                    return rooms.length ? h('div', { class: 'actions-row' }, rooms.map((r) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'room', id: r.id } }) }, h('span', { class: 'swatch', style: `background:${roomColor(r)}` }), `Elegir ${r.name}`))) : null;
+                })(),
                 h('div', { class: 'kv-title' }, 'Agrandar / achicar la habitación'),
                 h('p', { class: 'small muted' }, 'También podés arrastrar la manija azul del muro. Los muros que llegan a él se estiran solos.'),
                 h('div', { class: 'nudge', role: 'group', 'aria-label': 'Mover el muro' }, moveButtons(w)),
@@ -190,7 +234,13 @@ export function mountPanels(app) {
                     h('dt', {}, 'Superficie a ejes'), h('dd', {}, m2(room.grossM2)),
                     h('dt', {}, 'Perímetro'), h('dd', {}, `${fmt(room.perimeterM, 2)} m`),
                     h('dt', {}, 'Medidas'), h('dd', {}, `${fmt((room.bbox.w * G) / 100, 2)} × ${fmt((room.bbox.h * G) / 100, 2)} m${room.rect ? '' : ' (en L / irregular)'}`)),
-                h('p', { class: 'small muted' }, 'Arrastrá las esquinas azules para agrandar o achicar la habitación: se corren los dos muros de la esquina y los que llegan a ellos se estiran.'));
+                h('p', { class: 'small muted' }, 'Arrastrá las esquinas azules para agrandar o achicar la habitación: se corren los dos muros de la esquina y los que llegan a ellos se estiran. Al acercarte a un muro de abajo o a otra pared, se alinea sola.'),
+                (() => {
+                    const sug = roomSuggestions(room);
+                    return sug.length
+                        ? h('div', {}, h('div', { class: 'kv-title' }, 'Sugerencias'), h('div', { class: 'suggest-list' }, sug.map((x) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => app.moveWallBy(x.wall, x.delta) }, x.text))))
+                        : null;
+                })());
             return;
         }
 
