@@ -1,6 +1,6 @@
 import { $, $$ } from '../lib/dom.js';
 import { template } from '../lib/api.js';
-import { saveProject, blankProject } from '../lib/storage.js';
+import { saveProject, blankProject, loadProject } from '../lib/storage.js';
 import { mountAssistant } from './assistant.js';
 
 /* Filtros por etiqueta (1 planta, 2 plantas, evolutiva, quinchos, bajo descarte). */
@@ -16,9 +16,24 @@ for (const chip of chips) {
     });
 }
 
+/**
+ * Antes de pisar el proyecto del editor (plantilla, proyecto en blanco o asistente), se avisa si ya hay algo dibujado.
+ * Devuelve true si se puede seguir.
+ */
+export function confirmReplace() {
+    const current = loadProject();
+    if (!current?.levels?.some((l) => l.walls?.length)) return Promise.resolve(true);
+    const dlg = $('#confirm-replace');
+    $('#confirm-text').textContent = `Vas a reemplazar «${current.name || 'Proyecto sin título'}», el proyecto que tenés en el editor. Si lo querés conservar, cancelá y descargalo con «Guardar» en el editor.`;
+    dlg.returnValue = '';
+    dlg.showModal();
+    return new Promise((resolve) => dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok'), { once: true }));
+}
+
 /* Usar una plantilla: se guarda como proyecto actual y se abre el editor. */
 for (const btn of $$('[data-use]')) {
     btn.addEventListener('click', async () => {
+        if (!(await confirmReplace())) return;
         btn.disabled = true;
         try {
             saveProject(await template(btn.dataset.use));
@@ -31,12 +46,13 @@ for (const btn of $$('[data-use]')) {
 }
 
 /* Proyecto en blanco con retícula inicial parametrizable. */
-$('#blank-form').addEventListener('submit', (e) => {
+$('#blank-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!(await confirmReplace())) return;
     const f = Object.fromEntries(new FormData(e.target));
     saveProject(blankProject({ name: String(f.name).trim() || 'Proyecto sin título', lotW: Number(f.lotW), lotD: Number(f.lotD), t: Number(f.t), north: Number(f.north) }));
     location.href = '/';
 });
 
 /* Asistente de diseño por chat (sólo si el servidor lo tiene configurado). */
-if ($('#ai')) mountAssistant($('#ai'));
+if ($('#ai')) mountAssistant({ card: $('#ai'), dialog: $('#ai-dialog'), confirmReplace });

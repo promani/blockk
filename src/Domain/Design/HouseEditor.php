@@ -12,18 +12,26 @@ use App\Domain\Hcca;
  */
 final class HouseEditor
 {
-    public const array ACTIONS = ['agregar_vano', 'quitar_vano', 'cambiar_vano', 'agregar_muro', 'quitar_muro', 'cambiar_techo', 'renombrar'];
+    public const array ACTIONS = ['agregar_ventana', 'agregar_vano', 'quitar_vano', 'cambiar_vano', 'agregar_muro', 'quitar_muro', 'cambiar_techo', 'renombrar'];
+
+    /** Orden de preferencia de orientaciones para una ventana sin orientación pedida (sol de invierno en el hemisferio sur). */
+    private const array SUN_ORDER = ['N', 'E', 'O', 'S'];
+
+    /** @var array<string, mixed>|null análisis del proyecto (para ubicar ventanas por ambiente) */
+    private ?array $analysis = null;
 
     /**
      * @param array<string, mixed>             $project
      * @param list<array<string, mixed>>       $operations
+     * @param array<string, mixed>|null        $analysis   análisis de `$project` (lo necesita agregar_ventana)
      *
      * @return array<string, mixed> el proyecto modificado
      *
      * @throws \InvalidArgumentException si una operación no se puede aplicar (indica cuál y por qué)
      */
-    public function apply(array $project, array $operations): array
+    public function apply(array $project, array $operations, ?array $analysis = null): array
     {
+        $this->analysis = $analysis;
         if ([] === $operations || count($operations) > 30) {
             throw new \InvalidArgumentException('Mandá entre 1 y 30 operaciones.');
         }
@@ -48,6 +56,8 @@ final class HouseEditor
     {
         $action = (string) ($op['accion'] ?? '');
         switch ($action) {
+            case 'agregar_ventana':
+                return $this->windowInRoom($p, $op);
             case 'agregar_vano':
                 [$li, $wi] = $this->findWall($p, (string) ($op['muro'] ?? ''));
                 $w = $p['levels'][$li]['walls'][$wi];
@@ -136,6 +146,121 @@ final class HouseEditor
             default:
                 throw new \InvalidArgumentException(sprintf('acción desconocida; usá: %s.', implode(', ', self::ACTIONS)));
         }
+    }
+
+    /**
+     * Ventana en un ambiente («N1-A2»): el tramo exterior más largo libre de vanos (con jambas de 25 cm), en la
+     * orientación pedida o la de más sol. Si la ventana pedida no entra, la más grande que entre.
+     *
+     * @param array<string, mixed> $p
+     * @param array<string, mixed> $op
+     *
+     * @return array<string, mixed>
+     */
+    private function windowInRoom(array $p, array $op): array
+    {
+        if (null === $this->analysis) {
+            throw new \InvalidArgumentException('falta el análisis de la casa.');
+        }
+        if (1 !== preg_match('/^N([12])-A(\d+)$/', strtoupper(trim((string) ($op['ambiente'] ?? ''))), $m)) {
+            throw new \InvalidArgumentException('indicá el ambiente con su id (por ejemplo N1-A2).');
+        }
+        $li = (int) $m[1] - 1;
+        $room = array_values(array_filter($this->analysis['levels'][$li]['rooms'] ?? [], static fn (array $r): bool => $r['id'] === (int) $m[2]))[0] ?? null;
+        if (null === $room) {
+            throw new \InvalidArgumentException(sprintf('no existe el ambiente %s.', $op['ambiente']));
+        }
+        $want = strtoupper(trim((string) ($op['orientacion'] ?? '')));
+        $want = ['W' => 'O'][$want] ?? $want;
+        $info = $this->analysis['levels'][$li]['walls'] ?? [];
+        $north = (int) ($p['north'] ?? 0);
+
+        $gaps = []; // [facing, wallIndex, from, to]
+        foreach ($p['levels'][$li]['walls'] as $wi => $w) {
+            $ext = $info[$w['id']]['ext'] ?? null;
+            if (!is_array($ext)) {
+                continue;
+            }
+            $facing = $this->facing($ext, $north);
+            $horizontal = $w['y1'] === $w['y2'];
+            $line = $horizontal ? $w['y1'] : $w['x1'];
+            $start = $horizontal ? min($w['x1'], $w['x2']) : min($w['y1'], $w['y2']);
+            $end = $horizontal ? max($w['x1'], $w['x2']) : max($w['y1'], $w['y2']);
+            foreach ($room['fill'] as [$fx, $fy, $fw, $fh]) {
+                $touch = $horizontal ? ($fy === $line || $fy + $fh === $line) : ($fx === $line || $fx + $fw === $line);
+                if (!$touch) {
+                    continue;
+                }
+                $a = max($start, $horizontal ? $fx : $fy) - $start;
+                $b = min($end, $horizontal ? $fx + $fw : $fy + $fh) - $start;
+                if ($b - $a <= 6) {
+                    continue;
+                }
+                // Tramo libre: 3 u de jamba en los extremos y 2 u contra otros vanos del muro.
+                $free = [[$a + 3, $b - 3]];
+                foreach ($p['levels'][$li]['openings'] as $o) {
+                    if ($o['wall'] !== $w['id']) {
+                        continue;
+                    }
+                    $next = [];
+                    foreach ($free as [$f0, $f1]) {
+                        if ($o['pos'] - 2 > $f0) {
+                            $next[] = [$f0, min($f1, $o['pos'] - 2)];
+                        }
+                        if ($o['pos'] + $o['w'] + 2 < $f1) {
+                            $next[] = [max($f0, $o['pos'] + $o['w'] + 2), $f1];
+                        }
+                    }
+                    $free = $next;
+                }
+                foreach ($free as [$f0, $f1]) {
+                    if ($f1 - $f0 >= 5) {
+                        $gaps[] = [$facing, $wi, $f0, $f1];
+                    }
+                }
+            }
+        }
+        $all = $gaps;
+        if ('' !== $want) {
+            $gaps = array_values(array_filter($gaps, static fn (array $g): bool => $g[0] === $want));
+        }
+        if ([] === $gaps) {
+            $free = [];
+            foreach ($all as [$f, , $a, $b]) {
+                $free[$f] = max($free[$f] ?? 0, $b - $a);
+            }
+            $hint = [] === $free ? 'no tiene muros exteriores libres' : 'hay lugar hacia: '.implode(', ', array_map(fn (string $f, int $u): string => "{$f} (hasta {$this->m($u)} m)", array_keys($free), $free));
+
+            throw new \InvalidArgumentException(sprintf('el ambiente %s no tiene muro exterior libre%s para una ventana; %s.', $op['ambiente'], '' !== $want ? " hacia el {$want}" : '', $hint));
+        }
+        usort($gaps, static fn (array $x, array $y): int => [array_search($x[0], self::SUN_ORDER, true), $y[3] - $y[2]] <=> [array_search($y[0], self::SUN_ORDER, true), $x[3] - $x[2]]);
+        [$facing, $wi, $f0, $f1] = $gaps[0];
+        $gap = $f1 - $f0;
+        $presets = Hcca::openingPresets();
+        $asked = isset($op['tipo']) ? $this->preset((string) $op['tipo']) : 'V150';
+        if ('window' !== $presets[$asked]['kind']->value) {
+            throw new \InvalidArgumentException('agregar_ventana es para ventanas; para puertas usá agregar_vano.');
+        }
+        $preset = null;
+        foreach ([$asked, 'VG150', 'V187', 'V150', 'V125', 'V100', 'V62'] as $c) {
+            if ($presets[$c]['w'] <= $gap && $presets[$c]['w'] <= $presets[$asked]['w']) {
+                $preset = $c;
+                break;
+            }
+        }
+        $preset ??= 'V62';
+        $wall = $p['levels'][$li]['walls'][$wi];
+
+        return $this->one($p, ['accion' => 'agregar_vano', 'muro' => $wall['id'], 'tipo' => $preset, 'desde' => ($f0 + intdiv($gap - $presets[$preset]['w'], 2)) * Hcca::GRID_CM / 100]);
+    }
+
+    /** @param array{0: int|float, 1: int|float} $ext */
+    private function facing(array $ext, int $north): string
+    {
+        $bearing = rad2deg(atan2((float) $ext[0], -(float) $ext[1]));
+        $rel = fmod(fmod($bearing - $north, 360) + 360, 360);
+
+        return ['N', 'E', 'S', 'O'][((int) round($rel / 90)) % 4];
     }
 
     /**

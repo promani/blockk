@@ -43,9 +43,30 @@ final class ScriptedLlm implements LlmClient
         return ['role' => 'assistant', 'content' => $text];
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Una pregunta (id «q») con opciones id => texto.
+     *
+     * @param array<string, string> $options
+     *
+     * @return array<string, mixed>
+     */
     public static function ask(string $question, array $options, bool $multiple = false, string $id = 'q1'): array
     {
-        return self::call('preguntar', ['pregunta' => $question, 'opciones' => array_map(static fn (string $k, string $v): array => ['id' => $k, 'texto' => $v], array_keys($options), $options), 'multiple' => $multiple], $id);
+        return self::form([['id' => 'q', 'pregunta' => $question, 'multiple' => $multiple, 'opciones' => $options]], $id);
+    }
+
+    /**
+     * Varias preguntas: [{id, pregunta, multiple?, opciones: id => texto}].
+     *
+     * @param list<array<string, mixed>> $questions
+     *
+     * @return array<string, mixed>
+     */
+    public static function form(array $questions, string $id = 'q1'): array
+    {
+        return self::call('preguntar', ['preguntas' => array_map(static fn (array $q): array => [
+            'id' => $q['id'], 'pregunta' => $q['pregunta'], 'multiple' => $q['multiple'] ?? false,
+            'opciones' => array_map(static fn (string $k, string $v): array => ['id' => $k, 'texto' => $v], array_keys($q['opciones']), $q['opciones']),
+        ], $questions)], $id);
     }
 }

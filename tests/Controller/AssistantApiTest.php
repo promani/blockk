@@ -24,26 +24,26 @@ final class AssistantApiTest extends WebTestCase
         $client = static::createClient();
         $browser = bin2hex(random_bytes(12));
         KimiMock::$requests = [];
-        KimiMock::$queue = [ScriptedLlm::ask('¿Cuántos dormitorios?', ['d2' => 'Dos', 'd3' => 'Tres'])];
 
         $client->request('GET', '/api/assistant/status');
         self::assertTrue(json_decode($client->getResponse()->getContent(), true)['enabled']);
 
+        // formulario inicial y primera casa: sin el modelo
         $conv = $this->post($client, '/api/assistant/conversations', ['client' => $browser, 'inicio' => ['tipo' => 'nueva']]);
         self::assertResponseStatusCodeSame(201);
-        self::assertSame(['usuario', 'pregunta'], array_column($conv['eventos'], 'tipo'));
+        self::assertSame(['pregunta'], array_column($conv['eventos'], 'tipo'));
+        $conv = $this->post($client, "/api/assistant/conversations/{$conv['id']}/messages", ['client' => $browser, 'respuestas' => ['plantas' => ['1'], 'dormitorios' => ['2'], 'banos' => ['1'], 'cocina' => ['integrada'], 'techo' => ['dos_aguas']]]);
+        self::assertResponseIsSuccessful();
+        self::assertSame(['pregunta', 'usuario', 'casa'], array_column($conv['eventos'], 'tipo'));
+        self::assertSame([], KimiMock::$requests);
+
+        // un ajuste: una vuelta al modelo
+        KimiMock::$queue = [ScriptedLlm::call('generar_casa', ['niveles' => 1, 'ambientes' => [['tipo' => 'dormitorio', 'cantidad' => 3], ['tipo' => 'bano']]], 'c2')];
+        $conv = $this->post($client, "/api/assistant/conversations/{$conv['id']}/messages", ['client' => $browser, 'texto' => 'uno más']);
+        self::assertSame(['pregunta', 'usuario', 'casa', 'usuario', 'casa'], array_column($conv['eventos'], 'tipo'));
+        self::assertSame(2, $conv['nuevos']);
         self::assertSame('kimi-test', KimiMock::$requests[0]['model']);
         self::assertSame('system', KimiMock::$requests[0]['messages'][0]['role']);
-
-        KimiMock::$queue = [
-            ScriptedLlm::call('generar_casa', ['niveles' => 1, 'ambientes' => [['tipo' => 'dormitorio', 'cantidad' => 3], ['tipo' => 'bano']]], 'c2'),
-            ScriptedLlm::say('Te armé una casa de 3 dormitorios.'),
-        ];
-        $conv = $this->post($client, "/api/assistant/conversations/{$conv['id']}/messages", ['client' => $browser, 'opciones' => ['d3']]);
-        self::assertResponseIsSuccessful();
-        self::assertSame(['usuario', 'pregunta', 'usuario', 'casa', 'asistente'], array_column($conv['eventos'], 'tipo'));
-        self::assertSame(3, $conv['nuevos']);
-        self::assertSame($conv['id'], $conv['diseno']['id']);
 
         $client->request('GET', "/api/assistant/designs?client={$browser}");
         $designs = json_decode($client->getResponse()->getContent(), true)['designs'];
@@ -51,11 +51,16 @@ final class AssistantApiTest extends WebTestCase
         self::assertStringStartsWith('<svg', $designs[0]['svg']);
 
         $client->request('GET', "/api/assistant/designs/{$conv['id']}?client={$browser}");
-        self::assertResponseIsSuccessful();
-        self::assertCount(2, json_decode($client->getResponse()->getContent(), true)['project']['levels']);
+        $design = json_decode($client->getResponse()->getContent(), true);
+        self::assertCount(2, $design['project']['levels']);
+        self::assertSame(1, $design['programa']['niveles']);
 
-        $client->request('GET', "/api/assistant/conversations/{$conv['id']}?client={$browser}");
-        self::assertCount(5, json_decode($client->getResponse()->getContent(), true)['eventos']);
+        // desde el editor: el proyecto viaja con el mensaje
+        KimiMock::$queue = [ScriptedLlm::say('Listo.')];
+        $design['project']['name'] = 'Renombrada en el editor';
+        $conv = $this->post($client, '/api/assistant/conversations', ['client' => $browser, 'modo' => 'editor', 'inicio' => ['tipo' => 'proyecto', 'project' => $design['project'], 'programa' => $design['programa']], 'texto' => 'hola']);
+        self::assertSame(['casa', 'usuario', 'asistente'], array_column($conv['eventos'], 'tipo'));
+        self::assertStringContainsString('MODO EDITOR', end(KimiMock::$requests)['messages'][0]['content']);
     }
 
     public function testConversationsBelongToTheirBrowser(): void

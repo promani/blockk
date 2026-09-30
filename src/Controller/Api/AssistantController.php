@@ -45,7 +45,7 @@ final class AssistantController extends AbstractController
         }
         set_time_limit(300);
         try {
-            $conv = $this->assistant->start($client, (array) ($body['inicio'] ?? []));
+            $conv = $this->assistant->start($client, (array) ($body['inicio'] ?? []), (string) ($body['modo'] ?? 'galeria'), (string) ($body['texto'] ?? ''), $this->answers($body));
         } catch (InvalidProjectException $e) {
             return $this->json(['error' => 'invalid_project', 'details' => $e->errors], Response::HTTP_UNPROCESSABLE_ENTITY);
         } catch (\InvalidArgumentException $e) {
@@ -79,8 +79,9 @@ final class AssistantController extends AbstractController
         set_time_limit(300);
         $before = count($conv['events']);
         try {
-            $choices = array_values(array_filter(array_map('strval', (array) ($body['opciones'] ?? [])), static fn (string $c): bool => '' !== $c));
-            $conv = $this->assistant->reply($conv, (string) ($body['texto'] ?? ''), array_slice($choices, 0, 10));
+            $conv = $this->assistant->reply($conv, (string) ($body['texto'] ?? ''), $this->answers($body), is_array($body['project'] ?? null) ? $body['project'] : null);
+        } catch (InvalidProjectException $e) {
+            return $this->json(['error' => 'invalid_project', 'details' => $e->errors], Response::HTTP_UNPROCESSABLE_ENTITY);
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
@@ -102,7 +103,27 @@ final class AssistantController extends AbstractController
     {
         $d = $this->conversations->design($id, (string) $request->query->get('client', ''));
 
-        return null === $d ? $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND) : $this->json(['project' => $d['project'], 'nombre' => $d['nombre']]);
+        return null === $d ? $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND) : $this->json(['project' => $d['project'], 'nombre' => $d['nombre'], 'programa' => $d['programa'] ?? null]);
+    }
+
+    /**
+     * Respuestas a un formulario: {id de pregunta: [ids de opción]} (máx. 10 preguntas y 10 opciones cada una).
+     *
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, list<string>>
+     */
+    private function answers(array $body): array
+    {
+        $out = [];
+        foreach (array_slice((array) ($body['respuestas'] ?? []), 0, 10, true) as $q => $ids) {
+            $ids = array_values(array_filter(array_map('strval', array_slice((array) $ids, 0, 10)), static fn (string $i): bool => '' !== $i));
+            if ([] !== $ids) {
+                $out[(string) $q] = $ids;
+            }
+        }
+
+        return $out;
     }
 
     private function guard(Request $request, string $client): ?JsonResponse

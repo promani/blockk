@@ -10,36 +10,48 @@
 
     {% if assistant %}
     <section class="ai-card card" id="ai" aria-labelledby="ai-title">
-        <div class="ai-head">
+        <div class="ai-hero">
             <div>
-                <h2 id="ai-title">✦ Diseñá tu casa conversando</h2>
-                <p class="muted">Contale a la IA cuántas plantas y ambientes querés: te hace unas preguntas y te arma la casa, lista para abrir en el editor.</p>
+                <h2 id="ai-title">✦ Diseñá tu casa con IA</h2>
+                <p class="muted">Respondé unas preguntas y en segundos tenés una casa lista para abrir en el editor. Después la ajustás conversando.</p>
             </div>
-            <button type="button" class="btn btn-outline btn-sm" id="ai-reset" hidden>Nueva conversación</button>
-        </div>
-        <div class="ai-start" id="ai-start">
-            <button type="button" class="btn btn-primary" data-ai-start="nueva">Casa nueva</button>
-            <label class="ai-template">Partir de
-                <select id="ai-template">
-                    {% for c in cards %}<option value="{{ c.slug }}">{{ c.name }}</option>{% endfor %}
-                </select>
-                <button type="button" class="btn btn-outline" data-ai-start="plantilla">Usar</button>
-            </label>
-            <button type="button" class="btn btn-outline" data-ai-start="proyecto" id="ai-project" hidden>Modificar mi proyecto actual</button>
-        </div>
-        <div class="ai-chat" id="ai-chat" hidden>
-            <div class="ai-log" id="ai-log" aria-live="polite"></div>
-            <form class="ai-input" id="ai-form">
-                <input type="text" id="ai-text" maxlength="800" autocomplete="off" placeholder="Escribí tu respuesta o elegí una opción…" aria-label="Tu mensaje">
-                <button type="submit" class="btn btn-primary">Enviar</button>
-            </form>
+            <button type="button" class="btn btn-primary" id="ai-new">Empezar</button>
         </div>
         <div class="ai-designs" id="ai-designs" hidden>
             <h3>Tus diseños</h3>
             <div class="ai-design-list" id="ai-design-list"></div>
         </div>
     </section>
+
+    <dialog class="ai-dialog" id="ai-dialog" aria-labelledby="ai-dialog-title">
+        <header class="ai-dialog-head">
+            <h2 id="ai-dialog-title">✦ Diseñá tu casa</h2>
+            <ol class="ai-steps" id="ai-steps" aria-label="Pasos">
+                <li data-step="1">Tu casa</li><li data-step="2">Propuesta</li><li data-step="3">Ajustes</li>
+            </ol>
+            <button type="button" class="ai-x" data-close aria-label="Cerrar">×</button>
+        </header>
+        <div class="ai-log" id="ai-log" aria-live="polite"></div>
+        <footer class="ai-dialog-foot">
+            <form class="ai-input" id="ai-form">
+                <input type="text" maxlength="800" autocomplete="off" placeholder="O contalo con tus palabras…" aria-label="Tu mensaje">
+                <button type="submit" class="btn btn-outline">Enviar</button>
+            </form>
+            <button type="button" class="btn btn-primary" id="ai-open" hidden>Abrir en el editor</button>
+        </footer>
+    </dialog>
     {% endif %}
+
+    <dialog class="confirm-dialog" id="confirm-replace" aria-labelledby="confirm-title">
+        <form method="dialog">
+            <h2 id="confirm-title">¿Reemplazar tu proyecto?</h2>
+            <p id="confirm-text"></p>
+            <div class="confirm-actions">
+                <button type="submit" value="cancel" class="btn btn-outline">Cancelar</button>
+                <button type="submit" value="ok" class="btn btn-primary">Continuar</button>
+            </div>
+        </form>
+    </dialog>
 
     <section class="blank-card card" aria-labelledby="blank-title">
         <div>
@@ -87,7 +99,10 @@
                     <div><dt>Bloques c/ corte</dt><dd>{{ c.cutBlocksPct|number_format(0, ',', '.') }} %</dd></div>
                     <div><dt>Ref. ({{ c.currency }})</dt><dd>{{ c.cost|number_format(0, ',', '.') }}</dd></div>
                 </dl>
-                <button type="button" class="btn btn-primary" data-use="{{ c.slug }}">Usar esta plantilla</button>
+                <div class="tcard-actions">
+                    <button type="button" class="btn btn-primary" data-use="{{ c.slug }}">Usar</button>
+                    {% if assistant %}<button type="button" class="btn btn-outline" data-ai-modify="{{ c.slug }}">✦ Modificar con IA</button>{% endif %}
+                </div>
             </div>
         </article>
         {% endfor %}

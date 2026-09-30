@@ -12,6 +12,7 @@ import { wireBox, snapDots, magnetHit } from './overlay.js';
 import { magnet } from './snap.js';
 import { mountGuide } from './guide.js';
 import { wallRect, G } from './pick.js';
+import { mountAssistant } from './ai.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
 const store = new Store(config);
@@ -56,6 +57,7 @@ app.draw = () => draw(); // dibujo síncrono (mediciones de rendimiento)
 
 app.tools = createTools(app);
 const panels = mountPanels(app);
+mountAssistant(app);
 const guide = mountGuide(app, {
     go: (level, tool) => {
         if (level === 1 && !store.project.upper) return;

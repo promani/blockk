@@ -36,6 +36,8 @@ const panel = args.panel === 'true'; // true: página completa; si no, sólo el 
     if (args.slug) {
         await page.goto(`${base}/galeria`);
         await page.click(`.tcard[data-slug="${args.slug}"] [data-use]`);
+        // si ya hay un proyecto, la Galería pide confirmar antes de reemplazarlo
+        await page.click('#confirm-replace button[value="ok"]', { timeout: 1500 }).catch(() => {});
     } else {
         await page.goto(`${base}/`);
     }

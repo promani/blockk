@@ -1,37 +1,48 @@
 #!/usr/bin/env node
 /**
- * Servidor que imita la API de Kimi (OpenAI Chat Completions) con un guion fijo, para probar el chat de la Galería
- * sin gastar ni depender de la red. Uso: node kimi-falso.cjs [puerto=8099]
+ * Servidor que imita la API de Kimi (OpenAI Chat Completions) con un guion fijo, para probar el asistente sin gastar ni
+ * depender de la red. Uso: node kimi-falso.cjs [puerto=8099]
  * y la app con KIMI_BASE_URL=http://127.0.0.1:8099/v1 KIMI_API_KEY=x KIMI_MODEL=falso.
+ * GET /__log devuelve cuántas llamadas recibió (para comprobar que el formulario inicial no llama al modelo).
  */
 const http = require('http');
 
 const port = Number(process.argv[2] ?? 8099);
 let n = 0;
-const call = (name, args) => ({ role: 'assistant', content: '', tool_calls: [{ id: `c${++n}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
-const ask = (pregunta, opciones, multiple = false) => call('preguntar', { pregunta, multiple, opciones: opciones.map(([id, texto]) => ({ id, texto })) });
+let calls = 0;
+const call = (name, args, content = '') => ({ role: 'assistant', content, tool_calls: [{ id: `c${++n}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
+const q = (id, pregunta, opciones, multiple = false) => ({ id, pregunta, multiple, opciones: opciones.map(([oid, texto]) => ({ id: oid, texto })) });
 
 function reply(messages) {
+    const system = String(messages[0].content);
     const last = messages.at(-1);
     const text = String(last.content ?? '');
     if (last.role === 'tool') {
-        if (text.includes('"muros"')) return ask('¿Qué querés cambiar?', [['techo', 'Pasar el techo a un agua'], ['ok', 'Nada, está bien']]);
         if (text.includes('"resultado":"ok"')) {
             const casa = JSON.parse(text).casa;
-            return { role: 'assistant', content: `Listo: ${casa.nombre}, ${casa.superficieUtilM2} m² útiles y ${casa.bloques} bloques.`, tool_calls: ask('¿Cómo seguimos?', [['ok', 'Me gusta, la abro'], ['mas', 'Agregar un dormitorio']]).tool_calls };
+            const errors = casa.observaciones.filter((o) => o.severidad === 'error');
+            return { role: 'assistant', content: errors.length ? `Quedó con ${errors.length} error(es); lo reviso.` : 'Listo.' };
         }
-        return { role: 'assistant', content: 'Hubo un problema con la herramienta.' };
+        return { role: 'assistant', content: 'No pude: ' + text.slice(0, 120) };
     }
-    if (/casa nueva/i.test(text)) return ask('¿Cuántas plantas querés?', [['una', 'Una planta'], ['dos', 'Dos plantas']]);
-    if (/Elijo: Una planta/.test(text)) return ask('¿Qué extras sumamos?', [['lav', 'Lavadero'], ['esc', 'Escritorio'], ['toi', 'Toilette']], true);
-    if (/Elijo: .*Lavadero/.test(text)) return call('generar_casa', { niveles: 1, ambientes: [{ tipo: 'estar_comedor_cocina' }, { tipo: 'dormitorio', cantidad: 2 }, { tipo: 'bano' }, { tipo: 'lavadero' }, ...(/Escritorio/.test(text) ? [{ tipo: 'escritorio' }] : [])] });
-    if (/Agregar un dormitorio/.test(text)) return call('generar_casa', { niveles: 1, ambientes: [{ tipo: 'estar_comedor_cocina' }, { tipo: 'dormitorio', cantidad: 3 }, { tipo: 'bano' }, { tipo: 'lavadero' }] });
-    if (/modificar mi proyecto|plantilla/i.test(text)) return call('ver_casa', {});
-    if (/Pasar el techo a un agua/.test(text)) return call('editar_casa', { operaciones: [{ accion: 'cambiar_techo', tipo: 'un_agua' }] });
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    const t = String(lastUser?.content ?? '');
+    if (/familia/i.test(t)) return call('generar_casa', { niveles: 1, ambientes: [{ tipo: 'estar_comedor_cocina' }, { tipo: 'dormitorio_principal' }, { tipo: 'dormitorio', cantidad: 3 }, { tipo: 'bano', cantidad: 2 }, { tipo: 'lavadero' }] }, 'Para 5 personas: 4 dormitorios y 2 baños.');
+    if (/dormitorio/i.test(t) && /Sum/i.test(t)) return call('generar_casa', { niveles: 1, ambientes: [{ tipo: 'estar_comedor_cocina' }, { tipo: 'dormitorio_principal' }, { tipo: 'dormitorio', cantidad: 3 }, { tipo: 'bano' }, { tipo: 'toilette' }] });
+    if (/agrandala/i.test(t)) return call('preguntar', { preguntas: [q('cuanto', '¿Cuánto más grande?', [['poco', 'Un poco'], ['mucho', 'Bastante']]), q('que', '¿Qué sumamos?', [['dorm', 'Un dormitorio'], ['esc', 'Escritorio'], ['gal', 'Galería']], true)] });
+    if (/luz en el estar/i.test(t)) {
+        const m = system.match(/"(N1-A\d+) Estar[^"]*"/);
+        return call('editar_casa', { operaciones: [{ accion: 'agregar_ventana', ambiente: m ? m[1] : 'N1-A1', tipo: 'V150' }] }, 'Le sumo una ventana donde haya lugar.');
+    }
     return { role: 'assistant', content: 'Entendido.' };
 }
 
 http.createServer((req, res) => {
+    if (req.url === '/__log') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ calls }));
+        return;
+    }
     let body = '';
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
@@ -40,6 +51,7 @@ http.createServer((req, res) => {
             res.end(JSON.stringify({ error: { message: 'Invalid Authentication' } }));
             return;
         }
+        calls++;
         const { messages } = JSON.parse(body);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ choices: [{ message: reply(messages), finish_reason: 'stop' }] }));

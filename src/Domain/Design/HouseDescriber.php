@@ -113,12 +113,27 @@ final class HouseDescriber
                 }
                 $b = $room['bbox'];
                 $out[] = [
+                    'id' => sprintf('N%d-A%d', $li + 1, $room['id']),
                     'nivel' => $li + 1,
-                    'nombre' => [] !== $label ? implode(' + ', array_unique($label)) : $room['name'],
+                    'nombre' => [] !== $label ? implode(' + ', array_unique($label)) : null,
                     'm2' => $room['netM2'],
                     'caja' => [$this->m($b['x']), $this->m($b['y']), $this->m($b['w']), $this->m($b['h'])],
                 ];
             }
+        }
+
+        // Sin nombres (plantillas, proyectos dibujados a mano): se infieren por tamaño, para que se pueda hablar de ellos.
+        foreach ($out as $k => $r) {
+            if (null !== $r['nombre']) {
+                continue;
+            }
+            $sameLevel = array_filter($out, static fn (array $o): bool => $o['nivel'] === $r['nivel']);
+            $largest = max(array_column($sameLevel, 'm2'));
+            $out[$k]['nombre'] = match (true) {
+                $r['m2'] === $largest && $r['m2'] >= 12 => 1 === $r['nivel'] ? 'Estar-comedor (probable)' : 'Hall o estar (probable)',
+                $r['m2'] < 6.5 => 'Baño o servicio (probable)',
+                default => 'Dormitorio (probable)',
+            };
         }
 
         return $out;

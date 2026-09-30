@@ -27,6 +27,8 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     for (const t of templates) {
         await page.goto(`${base}/galeria`);
         await page.click(`.tcard[data-slug="${t.slug}"] [data-use]`);
+        // si ya hay un proyecto, la Galería pide confirmar antes de reemplazarlo
+        await page.click('#confirm-replace button[value="ok"]', { timeout: 1500 }).catch(() => {});
         await ready();
         await page.click('.guide-x').catch(() => {});
         const bad = await page.evaluate(() => window.blockk.store.analysis.issues.filter((x) => x.severity === 'error').map((x) => `${x.code} ${x.ref}`));

@@ -15,6 +15,11 @@
         <ini name="error_reporting" value="-1" />
         <server name="APP_ENV" value="test" force="true" />
         <server name="SHELL_VERBOSITY" value="-1" />
+        <!-- los tests nunca usan credenciales reales del entorno: Kimi se simula con KimiMock -->
+        <server name="KIMI_API_KEY" value="test-key" force="true" />
+        <server name="KIMI_MODEL" value="kimi-test" force="true" />
+        <server name="KIMI_BASE_URL" value="https://kimi.test/v1" force="true" />
+        <server name="REDIS_URL" value="" force="true" />
     </php>
 
     <testsuites>

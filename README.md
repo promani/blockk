@@ -104,15 +104,21 @@ cobertura total de cada corrida y ausencia de piezas superpuestas en **todas** l
 cómputo (áreas exactas, pallets, mortero, hormigón/hierro, cierre de la cotización), madera, validación, solar, sugeridor,
 plantillas y la API HTTP.
 
-## Diseño con IA (chat en la Galería)
+## Diseño con IA
 
-En la Galería, «Diseñá tu casa conversando» abre un chat: la IA hace preguntas de opción múltiple (plantas,
-dormitorios, baños, cocina, extras, techo) y arma la casa, que se abre en el editor como cualquier plantilla. También
-puede partir de una plantilla o del proyecto actual (botón «✦ Modificar con IA» del editor).
-
+- **Galería**: «✦ Diseñá tu casa con IA → Empezar» abre un asistente por pasos (Tu casa · Propuesta · Ajustes). El
+  primer paso es un formulario fijo (plantas, dormitorios, baños, cocina, extras, techo) y la primera casa sale al
+  instante, sin esperar al modelo; después se ajusta con sugerencias o texto libre. Cada plantilla tiene «Usar» y
+  «✦ Modificar con IA». Antes de empezar se avisa si se va a reemplazar el proyecto del editor.
+- **Editor**: el botón flotante «✦ IA» abre un diálogo para pedir cambios sobre la casa abierta; el modelo actúa directo
+  si el pedido es claro (pregunta sólo si es ambiguo) y cada cambio se aplica al editor como un paso que se puede
+  deshacer. Con cada mensaje viaja el proyecto actual, así la IA ve también lo cambiado a mano.
+- **Preguntas**: en formularios, una debajo de la otra; las de opción única se responden con un clic y, si hay alguna de
+  opción múltiple, se confirma con «Enviar».
 - **Modelo**: Kimi (Moonshot AI) por su API compatible con OpenAI, con llamadas a herramientas. El modelo no dibuja
-  muros: conversa y llama a `preguntar`, `generar_casa`, `editar_casa`, `cargar_plantilla` y `ver_casa`
-  (`src/Assistant/`). Toda casa pasa por el motor completo y sus observaciones vuelven al modelo para que las corrija.
+  muros: conversa y llama a `preguntar`, `generar_casa`, `editar_casa` (incluye `agregar_ventana` por ambiente y
+  orientación), `cargar_plantilla` y `ver_casa` (`src/Assistant/`). Toda casa pasa por el motor completo y sus
+  observaciones vuelven al modelo; si la casa queda sin errores el turno termina ahí (una sola llamada por ajuste).
 - **Generador** (`src/Domain/Design/HouseGenerator.php`): de un programa de ambientes a una casa válida y determinista
   (dormitorios al norte, servicios al sur, pasillo, losas y escalera en U en 2 plantas, techo con la sección de cabio
   que alcanza). Probado con programas al azar: o la casa sale sin errores ni advertencias, o se rechaza con un motivo.

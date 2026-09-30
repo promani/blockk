@@ -1,238 +1,104 @@
 /**
- * Chat de diseño con IA en la Galería. La conversación vive en el servidor (Redis); el navegador guarda sólo su id de
- * cliente (aleatorio, sin login) y la conversación abierta, para retomarla al volver.
+ * Asistente de la Galería: un diálogo por pasos (1 Tu casa · 2 Propuesta · 3 Ajustes). Arranca con un formulario fijo
+ * (la primera casa sale sin esperar al modelo) o desde una plantilla («✦ Modificar con IA»). La conversación y los
+ * diseños viven en el servidor; «Tus diseños» permite abrirlos o seguir conversando.
  */
 import { $, h, add, clear } from '../lib/dom.js';
-import { fmt, int } from '../lib/format.js';
-import { loadProject, saveProject } from '../lib/storage.js';
+import { fmt } from '../lib/format.js';
+import { saveProject } from '../lib/storage.js';
+import { api, createChat, thumb, kpis, reviewLine } from '../lib/ai-chat.js';
 
-const CLIENT_KEY = 'blockk.client';
-const CONV_KEY = 'blockk.ai.conv';
+export const LINK_KEY = 'blockk.ai.link';
 
-function clientId() {
-    try {
-        let id = localStorage.getItem(CLIENT_KEY);
-        if (!id || !/^[a-f0-9]{24}$/.test(id)) {
-            const bytes = window.crypto.getRandomValues(new Uint8Array(12));
-            id = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-            localStorage.setItem(CLIENT_KEY, id);
-        }
-        return id;
-    } catch {
-        return 'f'.repeat(24); // sin almacenamiento local: un id fijo (no se pueden retomar conversaciones)
-    }
-}
+export function mountAssistant({ card, dialog, confirmReplace }) {
+    const list = $('#ai-design-list', card);
+    const openBtn = $('#ai-open', dialog);
+    const steps = [...dialog.querySelectorAll('#ai-steps li')];
 
-const store = {
-    get: () => { try { return localStorage.getItem(CONV_KEY); } catch { return null; } },
-    set: (v) => { try { if (v) localStorage.setItem(CONV_KEY, v); else localStorage.removeItem(CONV_KEY); } catch { /* ok */ } },
-};
-
-async function api(url, body) {
-    const res = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body) } : { headers: { Accept: 'application/json' } });
-    let data = null;
-    try { data = await res.json(); } catch { /* vacío */ }
-    if (!res.ok) {
-        const err = new Error(data?.error === 'invalid_project' ? 'El proyecto actual no es válido para el asistente.' : (data?.error ?? `Error ${res.status}`));
-        err.status = res.status;
-        throw err;
-    }
-    return data;
-}
-
-/** Miniatura SVG del servidor como imagen (sin insertar HTML). */
-const thumb = (svg, alt) => h('img', { class: 'ai-thumb', alt, src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` });
-
-export function mountAssistant(root) {
-    const client = clientId();
-    const el = { start: $('#ai-start', root), chat: $('#ai-chat', root), log: $('#ai-log', root), form: $('#ai-form', root), text: $('#ai-text', root), reset: $('#ai-reset', root), designs: $('#ai-designs', root), list: $('#ai-design-list', root), project: $('#ai-project', root), template: $('#ai-template', root) };
-    let conv = null;
-    let busy = false;
-    const current = loadProject();
-    const hasProject = !!current?.levels?.some((l) => l.walls?.length);
-    el.project.hidden = !hasProject;
-
-    function setBusy(v) {
-        busy = v;
-        root.classList.toggle('ai-busy', v);
-        for (const b of root.querySelectorAll('button, input, select')) if (!b.closest('.ai-designs')) b.disabled = v;
-        $('.ai-typing', el.log)?.remove();
-        if (v) add(el.log, h('div', { class: 'ai-msg ai-bot ai-typing', 'aria-label': 'El asistente está escribiendo' }, h('span'), h('span'), h('span')));
-        el.log.scrollTop = el.log.scrollHeight;
-    }
-
-    function showChat(on) {
-        el.chat.hidden = !on;
-        el.start.hidden = on;
-        el.reset.hidden = !on;
-    }
-
-    async function openDesign(id) {
-        const d = await api(`/api/assistant/designs/${id}?client=${client}`);
-        saveProject(d.project);
-        location.href = '/';
-    }
-
-    function houseCard(ev, last) {
-        const r = ev.resumen;
-        const errors = r.observaciones.filter((o) => o.severidad === 'error').length;
-        const warns = r.observaciones.length - errors;
-        return h('div', { class: 'ai-house' },
+    const chat = createChat({
+        log: $('#ai-log', dialog),
+        form: $('#ai-form', dialog),
+        mode: 'galeria',
+        house: (ev) => h('div', { class: 'ai-house' },
             thumb(ev.svg, `Planta de ${ev.nombre}`),
             h('div', { class: 'ai-house-body' },
                 h('strong', {}, ev.nombre),
-                h('div', { class: 'ai-kpis' },
-                    h('span', {}, `${fmt(r.superficieUtilM2, 1)} m² útiles`),
-                    h('span', {}, `${r.niveles} planta${r.niveles > 1 ? 's' : ''}`),
-                    h('span', {}, `${int(r.bloques)} bloques`),
-                    h('span', {}, `${int(r.pallets)} pallets`),
-                    h('span', {}, `${r.moneda} ${int(r.costoReferencia)} ref.`)),
-                h('p', { class: 'ai-rooms muted small' }, r.ambientes.map((a) => `${a.nombre}${r.niveles > 1 ? ` (N${a.nivel})` : ''} ${fmt(a.m2, 1)} m²`).join(' · ')),
-                errors || warns ? h('p', { class: `small ${errors ? 'ai-err' : 'ai-warn'}` }, `${errors ? `${errors} error(es)` : ''}${errors && warns ? ' y ' : ''}${warns ? `${warns} advertencia(s)` : ''} en la Revisión`) : h('p', { class: 'small ai-ok' }, '✓ Sin observaciones en la Revisión'),
-                last ? h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: () => openDesign(ev.diseno).catch((e) => alert(e.message)) }, 'Abrir en el editor') : null));
-    }
+                kpis(ev.resumen),
+                h('p', { class: 'ai-rooms muted small' }, ev.resumen.ambientes.map((a) => `${a.nombre.replace(' (probable)', '')}${ev.resumen.niveles > 1 ? ` (P${a.nivel})` : ''}`).join(' · ')),
+                reviewLine(ev.resumen))),
+        suggestions: (conv) => {
+            const house = conv.eventos.findLast((e) => e.tipo === 'casa')?.resumen;
+            if (!house) return [];
+            return [
+                'Sumá un dormitorio',
+                house.niveles === 1 ? 'Pasala a 2 plantas' : 'Hacela de 1 planta',
+                'Más luz en el estar',
+                'Cambiá el techo',
+            ];
+        },
+        onChange: () => { refresh(); loadDesigns(); },
+    });
 
-    function question(ev, active) {
-        const chosen = new Set();
-        const confirm = ev.multiple ? h('button', { type: 'button', class: 'btn btn-primary btn-sm', disabled: true, onclick: () => send({ opciones: [...chosen] }) }, 'Confirmar') : null;
-        const opts = h('div', { class: 'ai-options', role: ev.multiple ? 'group' : 'radiogroup', 'aria-label': ev.pregunta }, ev.opciones.map((o) => {
-            const btn = h('button', { type: 'button', class: 'chip ai-option', 'aria-pressed': 'false', disabled: !active, title: o.detalle || null }, o.texto, o.detalle ? h('small', {}, o.detalle) : null);
-            btn.addEventListener('click', () => {
-                if (!ev.multiple) {
-                    send({ opciones: [o.id] });
-                    return;
-                }
-                if (chosen.has(o.id)) chosen.delete(o.id); else chosen.add(o.id);
-                btn.setAttribute('aria-pressed', String(chosen.has(o.id)));
-                confirm.disabled = chosen.size === 0;
-            });
-            return btn;
-        }), active ? confirm : null);
-        return h('div', { class: 'ai-msg ai-bot' }, h('p', {}, ev.pregunta), opts, active && ev.multiple ? h('p', { class: 'muted small' }, 'Podés elegir varias.') : null);
-    }
-
-    function render() {
-        clear(el.log);
-        if (!conv) return;
-        const events = conv.eventos;
-        const lastHouse = events.map((e) => e.tipo).lastIndexOf('casa');
-        events.forEach((ev, i) => {
-            const isLast = i === events.length - 1;
-            if (ev.tipo === 'usuario') add(el.log, h('div', { class: 'ai-msg ai-me' }, ev.texto));
-            else if (ev.tipo === 'asistente') add(el.log, h('div', { class: 'ai-msg ai-bot' }, ev.texto));
-            else if (ev.tipo === 'pregunta') add(el.log, question(ev, isLast && conv.activa));
-            else if (ev.tipo === 'casa') add(el.log, h('div', { class: 'ai-msg ai-bot ai-wide' }, houseCard(ev, i === lastHouse)));
-            else if (ev.tipo === 'error') add(el.log, h('div', { class: 'ai-msg ai-bot ai-error' }, ev.texto));
+    function refresh() {
+        const ev = chat.conv?.eventos ?? [];
+        const houseAt = ev.map((e) => e.tipo).lastIndexOf('casa');
+        const firstHouse = ev.findIndex((e) => e.tipo === 'casa');
+        const step = houseAt < 0 ? 1 : ev.slice(firstHouse + 1).some((e) => e.tipo === 'usuario') ? 3 : 2;
+        steps.forEach((li, i) => {
+            li.classList.toggle('done', i + 1 < step);
+            li.toggleAttribute('aria-current', i + 1 === step);
         });
-        el.text.disabled = !conv.activa;
-        el.log.scrollTop = el.log.scrollHeight;
+        openBtn.hidden = houseAt < 0;
     }
 
-    async function run(promise) {
-        setBusy(true);
-        try {
-            conv = await promise;
-            store.set(conv.id);
-            showChat(true);
-        } catch (e) {
-            if (conv) {
-                conv.eventos.push({ tipo: 'error', texto: e.message });
-                conv.activa = true; // se puede volver a intentar
-            } else {
-                showChat(false);
-                alert(e.message);
-            }
-        } finally {
-            setBusy(false);
-            render();
-            if (conv && !el.chat.hidden) el.text.focus();
-            loadDesigns();
-        }
+    function open() {
+        if (!dialog.open) dialog.showModal();
+        refresh();
     }
 
-    function send(payload) {
-        if (busy || !conv) return;
-        // se muestra ya lo que se mandó, antes de la respuesta
-        const labels = payload.opciones ? conv.eventos.at(-1)?.opciones?.filter((o) => payload.opciones.includes(o.id)).map((o) => o.texto) : [];
-        conv.eventos.push({ tipo: 'usuario', texto: [labels?.join(', '), payload.texto].filter(Boolean).join('. ') });
-        conv.activa = false;
-        render();
-        run(api(`/api/assistant/conversations/${conv.id}/messages`, { client, ...payload }));
+    async function openInEditor(id) {
+        const d = await api(`/api/assistant/designs/${id}?client=${chat.client}`);
+        saveProject(d.project);
+        try { localStorage.setItem(LINK_KEY, JSON.stringify({ name: d.project.name, programa: d.programa })); } catch { /* ok */ }
+        location.href = '/';
     }
 
-    function start(inicio) {
-        showChat(true);
-        clear(el.log);
-        run(api('/api/assistant/conversations', { client, inicio }));
-    }
+    dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
+    openBtn.addEventListener('click', () => openInEditor(chat.conv.id).catch((e) => alert(e.message)));
 
-    for (const b of root.querySelectorAll('[data-ai-start]')) {
-        b.addEventListener('click', () => {
-            const tipo = b.dataset.aiStart;
-            if (tipo === 'plantilla') start({ tipo, slug: el.template.value });
-            else if (tipo === 'proyecto') start({ tipo, project: loadProject() });
-            else start({ tipo: 'nueva' });
+    $('#ai-new', card).addEventListener('click', async () => {
+        if (!(await confirmReplace())) return;
+        open();
+        await chat.start({ modo: 'galeria', inicio: { tipo: 'nueva' } });
+        refresh();
+    });
+    for (const b of document.querySelectorAll('[data-ai-modify]')) {
+        b.addEventListener('click', async () => {
+            if (!(await confirmReplace())) return;
+            open();
+            await chat.start({ modo: 'galeria', inicio: { tipo: 'plantilla', slug: b.dataset.aiModify } });
+            refresh();
         });
     }
-    el.form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const texto = el.text.value.trim();
-        if (!texto) return;
-        el.text.value = '';
-        send({ texto });
-    });
-    el.reset.addEventListener('click', () => {
-        conv = null;
-        store.set(null);
-        clear(el.log);
-        showChat(false);
-    });
 
     async function loadDesigns() {
         try {
-            const { designs } = await api(`/api/assistant/designs?client=${client}`);
-            clear(el.list);
-            el.designs.hidden = designs.length === 0;
+            const { designs } = await api(`/api/assistant/designs?client=${chat.client}`);
+            clear(list);
+            $('#ai-designs', card).hidden = designs.length === 0;
             for (const d of designs) {
-                add(el.list, h('article', { class: 'ai-design card' },
+                add(list, h('article', { class: 'ai-design card' },
                     thumb(d.svg, `Planta de ${d.nombre}`),
                     h('div', { class: 'ai-design-body' },
                         h('strong', {}, d.nombre),
                         h('span', { class: 'muted small' }, `${fmt(d.resumen.superficieUtilM2, 1)} m² · ${d.resumen.niveles} planta${d.resumen.niveles > 1 ? 's' : ''} · ${new Date(d.updated * 1000).toLocaleDateString('es-AR')}`),
                         h('div', { class: 'ai-design-actions' },
-                            h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: () => openDesign(d.id).catch((e) => alert(e.message)) }, 'Abrir en el editor'),
-                            h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: () => resume(d.id) }, 'Seguir conversando')))));
+                            h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: async () => { if (await confirmReplace()) openInEditor(d.id).catch((e) => alert(e.message)); } }, 'Abrir en el editor'),
+                            h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: async () => { open(); if (await chat.resume(d.id)) refresh(); } }, 'Seguir')))));
             }
         } catch {
-            el.designs.hidden = true;
+            $('#ai-designs', card).hidden = true;
         }
-    }
-
-    async function resume(id) {
-        setBusy(true);
-        try {
-            conv = await api(`/api/assistant/conversations/${id}?client=${client}`);
-            store.set(conv.id);
-            showChat(true);
-            root.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } catch {
-            store.set(null);
-            conv = null;
-            showChat(false);
-        } finally {
-            setBusy(false);
-            render();
-        }
-    }
-
-    // Arranque: desde el editor («Modificar con IA») se abre directo con el proyecto actual; si no, se retoma la última.
-    const params = new URLSearchParams(location.search);
-    if (params.get('ia') === 'proyecto' && hasProject) {
-        window.history.replaceState(null, '', location.pathname + '#ai');
-        start({ tipo: 'proyecto', project: current });
-        root.scrollIntoView({ block: 'start' });
-    } else if (store.get()) {
-        resume(store.get());
     }
     loadDesigns();
 }

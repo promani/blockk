@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Prueba de punta a punta del chat de diseño contra Kimi falso (levantar antes servidor-ia.sh):
- * casa nueva → preguntas de opción simple y múltiple → casa generada → cambio → abrir en el editor →
- * «Modificar con IA» desde el editor → retomar la conversación al recargar. Falla ante errores de consola.
+ * Prueba de punta a punta del asistente contra Kimi falso (levantar antes servidor-ia.sh). Galería: formulario
+ * inicial sin modelo → casa → sugerencia → pregunta ambigua con varias preguntas → abrir en el editor. Editor: botón
+ * flotante → pedido → aplicado y deshacer. Galería: aviso antes de reemplazar y «Modificar con IA» de una plantilla.
+ * Falla ante errores de consola.
  *
  *   node asistente.cjs [--base http://127.0.0.1:8091] [--shots carpeta]
  */
@@ -10,64 +11,98 @@ const { chromium } = require('playwright');
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const base = arg('--base', 'http://127.0.0.1:8091');
+const kimi = arg('--kimi', 'http://127.0.0.1:8099');
 const shots = arg('--shots', null);
 const fails = [];
 const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!ok) fails.push(msg); };
 
 (async () => {
     const browser = await chromium.launch();
-    const page = await (await browser.newContext({ viewport: { width: 1360, height: 1000 } })).newPage();
+    const page = await (await browser.newContext({ viewport: { width: 1360, height: 960 } })).newPage();
     const errors = [];
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     page.on('pageerror', (e) => errors.push(String(e)));
-    const idle = () => page.waitForFunction(() => !document.querySelector('#ai')?.classList.contains('ai-busy'), null, { timeout: 30000 });
-    const shot = async (name) => { if (shots) await page.locator('#ai').screenshot({ path: `${shots}/${name}.png` }); };
+    const idle = () => page.waitForFunction(() => !document.querySelector('.ai-typing'), null, { timeout: 60000 });
+    const shot = async (name, sel = '#ai-dialog') => { if (shots) await page.locator(sel).screenshot({ path: `${shots}/${name}.png` }); };
+    const kimiCalls = async () => (await (await fetch(`${kimi}/__log`)).json()).calls;
 
+    // --- Galería: asistente paso a paso
     await page.goto(`${base}/galeria`);
     await page.evaluate(() => localStorage.clear());
     await page.reload();
-    log(await page.isVisible('#ai'), 'la Galería muestra el asistente');
+    const calls0 = await kimiCalls();
+    await page.click('#ai-new');
+    await idle();
+    log((await page.locator('.ai-q').count()) === 6, 'formulario inicial con 6 preguntas, una debajo de la otra');
+    log(await page.isVisible('#ai-steps li[data-step="1"][aria-current]'), 'paso 1 activo');
+    for (const opt of ['1 planta', '3', 'Baño + toilette', 'Separada', 'Lavadero', 'A dos aguas']) {
+        await page.locator('.ai-q .ai-option', { hasText: new RegExp(`^${opt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }).first().click();
+    }
+    await shot('ia-formulario');
+    await page.click('.ai-form-foot button:has-text("Enviar")');
+    await idle();
+    const card = await page.locator('.ai-house').last().innerText();
+    log(/Cocina/.test(card) && /Toilette/.test(card) && /Sin observaciones/.test(card), 'casa del formulario: cocina aparte, toilette, sin observaciones');
+    log((await kimiCalls()) === calls0, 'el formulario inicial no llamó al modelo');
+    log(await page.isVisible('#ai-steps li[data-step="2"][aria-current]') && await page.isVisible('#ai-open'), 'paso 2 y botón «Abrir en el editor»');
+    await shot('ia-propuesta');
 
-    await page.click('[data-ai-start="nueva"]');
+    await page.click('.ai-chip:has-text("Sumá un dormitorio")');
     await idle();
-    log(await page.isVisible('.ai-option:has-text("Una planta")'), 'primera pregunta con opciones');
-    await page.click('.ai-option:has-text("Una planta")');
-    await idle();
-    await page.click('.ai-option:has-text("Lavadero")');
-    await page.click('.ai-option:has-text("Escritorio")');
-    log(await page.isEnabled('.ai-options button:has-text("Confirmar")'), 'opción múltiple: se habilita Confirmar');
-    await shot('ia-multiple');
-    await page.click('.ai-options button:has-text("Confirmar")');
-    await idle();
-    const card = await page.locator('.ai-house').last().innerText().catch(() => '');
-    log(/m² útiles/.test(card) && /Escritorio/.test(card) && /Sin observaciones/.test(card), 'casa generada con escritorio y sin observaciones');
-    await shot('ia-casa');
+    log((await page.locator('.ai-house').count()) === 2 && await page.isVisible('#ai-steps li[data-step="3"][aria-current]'), 'sugerencia → nueva versión, paso 3');
 
-    await page.click('.ai-option:has-text("Agregar un dormitorio")');
+    await page.fill('#ai-form input', 'agrandala');
+    await page.press('#ai-form input', 'Enter');
     await idle();
-    const houses = await page.locator('.ai-house').count();
-    log(houses === 2 && (await page.locator('.ai-house button:has-text("Abrir en el editor")').count()) === 1, 'segunda versión: sólo la última se abre');
-    log(await page.isVisible('.ai-design:has-text("3 dormitorios")'), '«Tus diseños» muestra la casa guardada');
-
-    await page.reload();
+    const qs = page.locator('.ai-form').last().locator('.ai-q');
+    log((await qs.count()) === 2, 'pedido ambiguo → dos preguntas juntas');
+    await qs.nth(0).locator('.ai-option').first().click();
+    log(await page.isVisible('.ai-form-foot button:has-text("Enviar")'), 'con una pregunta múltiple se confirma con «Enviar»');
+    await qs.nth(1).locator('.ai-option').nth(1).click();
+    await page.locator('.ai-form-foot button:has-text("Enviar")').last().click();
     await idle();
-    log((await page.locator('.ai-house').count()) === 2, 'al recargar se retoma la conversación');
+    log(/Un poco · Escritorio/.test(await page.locator('.ai-me').last().innerText()), 'las respuestas se muestran juntas');
 
-    await page.click('.ai-house button:has-text("Abrir en el editor")');
+    await page.click('#ai-open');
     await page.waitForURL(`${base}/`);
     await page.waitForFunction(() => window.blockk?.store?.analysis, null, { timeout: 30000 });
     const rooms = await page.evaluate(() => window.blockk.store.analysis.levels[0].rooms.length);
-    log(rooms >= 6, `el editor abre la casa (${rooms} ambientes)`);
+    log(rooms >= 7, `el editor abre la casa (${rooms} ambientes)`);
 
-    await page.click('#btn-ai');
-    await page.waitForURL(/galeria/);
+    // --- Editor: botón flotante
+    await page.click('#ai-fab');
+    log(await page.isVisible('#ai-dialog .ai-chip'), 'el botón flotante abre el diálogo con ideas');
+    await shot('ia-editor-intro');
+    await page.click('#ai-dialog .ai-chip:has-text("Sumá un dormitorio")');
     await idle();
-    await page.waitForSelector('.ai-option:has-text("Pasar el techo a un agua")', { timeout: 30000 });
-    log(true, '«Modificar con IA» abre el chat con el proyecto actual');
-    await page.click('.ai-option:has-text("Pasar el techo a un agua")');
+    await page.waitForSelector('#ai-dialog :text("✓ Aplicado")', { timeout: 30000 });
+    const label = await page.evaluate(() => window.blockk.store.history.at(-1)?.label);
+    log(label === 'Cambio del asistente', 'el cambio se aplicó al editor como un paso deshacible');
+    await shot('ia-editor-aplicado');
+    await page.click('#ai-dialog button:has-text("Deshacer este cambio")');
+    await page.waitForSelector('#ai-dialog :text("↶ Deshecho")', { timeout: 30000 });
+    log(await page.evaluate(() => window.blockk.store.history.at(-1)?.label !== 'Cambio del asistente' && window.blockk.store.future.length === 1), 'deshacer vuelve a la casa anterior');
+    await page.click('#ai-dialog [data-close]');
+
+    // --- Galería: aviso antes de reemplazar y «Modificar con IA»
+    await page.goto(`${base}/galeria`);
+    await page.click('[data-ai-modify="casa-minima"]');
+    log(await page.isVisible('#confirm-replace'), 'avisa antes de reemplazar el proyecto actual');
+    await page.click('#confirm-replace button[value="cancel"]');
+    log(!(await page.isVisible('#ai-dialog')), 'cancelar no abre el asistente');
+    await page.click('[data-ai-modify="casa-minima"]');
+    await page.click('#confirm-replace button[value="ok"]');
     await idle();
-    log((await page.locator('.ai-house').count()) >= 2, 'la edición devuelve una casa nueva');
-    await shot('ia-edicion');
+    log((await page.locator('#ai-dialog .ai-house').count()) === 1 && await page.isVisible('#ai-dialog .ai-chip'), 'la plantilla aparece con sugerencias, sin esperar al modelo');
+    await page.click('#ai-dialog .ai-chip:has-text("Más luz en el estar")');
+    await idle();
+    const last = await page.locator('.ai-house').last().innerText();
+    log((await page.locator('#ai-dialog .ai-house').count()) === 2 && /Sin observaciones/.test(last), 'ventana agregada por ambiente donde hay lugar, sin observaciones');
+    await shot('ia-plantilla');
+    await page.click('#ai-dialog [data-close]');
+    await page.click('[data-use="casa-minima"]');
+    log(await page.isVisible('#confirm-replace'), '«Usar» también avisa');
+    await page.click('#confirm-replace button[value="cancel"]');
 
     log(!errors.length, `sin errores de consola${errors.length ? ` → ${errors.slice(0, 3).join(' | ')}` : ''}`);
     await browser.close();
