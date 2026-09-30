@@ -1283,37 +1283,48 @@ export function createTools(app) {
     // ---------------- techo (rectángulo, como una habitación) ----------------
     const roofDefaults = { type: 'gable', dir: 'x', slope: 30, overhang: 40, section: '3x8', spacing: 50, gableT: 20 };
     const FALL_SIDES = ['S', 'N', 'E', 'W'];
-    /** Nivel sobre el que apoyan los techos nuevos: por defecto el más alto con muros. */
-    const roofLevel = () => Math.min(store.ui.roofLevel ?? store.topLevel, store.topLevel);
     const selectedRoof = () => {
         const sel = store.ui.selection;
         if (!sel || (sel.type !== 'roof' && sel.type !== 'gable')) return null;
         return store.project.roofs?.find((r) => r.id === (sel.type === 'roof' ? sel.id : String(sel.id).split(':')[0])) ?? null;
     };
     let roofDraw = null;
-    /** Nivel de apoyo: el elegido, salvo que haya muros del Nivel 2 sobre el rectángulo (entonces apoya sobre ellos). */
-    const levelFor = (d, r) => {
-        const upper = d.levels[1].walls;
-        if (roofLevel() === 0 && d.upper && upper.length) {
-            const cx = r.x + r.w / 2;
-            const cy = r.y + r.h / 2;
-            const x0 = Math.min(...upper.map((w) => w.x1));
-            const x1 = Math.max(...upper.map((w) => w.x2));
-            const y0 = Math.min(...upper.map((w) => w.y1));
-            const y1 = Math.max(...upper.map((w) => w.y2));
-            if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) return 1;
-        }
-        return roofLevel();
+    /** Lado del rectángulo que choca contra un muro del nivel de arriba (N, S, W, E) o null. */
+    const wallAbove = (d, r, level) => {
+        const up = d.levels[level + 1]?.walls ?? [];
+        const cover = (horizontal, line, a0, a1) => up.filter((w) => (horizontal ? w.y1 === w.y2 && w.y1 === line : w.x1 === w.x2 && w.x1 === line))
+            .reduce((s, w) => s + Math.max(0, Math.min(a1, horizontal ? w.x2 : w.y2) - Math.max(a0, horizontal ? w.x1 : w.y1)), 0);
+        const sides = [['N', cover(true, r.y, r.x, r.x + r.w) / r.w], ['S', cover(true, r.y + r.h, r.x, r.x + r.w) / r.w], ['W', cover(false, r.x, r.y, r.y + r.h) / r.h], ['E', cover(false, r.x + r.w, r.y, r.y + r.h) / r.h]];
+        const best = sides.sort((p, q) => q[1] - p[1])[0];
+        return best[1] >= 0.5 ? best[0] : null;
     };
-    const newRoof = (d, r) => {
+    const OPPOSITE = { N: 'S', S: 'N', W: 'E', E: 'W' };
+    const newRoof = (d, r, level) => {
         const spec = { ...roofDefaults };
-        if (spec.type === 'gable') spec.dir = r.w >= r.h ? 'x' : 'y';
+        const against = wallAbove(d, r, level);
+        if (against) {
+            // Pegado a la planta alta: a un agua, bajando desde esa pared (nunca un faldón que caiga contra ella).
+            spec.type = 'shed';
+            spec.dir = OPPOSITE[against];
+        } else if (spec.type === 'gable') spec.dir = r.w >= r.h ? 'x' : 'y';
         else if (!FALL_SIDES.includes(spec.dir)) spec.dir = 'S';
-        d.roofs.push({ id: nextId(d, 'r'), level: levelFor(d, r), x: r.x, y: r.y, w: r.w, h: r.h, type: spec.type, dir: spec.dir, slope: spec.slope, overhang: spec.overhang, section: spec.section, spacing: spec.spacing, gableA: true, gableB: true, gableT: spec.gableT });
+        // El nivel es orientativo: el servidor lo ajusta a los muros que rodean el rectángulo.
+        d.roofs.push({ id: nextId(d, 'r'), level, x: r.x, y: r.y, w: r.w, h: r.h, type: spec.type, dir: spec.dir, slope: spec.slope, overhang: spec.overhang, section: spec.section, spacing: spec.spacing, gableA: true, gableB: true, gableT: spec.gableT });
     };
-    const roofRoomAt = (a) => {
-        const rooms = store.analysis?.levels?.[roofLevel()]?.rooms ?? [];
-        return rooms.find((rm) => rm.fill?.some(([x, y, w, h]) => a.gx >= x && a.gx < x + w && a.gy >= y && a.gy < y + h)) ?? null;
+    /**
+     * Habitación que se ve bajo el cursor: se prueba desde el nivel más alto (en isométrica, lo más alto tapa lo de
+     * abajo) cortando el rayo con el plano de la corona de cada nivel. Así un clic sobre la planta baja al lado de la alta
+     * elige la planta baja, y no un punto corrido sobre el plano de arriba.
+     */
+    const roofRoomAt = (sx, sy) => {
+        for (let level = store.topLevel; level >= 0; level--) {
+            const [wx, wy] = app.cam.unproject(sx, sy, (level + 1) * cfg.levelHeight);
+            const gx = Math.floor(wx / G);
+            const gy = Math.floor(wy / G);
+            const room = (store.analysis?.levels?.[level]?.rooms ?? []).find((rm) => rm.fill?.some(([x, y, w, h]) => gx >= x && gx < x + w && gy >= y && gy < y + h));
+            if (room) return { room, level };
+        }
+        return null;
     };
 
     /** Barra de opciones del techo: edita el techo elegido o, si no hay, los valores de los techos nuevos. */
@@ -1337,7 +1348,6 @@ export function createTools(app) {
                 'aria-pressed': String(cur.type === v),
                 onclick: () => set('Tipo de techo', { type: v, dir: v === 'shed' ? (['N', 'S', 'E', 'W'].includes(cur.dir) ? cur.dir : 'S') : (['x', 'y'].includes(cur.dir) ? cur.dir : longer) }),
             }, t)));
-        const levels = store.project.upper ? [[0, 'Sobre el Nivel 1'], [1, 'Sobre el Nivel 2']] : null;
 
         return h('span', { class: 'row' }, target ? h('span', { class: 'tag' }, `Techo ${target.id}`) : null, target ? h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: () => app.deleteSelection() }, 'Quitar techo') : null, types,
             cur.type === 'gable'
@@ -1345,9 +1355,7 @@ export function createTools(app) {
                 : selectT('Cae hacia', cur.dir, FALL_SIDES.map((d) => [d, sideLabel(d, store.project.north)]), (v) => set('Caída del techo', { dir: v })),
             numIn('Pendiente', cur.slope, 10, 100, 5, 'slope', '%'),
             numIn('Alero', cur.overhang, 0, 100, 5, 'overhang', 'cm'),
-            selectT('Cabios', cur.section, Object.entries(cfg.timberSections).map(([k, x]) => [k, x.label.replace('Pino tratado ', '')]), (v) => set('Sección de cabios', { section: v })),
-            selectT('Separación', cur.spacing, [30, 40, 50, 60].map((v) => [v, `${v} cm`]), (v) => set('Separación de cabios', { spacing: Number(v) })),
-            levels && !target ? selectT('Apoya', roofLevel(), levels, (v) => { store.setUi({ roofLevel: Number(v) }); app.refreshOptions(); }) : null);
+            h('span', { class: 'muted small' }, 'Los cabios se eligen solos según la luz.'));
     };
     app.roofOptions = roofOptions;
 
@@ -1355,12 +1363,18 @@ export function createTools(app) {
         magnet: true,
         hotkey: 'h',
         label: 'Techo',
-        hint: 'Arrastrá un rectángulo sobre los muros (o clic dentro de una habitación): cada techo se configura aparte. Los techos se editan con Seleccionar.',
-        planeZ: () => (roofLevel() + 1) * cfg.levelHeight,
+        hint: 'Clic sobre una habitación (de la planta alta o de la baja) para techarla, o arrastrá un rectángulo sobre los muros. El techo apoya en los muros que lo rodean.',
+        // mientras se arrastra, el plano es el de la corona del nivel donde empezó el rectángulo
+        planeZ: () => ((roofDraw?.level ?? store.topLevel) + 1) * cfg.levelHeight,
         options: roofOptions,
         reset() { roofDraw = null; },
         down(p) {
-            roofDraw = { a: { gx: p.gx, gy: p.gy }, rect: null, dragged: false, at: { x: p.sx, y: p.sy } };
+            const hit = roofRoomAt(p.sx, p.sy);
+            const level = hit?.level ?? store.topLevel;
+            const [wx, wy] = app.cam.unproject(p.sx, p.sy, (level + 1) * cfg.levelHeight);
+            const a = { gx: Math.round(wx / G), gy: Math.round(wy / G) };
+            roofDraw = { a, level, hit, rect: null, dragged: false, at: { x: p.sx, y: p.sy } };
+            store.ui.roofLevel = level; // el imán se pega a los muros de ese nivel
         },
         move(p) {
             if (!roofDraw) return;
@@ -1371,8 +1385,8 @@ export function createTools(app) {
         up() {
             if (!roofDraw) return;
             let r = roofDraw.rect;
-            const a = roofDraw.a;
-            const at = roofDraw.at;
+            const { at, hit: roomHit } = roofDraw;
+            let level = roofDraw.level;
             roofDraw = null;
             if (!r) {
                 // Un clic sobre un techo existente lo elige (para editarlo o quitarlo) en lugar de dibujar otro encima.
@@ -1381,18 +1395,19 @@ export function createTools(app) {
                     store.setUi({ selection: hit });
                     return;
                 }
-                const room = roofRoomAt(a);
-                if (!room) {
-                    app.toast('Clic dentro de una habitación cerrada del nivel, o arrastrá un rectángulo sobre los muros.', 'error');
+                if (!roomHit) {
+                    app.toast('Clic sobre una habitación cerrada, o arrastrá un rectángulo sobre los muros.', 'error');
                     return;
                 }
+                const { room } = roomHit;
+                level = roomHit.level;
                 r = { x: room.bbox.x, y: room.bbox.y, w: room.bbox.w, h: room.bbox.h };
             }
             if (r.w < 4 || r.h < 4) {
                 app.toast('El techo debe medir al menos 50 × 50 cm.', 'error');
                 return;
             }
-            store.commit('Agregar techo', (d) => newRoof(d, r));
+            store.commit('Agregar techo', (d) => newRoof(d, r, level));
         },
         keyDown(e) {
             if (e.key === 'Escape' && roofDraw) {
@@ -1403,8 +1418,8 @@ export function createTools(app) {
             return false;
         },
         draw(ctx, cam) {
-            const z = (roofLevel() + 1) * cfg.levelHeight;
             if (roofDraw?.rect) {
+                const z = (roofDraw.level + 1) * cfg.levelHeight;
                 const { x, y, w, h: hh } = roofDraw.rect;
                 outlineRect(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, { stroke: '#7a3b25', fill: 'rgba(196,99,63,.30)', width: 2.5, dash: [6, 4] });
                 dimLabel(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, `${fmt((w * G) / 100)} × ${fmt((hh * G) / 100)} m · ${fmt(((w * G) / 100) * ((hh * G) / 100))} m² de planta`);
@@ -1412,9 +1427,12 @@ export function createTools(app) {
             }
             const p = app.pointer;
             if (!p) return;
-            const room = roofRoomAt({ gx: p.gx, gy: p.gy });
-            if (room) outlineRect(ctx, cam, room.bbox.x * G, room.bbox.y * G, (room.bbox.x + room.bbox.w) * G, (room.bbox.y + room.bbox.h) * G, z, { stroke: '#7a3b25', fill: 'rgba(196,99,63,.22)', width: 2 });
-            else if (inLot(p.gx, p.gy)) nodeMarker(ctx, cam, p.gx * G, p.gy * G, z, '#7a3b25');
+            const hit = roofRoomAt(p.sx, p.sy);
+            const z = ((hit?.level ?? store.topLevel) + 1) * cfg.levelHeight;
+            if (hit) {
+                const { room } = hit;
+                outlineRect(ctx, cam, room.bbox.x * G, room.bbox.y * G, (room.bbox.x + room.bbox.w) * G, (room.bbox.y + room.bbox.h) * G, z, { stroke: '#7a3b25', fill: 'rgba(196,99,63,.22)', width: 2 });
+            } else if (inLot(p.gx, p.gy)) nodeMarker(ctx, cam, p.gx * G, p.gy * G, z, '#7a3b25');
         },
     };
 

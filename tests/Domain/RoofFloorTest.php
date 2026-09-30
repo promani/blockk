@@ -66,7 +66,7 @@ final class RoofFloorTest extends TestCase
     }
 
     #[Test]
-    public function shedRoofFallsTowardsTheChosenSideAndChecksTheRafterSpan(): void
+    public function shedRoofFallsTowardsTheChosenSideAndPicksTheRafterSection(): void
     {
         $a = $this->analyze(Fixtures::room(40, 30)->roof('shed', 'S'));
         $planes = $a['roof']['parts'][0]['geometry']['planes'];
@@ -77,10 +77,9 @@ final class RoofFloorTest extends TestCase
         // Cae hacia el sur (y grande): el borde bajo está en y máx.
         $lowY = $ys[array_search(min($zs), $zs, true)];
         self::assertGreaterThan(min($ys), $lowY);
-        self::assertContains('roof.rafter-span', $this->codes($a), 'Un cabio de 3,75 m con 3″×8″ a 50 cm excede la luz de referencia');
-
-        $ok = $this->analyze(Fixtures::room(40, 30)->roof('shed', 'S', 30, '3x10'));
-        self::assertNotContains('roof.rafter-span', $this->codes($ok));
+        // Un cabio de 3,75 m no lo cubre el 3″×8″ a 50 cm: se usa solo el 3″×10″, sin observaciones.
+        self::assertSame('3x10', $a['roof']['parts'][0]['bom']['section']);
+        self::assertSame([], array_values(array_filter($this->codes($a), static fn (string $c): bool => str_starts_with($c, 'roof.'))));
     }
 
     #[Test]
@@ -108,11 +107,12 @@ final class RoofFloorTest extends TestCase
     }
 
     #[Test]
-    public function roofWarnsWhenTheEavesHaveNoBearingWall(): void
+    public function roofsHaveNoReviewNotes(): void
     {
+        // Los techos son para ver la casa completa y computar la madera: no generan observaciones.
         $b = (new TemplateBuilder('t'))->wall(0, 0, 0, 40, 0, 20.0)->wall(0, 0, 0, 0, 30, 20.0)->wall(0, 40, 0, 40, 30, 20.0)->roof('gable', 'x');
 
-        self::assertContains('roof.support', $this->codes($this->analyze($b)));
+        self::assertSame([], array_values(array_filter($this->codes($this->analyze($b)), static fn (string $c): bool => str_starts_with($c, 'roof.'))));
     }
 
     #[Test]
@@ -273,12 +273,19 @@ final class RoofFloorTest extends TestCase
     }
 
     #[Test]
-    public function aRoofUnderUpperWallsIsFlagged(): void
+    public function aRoofSitsOnTheWallsAroundItWhateverLevelWasSaved(): void
     {
-        $b = Fixtures::room(40, 30)->room(1, 0, 0, 40, 30)->roofPart(0, 0, 0, 40, 30);
-        self::assertContains('roof.covered', $this->codes($this->analyze($b)));
-        $ok = Fixtures::room(40, 30)->room(1, 0, 0, 40, 30)->roofPart(1, 0, 0, 40, 30);
-        self::assertNotContains('roof.covered', $this->codes($this->analyze($ok)));
+        // Guardado sobre el Nivel 1 pero rodeado por muros del Nivel 2: apoya arriba.
+        $b = Fixtures::room(40, 30)->joists(0, 0, 40, 30, 'x')->room(1, 0, 0, 40, 30)->roofPart(0, 0, 0, 40, 30);
+        $part = $this->analyze($b)['roof']['parts'][0];
+        self::assertSame(1, $part['level']);
+        self::assertEqualsWithDelta(600.0, $part['geometry']['zTop'], 0.01);
+
+        // Guardado sobre el Nivel 2 sobre la parte baja (el caso de un techo dibujado con el Nivel 2 activo): apoya abajo.
+        $low = Fixtures::room(64, 40)->wall(0, 32, 0, 32, 40, 20)->joists(0, 0, 32, 40, 'x')->room(1, 0, 0, 32, 40)->roofPart(1, 32, 0, 32, 40, 'shed', 'E');
+        $part = $this->analyze($low)['roof']['parts'][0];
+        self::assertSame(0, $part['level']);
+        self::assertEqualsWithDelta(300.0, $part['geometry']['zTop'], 0.01);
     }
 
     #[Test]

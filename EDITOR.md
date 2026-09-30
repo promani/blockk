@@ -38,7 +38,7 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 | Puerta / Ventana | `P` / `N` | Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Tipos predefinidos (P75…P150, V62…V187, ventiluces, ventanal). |
 | Escalera | `S` | Clic dentro de una habitación del Nivel 1: recta, en L o en U. Sigue al cursor, se acomoda dentro de la habitación y, si no entra, se gira sola. `X` gira. |
 | Piso | `L` | En el Nivel 2: clic dentro de una habitación de abajo; losa de hormigón o entrepiso de madera, con el hueco de la escalera recortado. |
-| Techo | `H` | En la pestaña Techo: rectángulo o clic dentro de un ambiente; a un agua o a dos aguas, pendiente, alero y cabios. El alero va sólo donde cae el agua (y no contra un muro de la planta alta). |
+| Techo | `H` | En la pestaña Techo: clic sobre una habitación (alta o baja: se elige la que se ve bajo el cursor) o un rectángulo sobre los muros. El techo apoya en los muros que lo rodean (el nivel sale solo), el alero va sólo donde cae el agua y, pegado a la planta alta, se propone a un agua bajando desde esa pared. Los cabios se eligen solos según la luz y los techos no generan observaciones: son para ver la casa completa y computar la madera. |
 | Bloque, Viga U, Viga de madera | `B`, `U`, `T` | Bajo «Más»: un bloque suelto, un encadenado U intermedio, una viga de madera. |
 
 ## Asistencias al dibujar

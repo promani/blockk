@@ -27,11 +27,10 @@ final class RoofPlanner
         $parts = [];
         $issues = [];
         foreach ($project->roofs as $part) {
-            $upper = $part->level + 1 < count($levels) ? $levels[$part->level + 1]->level->walls : [];
-            $built = $this->planPart($part, $levels[$part->level]->level->walls, $upper);
-            if (0 === $part->level && $project->level(1)->walls !== [] && $this->coversUpperWalls($part, $project->level(1)->walls)) {
-                $built['issues'][] = $this->issue($part, 'warn', 'roof.covered', sprintf('El techo %s queda debajo de muros del Nivel 2: cambialo a «Sobre el Nivel 2» o achicá su rectángulo.', $part->id));
-            }
+            // El techo apoya sobre los muros que lo rodean: el nivel sale de ahí, no de lo que se haya elegido al dibujarlo.
+            $level = $this->supportLevel($part, $levels);
+            $upper = $level + 1 < count($levels) ? $levels[$level + 1]->level->walls : [];
+            $built = $this->planPart($part, $level, $upper);
             $parts[] = $built;
             array_push($issues, ...$built['issues']);
         }
@@ -170,32 +169,47 @@ final class RoofPlanner
         };
     }
 
-    /** ¿El centro del techo cae dentro de la planta del Nivel 2 (caja envolvente de sus muros)? Entonces tiene muros encima. @param list<Wall> $upper */
-    private function coversUpperWalls(RoofPart $p, array $upper): bool
+    /**
+     * Nivel sobre el que apoya el techo: el más alto cuyos muros cubren al menos la mitad del contorno del rectángulo.
+     * Si ninguno lo rodea, el guardado (limitado al último nivel con muros).
+     *
+     * @param list<LevelAnalysis> $levels
+     */
+    private function supportLevel(RoofPart $p, array $levels): int
     {
-        $cx = $p->x + $p->w / 2;
-        $cy = $p->y + $p->h / 2;
+        $G = Hcca::GRID_CM;
+        [$x0, $x1, $y0, $y1] = [$p->x * $G, ($p->x + $p->w) * $G, $p->y * $G, ($p->y + $p->h) * $G];
+        $top = 0;
+        for ($l = count($levels) - 1; $l >= 0; --$l) {
+            $walls = $levels[$l]->level->walls;
+            if ([] === $walls) {
+                continue;
+            }
+            $top = max($top, $l);
+            $covered = $this->coverage($walls, Axis::X, $p->y, $x0, $x1, false) + $this->coverage($walls, Axis::X, $p->y + $p->h, $x0, $x1, false)
+                + $this->coverage($walls, Axis::Y, $p->x, $y0, $y1, false) + $this->coverage($walls, Axis::Y, $p->x + $p->w, $y0, $y1, false);
+            if ($covered >= ($x1 - $x0 + $y1 - $y0)) { // la mitad del perímetro
+                return $l;
+            }
+        }
 
-        return $cx >= min(array_map(static fn (Wall $w): int => $w->x1, $upper))
-            && $cx <= max(array_map(static fn (Wall $w): int => $w->x2, $upper))
-            && $cy >= min(array_map(static fn (Wall $w): int => $w->y1, $upper))
-            && $cy <= max(array_map(static fn (Wall $w): int => $w->y2, $upper));
+        return min($p->level, $top);
     }
 
     /**
-     * @param list<Wall> $walls muros del nivel sobre el que apoya
+     * @param int        $level nivel sobre el que apoya
      * @param list<Wall> $upper muros del nivel de arriba: un borde del techo que choca contra ellos no lleva alero ni hastial
      *
      * @return array{id: string, level: int, type: string, geometry: array<string, mixed>, bom: array<string, mixed>, issues: list<array<string, mixed>>}
      */
-    private function planPart(RoofPart $roof, array $walls, array $upper = []): array
+    private function planPart(RoofPart $roof, int $level, array $upper = []): array
     {
         $G = Hcca::GRID_CM;
         $x0 = $roof->x * $G;
         $x1 = ($roof->x + $roof->w) * $G;
         $y0 = $roof->y * $G;
         $y1 = ($roof->y + $roof->h) * $G;
-        $zTop = ($roof->level + 1) * (float) Hcca::LEVEL_HEIGHT_CM;
+        $zTop = ($level + 1) * (float) Hcca::LEVEL_HEIGHT_CM;
         $o = (float) $roof->overhang;
         $s = $roof->slopePct / 100;
         // Los cabios apoyan sobre el borde exterior del muro (no en su eje): la cubierta sube media pared × pendiente (+1 cm)
@@ -266,11 +280,6 @@ final class RoofPlanner
             $coverM2 = array_sum($lens) * $lr / 10000;
             $battenMl = array_sum(array_map(static fn (float $l): int => (int) ceil($l / self::BATTEN_SPACING_CM) + 1, $lens)) * $lr / 100;
             $ridgeMl = $lr / 100;
-            $ridgeLen = $a1 - $a0;
-            if ($ridgeLen > 475) {
-                $issues[] = $this->issue($roof, 'info', 'roof.ridge', sprintf('Cumbrera de %s m: verificar apoyos intermedios (muros transversales o pilares) para que no supere la luz de la viga.', number_format($ridgeLen / 100, 2, ',', '')));
-            }
-            $eaves = [$c0, $c1];
         } else {
             $lowIsFirst = in_array($roof->dir, ['N', 'W'], true);
             $low = $lowIsFirst ? $c0 : $c1;
@@ -304,7 +313,6 @@ final class RoofPlanner
             $coverM2 = $rafterLen * $lr / 10000;
             $battenMl = ((int) ceil($rafterLen / self::BATTEN_SPACING_CM) + 1) * $lr / 100;
             $ridgeMl = 0.0;
-            $eaves = [$c0, $c1];
         }
 
         $masonryM2 = 0.0;
@@ -314,28 +322,10 @@ final class RoofPlanner
             }
         }
 
-        // Los cabios apoyan sobre muros portantes del último nivel en las dos líneas de alero.
-        foreach ($eaves as $line) {
-            $covered = $this->coverage($walls, $alongX ? Axis::X : Axis::Y, (int) round($line / Hcca::GRID_CM), $a0, $a1);
-            if ($covered < 0.8 * ($a1 - $a0)) {
-                $issues[] = $this->issue($roof, 'warn', 'roof.support', 'Falta muro portante bajo un lateral del techo: los cabios deben apoyar sobre muros de ≥ 15 cm con encadenado (viga corona).');
-                break;
-            }
-        }
-
-        $section = Hcca::timberSections()[$roof->section];
-        $maxRun = $section['maxSpanCm'] * (40 / $roof->spacing) ** (1 / 3);
-        if ($run > $maxRun + 0.001) {
-            $issues[] = $this->issue($roof, 'error', 'roof.rafter-span', sprintf('Luz horizontal del cabio de %s m excede el máximo referencial de %s m para %s a %d cm. Use una sección mayor, menor separación o agregue apoyos.', number_format($run / 100, 2, ',', ''), number_format($maxRun / 100, 2, ',', ''), $section['label'], $roof->spacing));
-        }
-        $commercial = array_find(Hcca::TIMBER_LENGTHS_CM, static fn (int $l): bool => $l >= $rafterLen - 0.001);
-        if (null === $commercial) {
-            $issues[] = $this->issue($roof, 'warn', 'roof.length', sprintf('Un cabio de %s m supera el largo comercial máximo (6,00 m).', number_format($rafterLen / 100, 2, ',', '')));
-            $commercial = (int) ceil($rafterLen / 10) * 10;
-        }
-        if ($roof->slopePct < 15 || $roof->slopePct > 70) {
-            $issues[] = $this->issue($roof, 'info', 'roof.slope', 'Pendiente fuera del rango habitual (15–70 %): verificar con el tipo de cubierta elegido.');
-        }
+        // El techo es para que la casa se vea completa y para computar la madera: sin revisiones. La sección de los cabios
+        // se elige sola (la guardada o la menor que cubre la luz) y el largo, el comercial que alcanza.
+        $sectionKey = $this->rafterSection($roof, $run);
+        $commercial = array_find(Hcca::TIMBER_LENGTHS_CM, static fn (int $l): bool => $l >= $rafterLen - 0.001) ?? (int) ceil($rafterLen / 10) * 10;
 
         $byT = [];
         foreach ($gables as $g) {
@@ -346,7 +336,7 @@ final class RoofPlanner
 
         return [
             'id' => $roof->id,
-            'level' => $roof->level,
+            'level' => $level,
             'type' => $roof->type->value,
             'issues' => $issues,
             'geometry' => [
@@ -366,7 +356,7 @@ final class RoofPlanner
                 'dir' => $roof->dir,
             ],
             'bom' => [
-                'section' => $roof->section,
+                'section' => $sectionKey,
                 'raftersCount' => $pieces,
                 'raftersCommercialCm' => $commercial,
                 'ridgeMl' => round($ridgeMl, 2),
@@ -376,6 +366,20 @@ final class RoofPlanner
                 'gableByThickness' => array_map(static fn (float $m2): float => round($m2, 2), $byT),
             ],
         ];
+    }
+
+    /** Sección de cabio: la guardada o, si no cubre la luz horizontal, la menor que la cubre (si ninguna, la mayor). */
+    private function rafterSection(RoofPart $roof, float $run): string
+    {
+        $keys = array_keys(Hcca::timberSections());
+        $from = array_search($roof->section, $keys, true);
+        foreach (array_slice($keys, false === $from ? 0 : $from) as $k) {
+            if (Hcca::timberSections()[$k]['maxSpanCm'] * (40 / $roof->spacing) ** (1 / 3) >= $run - 0.001) {
+                return $k;
+            }
+        }
+
+        return $keys[array_key_last($keys)];
     }
 
     /**
@@ -531,9 +535,4 @@ final class RoofPlanner
         return $covered;
     }
 
-    /** @return array<string, mixed> */
-    private function issue(RoofPart $roof, string $severity, string $code, string $message): array
-    {
-        return ['severity' => $severity, 'code' => $code, 'message' => $message, 'level' => 2, 'ref' => $roof->id, 'x' => $roof->x, 'y' => $roof->y];
-    }
 }
