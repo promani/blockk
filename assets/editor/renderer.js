@@ -7,27 +7,15 @@
 import { Camera } from './camera.js';
 import { KIND, sortedItems, visibleFaces } from './scene.js';
 import { fmt } from '../lib/format.js';
+import { drawTheme, mix } from '../lib/theme.js';
 import { planeEq, planeHoles, gableHoles, withHoles } from './roofclip.js';
 
 const G = 12.5;
 
-/** Colores de piso por ambiente (pasteles): el mismo ambiente conserva su color al editar. */
-export const ROOM_COLORS = ['#fbe3b8', '#bfe3ee', '#dccdf3', '#cfe9bd', '#f8c9c9', '#f3eaa6', '#b9e0d6', '#f1cfe0'];
-export const roomColor = (room) => ROOM_COLORS[(room.id - 1) % ROOM_COLORS.length];
-
-const BASE = {
-    [KIND.BLOCK]: '#e7ebf1',
-    [KIND.CUT]: '#f4d99a',
-    [KIND.U]: '#9fd15c',
-    [KIND.UCUT]: '#c2df95',
-    [KIND.DOOR]: '#b9834f',
-    [KIND.GLASS]: '#a9d3ef',
-    [KIND.FRAME]: '#f7f8fa',
-    [KIND.JOIST]: '#d9a05b',
-    [KIND.DECK]: '#ecd2a0',
-    [KIND.BEAM]: '#c48a45',
-    [KIND.STEP]: '#d2d8e0',
-    [KIND.SLAB]: '#aab3bf',
+/** Colores de piso por ambiente (del tema): el mismo ambiente conserva su color al editar. */
+export const roomColor = (room) => {
+    const floors = drawTheme().floors;
+    return floors[(room.id - 1) % floors.length];
 };
 
 function shade(hex, k) {
@@ -36,7 +24,30 @@ function shade(hex, k) {
     return `rgb(${c((n >> 16) & 255)},${c((n >> 8) & 255)},${c(n & 255)})`;
 }
 
-const PALETTE = Object.fromEntries(Object.entries(BASE).map(([k, hex]) => [k, { top: shade(hex, 1.03), yp: shade(hex, 0.88), xp: shade(hex, 0.74) }]));
+/** Caras de cada tipo de caja (tapa, frente y costado sombreados) a partir de los colores del tema. */
+let paletteFor = null;
+let palette = null;
+function PAL() {
+    const t = drawTheme();
+    if (paletteFor === t) return palette;
+    const base = {
+        [KIND.BLOCK]: t.block,
+        [KIND.CUT]: t.cut,
+        [KIND.U]: t.u,
+        [KIND.UCUT]: mix(t.u, '#ffffff', 0.35),
+        [KIND.DOOR]: t.door,
+        [KIND.GLASS]: t.glass,
+        [KIND.FRAME]: '#f7f8fa',
+        [KIND.JOIST]: t.wood,
+        [KIND.DECK]: mix(t.wood, '#ffffff', 0.45),
+        [KIND.BEAM]: mix(t.wood, '#000000', 0.12),
+        [KIND.STEP]: mix(t.slab, '#ffffff', 0.5),
+        [KIND.SLAB]: t.slab,
+    };
+    palette = Object.fromEntries(Object.entries(base).map(([k, hex]) => [k, { top: shade(hex, 1.03), yp: shade(hex, 0.88), xp: shade(hex, 0.74) }]));
+    paletteFor = t;
+    return palette;
+}
 
 export class Renderer {
     constructor(canvas) {
@@ -89,7 +100,7 @@ export class Renderer {
         const { cam } = f;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, cam.w, cam.h);
-        ctx.fillStyle = '#e9eef6';
+        ctx.fillStyle = drawTheme().sky;
         ctx.fillRect(0, 0, cam.w, cam.h);
         this.drawGround(f);
         if (f.project) {
@@ -113,7 +124,7 @@ export class Renderer {
         corners.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
         ctx.closePath();
         if (showLot) {
-            ctx.fillStyle = '#e1e9d6';
+            ctx.fillStyle = drawTheme().ground;
             ctx.fill();
         }
         if (showGrid) this.drawGrid(cam, W, D, z);
@@ -273,7 +284,7 @@ export class Renderer {
                     ctx.clip('evenodd');
                 }
             }
-            poly(pl.pts, shade('#c4633f', 0.78 + 0.3 * Math.max(0, light)), '#7a3b25');
+            poly(pl.pts, shade(drawTheme().roof, 0.78 + 0.3 * Math.max(0, light)), shade(drawTheme().roof, 0.62));
             const xs = pl.pts.map((q) => q[0]);
             const ys = pl.pts.map((q) => q[1]);
             const inside = (r) => {
@@ -330,7 +341,7 @@ export class Renderer {
 
     /** Losa o entrepiso de una pieza: caras laterales exteriores, bordes interiores del hueco de escalera y cara superior agujereada. */
     drawPlate(ctx, cam, b, strokeOn) {
-        const pal = PALETTE[b.kind];
+        const pal = PAL()[b.kind];
         const { x0, x1, y0, y1, z0, z1 } = b;
         const P = (x, y, z) => cam.project(x, y, z);
         const poly = (pts, color) => {
@@ -396,7 +407,7 @@ export class Renderer {
 
     /** Hastial de bloque: polígono con las hiladas y las juntas verticales del despiece del servidor. */
     drawGable(ctx, cam, gb, poly) {
-        poly(gb.pts, '#e7ebf1', 'rgba(30,41,59,.55)');
+        poly(gb.pts, drawTheme().block, 'rgba(30,41,59,.55)');
         if (cam.zoom < 0.07 || !gb.plane) return;
         const { axis, at, z } = gb.plane;
         const P = (u, v) => (axis === 'y' ? cam.project(at, u, z + v) : cam.project(u, at, z + v));
@@ -462,7 +473,7 @@ export class Renderer {
         }
         const rot = cam.rot;
         const glass = b.kind === KIND.GLASS;
-        const pal = PALETTE[b.kind];
+        const pal = PAL()[b.kind];
         const { x0, x1, y0, y1, z0, z1 } = b;
         const P = (x, y, z) => cam.project(x, y, z);
 

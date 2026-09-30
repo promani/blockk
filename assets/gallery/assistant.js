@@ -10,6 +10,10 @@ import { api, createChat, thumb, kpis, reviewLine } from '../lib/ai-chat.js';
 import { analyze, solarPath } from '../lib/api.js';
 import { carouselOf } from '../lib/carousel.js';
 import { getThumbs, putThumbs } from '../lib/thumbcache.js';
+import { drawTheme } from '../lib/theme.js';
+
+/** Las miniaturas guardadas dependen de los colores del dibujo: si cambian en /estilos, se vuelven a dibujar. */
+const themeKey = () => [...JSON.stringify(drawTheme())].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7).toString(36);
 import { renderThumbs } from '../editor/snapshot.js';
 
 export const LINK_KEY = 'blockk.ai.link';
@@ -90,7 +94,7 @@ export function mountAssistant({ card, dialog, confirmReplace, config }) {
      * navegador; mientras tanto se ve la planta en SVG.
      */
     async function designThumbs(d, holder) {
-        const key = `${d.id}:${d.updated}:1`;
+        const key = `${d.id}:${d.updated}:${themeKey()}`;
         let views = await getThumbs(key);
         if (!views) {
             const { project } = await api(`/api/assistant/designs/${d.id}?client=${chat.client}`);

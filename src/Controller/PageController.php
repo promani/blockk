@@ -58,4 +58,10 @@ final class PageController extends AbstractController
     {
         return $this->render('catalog/index.html.twig', ['nav' => 'catalog', 'sys' => ClientConfig::catalog()]);
     }
+
+    #[Route('/estilos', name: 'styles', methods: ['GET'])]
+    public function styles(): Response
+    {
+        return $this->render('styles/index.html.twig', ['nav' => 'styles', 'config' => ClientConfig::json()]);
+    }
 }

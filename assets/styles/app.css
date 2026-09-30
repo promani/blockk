@@ -1,16 +1,16 @@
-/* Blockk Studio — paleta técnica: verde institucional, grafito y superficies claras.
-   El texto sobre verde va siempre en grafito (contraste ≥ 6:1). */
+/* Blockk Studio — paleta «Vivo» por defecto (verde, grafito y superficies claras); se cambia en /estilos
+   (assets/lib/theme.js), que pisa estas variables. El texto sobre verde va siempre en grafito. */
 :root {
-    --green: #8bc53f;
-    --green-600: #6da22a;
-    --green-800: #3f6212;
-    --green-100: #eaf5d8;
-    --graphite: #1e293b;
-    --graphite-700: #334155;
-    --surface: #f7f9ff;
+    --green: #78c23a;
+    --green-600: #609b2e;
+    --green-800: #36571a;
+    --green-100: #ebf6e1;
+    --graphite: #1b2a41;
+    --graphite-700: #3d4a5e;
+    --surface: #f4f8ff;
     --panel: #ffffff;
-    --border: #d5dbe6;
-    --muted: #556070;
+    --border: #cdd3dd;
+    --muted: #5e6a7c;
     --danger: #b42318;
     --danger-bg: #fdecea;
     --warn: #93520a;
@@ -253,7 +253,7 @@ label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-
 .piece-fig.wood span { background: #d9a05b; height: 18px; }
 .rules { padding-left: 1.2rem; display: grid; gap: 10px; max-width: 90ch; }
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
-.callout { background: var(--green-100); border: 1px solid #c5e08f; border-radius: var(--radius); padding: 14px 18px; }
+.callout { background: var(--green-100); border: 1px solid var(--green); border-radius: var(--radius); padding: 14px 18px; }
 .faq { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin: 8px 0; }
 .faq summary { cursor: pointer; font-weight: 650; }
 .calc-out { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; padding: 14px 16px; }
@@ -450,3 +450,25 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 @media (max-width: 420px) {
     .brand span { display: none; }
 }
+
+/* ---------------------------------------------------------------- estilos del sitio */
+.styles-grid { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.styles-form { padding: 16px 18px; }
+.styles-form h2 { margin-top: 0; font-size: 1.1rem; }
+.styles-form h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 8px; }
+.preset-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.preset { font: inherit; font-weight: 650; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--graphite); cursor: pointer; }
+.preset[aria-pressed="true"] { border-color: var(--green-600); box-shadow: 0 0 0 2px var(--green-100); }
+.swatches { display: flex; gap: 3px; }
+.swatches i { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(0, 0, 0, .08); }
+.color-list { display: grid; gap: 6px; }
+.color-field { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; cursor: pointer; font-weight: 500; text-align: left; }
+.color-field input[type="color"] { flex: none; }
+.color-field input[type="color"] { width: 38px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
+.floor-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.styles-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.styles-preview h2 { margin-top: 0; font-size: 1.1rem; }
+.preview-canvas { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0; overflow: hidden; }
+.preview-canvas canvas { width: 100%; height: auto; display: block; }
+.preview-ui { margin-top: 14px; padding: 14px 16px; }
+@media (max-width: 760px) { .styles-grid { grid-template-columns: minmax(0, 1fr); } }

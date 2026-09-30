@@ -11,8 +11,9 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
   cuartos con una flecha diagonal en cada uno (las cuatro vistas isométricas) y un ojo al centro; también `[` `]`.
 - **Ver adentro**: un deslizador baja la altura visible de los muros del nivel (no cambia el proyecto).
 - **Brújula con el sol** (arriba a la derecha) y sombras según época, latitud y hora.
-- **Panel derecho**: *Selección* o *Configuraciones generales* (terreno, norte, sol y ajustes del proyecto cuando no hay
-  nada elegido), **Resumen** y **Revisión**, que se adaptan a lo que se está haciendo.
+- **Panel derecho**: *Selección* o *Configuraciones generales* (terreno —con «Mostrar terreno» y «Mostrar cuadrícula»—,
+  norte, sol y ajustes del proyecto cuando no hay nada elegido). Los lados de techos y escaleras se nombran por el plano
+  (arriba, derecha…) con su punto cardinal según el norte elegido, **Resumen** y **Revisión**, que se adaptan a lo que se está haciendo.
 - **Guía «Próximo paso»**: propone la siguiente acción (habitación, puerta, ventanas, nivel 2, piso, escalera, techo) y
   abre la herramienta con un clic. Se minimiza.
 - **Botón flotante «✦ IA»** (abajo a la derecha, si el asistente está configurado): ver [LLM.md](LLM.md).
@@ -97,6 +98,9 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
   el mouse está encima). Las de las plantillas se pregeneran con `composer miniaturas` (`public/img/plantillas`, con
   hash del proyecto); las de «Tus diseños» se dibujan en el navegador y quedan en IndexedDB; cada una con «Usar» y «✦ Modificar con IA». Antes de reemplazar el proyecto del
   editor se pide confirmación.
+- **Estilos** (`/estilos`): paletas (Vivo, Clásico, Tierra, Contraste) y cada color de la interfaz y del dibujo, con
+  vista previa; se guarda en el navegador (`assets/lib/theme.js`). Las miniaturas pregeneradas de la Galería usan la
+  paleta por defecto.
 - **Catálogo técnico** (`/catalogo`): fichas de piezas, reglas críticas de colocación, módulo y niveles, calculadora
   rápida de paño y mortero y preguntas frecuentes. Ver [HCCA.md](HCCA.md).
 

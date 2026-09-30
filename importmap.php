@@ -10,4 +10,5 @@ return [
     'bom' => ['path' => './assets/bom/main.js', 'entrypoint' => true],
     'gallery' => ['path' => './assets/gallery/main.js', 'entrypoint' => true],
     'catalog' => ['path' => './assets/catalog/main.js', 'entrypoint' => true],
+    'styles' => ['path' => './assets/styles-page/main.js', 'entrypoint' => true],
 ];
