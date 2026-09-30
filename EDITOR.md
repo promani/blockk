@@ -1,0 +1,100 @@
+# Editor — funcionalidades y controles
+
+El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloque: los muros van a 90° y en múltiplos de
+12,5 cm, y el motor del servidor recalcula despiece, cómputo y revisión con cada cambio.
+
+## Pantalla
+
+- **Pestañas de nivel**: *Nivel 1*, *Nivel 2* (aparece con «+ Agregar nivel»; máximo 2 niveles con muros) y *Techo*.
+- **Barra de herramientas** (izquierda): cambia según la pestaña. Lo avanzado queda bajo «Más».
+- **Vista**: *Isométrica* o *Planta* (`Tab`). Abajo a la izquierda, el **selector de vistas**: un cuadrado en cuatro
+  cuartos con una flecha diagonal en cada uno (las cuatro vistas isométricas) y un ojo al centro; también `[` `]`.
+- **Ver adentro**: un deslizador baja la altura visible de los muros del nivel (no cambia el proyecto).
+- **Brújula con el sol** (arriba a la derecha) y sombras según época, latitud y hora.
+- **Panel derecho**: *Selección* o *Configuraciones generales* (terreno, norte, sol y ajustes del proyecto cuando no hay
+  nada elegido), **Resumen** y **Revisión**, que se adaptan a lo que se está haciendo.
+- **Guía «Próximo paso»**: propone la siguiente acción (habitación, puerta, ventanas, nivel 2, piso, escalera, techo) y
+  abre la herramienta con un clic. Se minimiza.
+- **Botón flotante «✦ IA»** (abajo a la derecha, si el asistente está configurado): ver [LLM.md](LLM.md).
+
+## Herramientas
+
+| Herramienta | Tecla | Qué hace |
+| --- | --- | --- |
+| Elegir | `V` | Clic en un muro, vano, losa, escalera, techo o hastial para verlo y cambiarlo; doble clic en el piso elige la habitación. Manijas azules para estirar. |
+| Mover | `M` | Rectángulo para elegir varios elementos (muros con sus vanos, escaleras, pisos y techos de todos los niveles) o `Ctrl+A` para toda la casa; se arrastran o se corren con flechas de a 62,5 cm dentro del terreno. |
+| Habitación | `R` | Arrastrar en diagonal dibuja cuatro muros; empezando desde una pared existente, se comparte. |
+| Muro | `W` | Muro a muro; al volver al punto de partida la cadena se cierra sola (igual que Habitación). |
+| Puerta / Ventana | `P` / `N` | Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Tipos predefinidos (P75…P150, V62…V187, ventiluces, ventanal). |
+| Escalera | `S` | Clic dentro de una habitación del Nivel 1: recta, en L o en U. `X` gira. |
+| Piso | `L` | En el Nivel 2: clic dentro de una habitación de abajo; losa de hormigón o entrepiso de madera, con el hueco de la escalera recortado. |
+| Techo | `H` | En la pestaña Techo: rectángulo o clic dentro de un ambiente; a un agua o a dos aguas, pendiente, alero y cabios. |
+| Bloque, Viga U, Viga de madera | `B`, `U`, `T` | Bajo «Más»: un bloque suelto, un encadenado U intermedio, una viga de madera. |
+
+## Asistencias al dibujar
+
+- Paso de dibujo de 62,5 cm y puntos de ajuste junto al cursor.
+- **Imán** azul: pega el trazo al eje o extremo del muro más cercano (del nivel o del de abajo), hasta 40 cm.
+- **Guías de alineación** al arrastrar un muro, una esquina o un borde de techo: muros de abajo en naranja, paredes
+  vecinas en azul; a menos de 25 cm se pega.
+- Mover un muro estira los que llegan a él; si queda justo sobre la línea de un vecino, el tramo sobrante se absorbe.
+- Al elegir una habitación, el panel **sugiere** agrandarla hasta los muros de abajo o la pared vecina.
+- Cada habitación cerrada se pinta con su color de piso; sus **esquinas azules** la agrandan o achican.
+
+## Propiedades por elemento
+
+- **Muro**: espesor (7,5 / 10 / 15 / 20 cm), **alto** (de 50 cm a 3,00 m; sin nada encima hasta 4,00 m) y **corona U**
+  (se puede sacar en paredes que son sólo mampostería).
+- **Vano**: tipo, antepecho y posición.
+- **Techo**: tipo, sentido de la cumbrera o de la caída, pendiente, alero, sección y separación de cabios. Si dos techos
+  se superponen sólo queda el más alto (dos techos a dos aguas cruzados forman una cruz). Los **hastiales** de bloque se
+  despiezan hilada por hilada y se pueden quitar o cambiar de espesor.
+- **Losa / entrepiso / escalera**: espesor, sección y separación de tirantes, forma y giro de la escalera.
+
+## Resumen y Revisión según el contexto
+
+- Con Puerta o Ventana: vidrio total, **luz natural por habitación** (referencia ≥ 1/8 del piso), vidrio por
+  orientación y «Sugerir ventanas según el sol».
+- Con un muro: sus piezas, cortes y bloques U. Con una habitación: superficie y luz. Con Piso o Escalera: losas,
+  tirantes y escaleras. En la pestaña Techo: los techos.
+- La **Revisión** muestra primero las observaciones de lo que se está haciendo; el resto del proyecto queda a un clic.
+  Cada observación lleva al elemento.
+
+## Teclado y mouse
+
+| Acción | Control |
+| --- | --- |
+| Herramientas | `V M R W P N S L H B U T` |
+| Deshacer / rehacer | `Ctrl+Z` / `Ctrl+Y` (también los botones de la barra superior) |
+| Eliminar lo elegido | `Supr` o `Retroceso` |
+| Cancelar | `Esc` |
+| Isométrica / planta | `Tab` |
+| Girar la vista | `[` `]` o el selector de vistas |
+| Zoom | rueda, `+` `-` o los botones de la esquina |
+| Encuadrar | `F` |
+| Paneo | clic central o `Espacio` + arrastre |
+| Nivel 1 / Nivel 2 / Techo | `1` `2` `3` |
+| Girar bloque o escalera | `X` |
+| Elegir todo (con Mover) | `Ctrl+A` |
+
+## Archivo
+
+*Nuevo*, *Guardar* (descarga el `.json`) y *Abrir*. El proyecto se guarda solo en el navegador (`localStorage`).
+«Ver cómputo →» abre el cómputo.
+
+## Otras pantallas
+
+- **Cómputo** (`/computo`): KPIs, desglose por nivel, patrones de corte, madera, presupuesto con **precios editables**,
+  envío a un distribuidor (correo/WhatsApp) y exportación **CSV** y **PDF** vectorial.
+- **Galería** (`/galeria`): asistente de IA, «Tus diseños», proyecto en blanco con retícula parametrizable y plantillas
+  con miniatura y métricas del motor; cada una con «Usar» y «✦ Modificar con IA». Antes de reemplazar el proyecto del
+  editor se pide confirmación.
+- **Catálogo técnico** (`/catalogo`): fichas de piezas, reglas críticas de colocación, módulo y niveles, calculadora
+  rápida de paño y mortero y preguntas frecuentes. Ver [HCCA.md](HCCA.md).
+
+## Código
+
+`assets/editor/`: `main.js` (arranque, teclado, barra), `store.js` (estado, historial y llamadas a `/api/analyze`),
+`tools.js` (herramientas), `scene.js` + `renderer.js` (cajas y dibujo; orden de pintor por capas), `snap.js` (imán y
+anclajes), `wallmove.js`, `panels.js` + `context.js` (panel derecho según el contexto), `guide.js`, `ai.js` (botón
+flotante). En la página, `window.blockk` expone store, cámara y render para las pruebas.
