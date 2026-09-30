@@ -363,7 +363,11 @@ final class Assistant
                     $analysis = $this->analyze($conv['draft']['project'])['analysis'];
                     $project = $this->editor->apply($conv['draft']['project'], (array) ($args['operaciones'] ?? []), $analysis);
                 } catch (\InvalidArgumentException $e) {
-                    return ['content' => 'No se aplicó ningún cambio. '.$e->getMessage(), 'error' => true];
+                    $hint = null !== ($conv['draft']['program'] ?? null)
+                        ? ' La casa tiene programa: podés regenerarla con generar_casa si eso resuelve el pedido.'
+                        : ' La casa NO tiene programa (plantilla o dibujada a mano): no la regeneres sin preguntarle a la persona, porque se perdería su diseño; explicale y ofrecé alternativas.';
+
+                    return ['content' => 'No se aplicó ningún cambio. '.$e->getMessage().$hint, 'error' => true];
                 }
 
                 return $this->afterChange($conv, $project, $conv['draft']['names'], $conv['draft']['program'] ?? null);

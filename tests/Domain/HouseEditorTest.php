@@ -103,4 +103,26 @@ final class HouseEditorTest extends TestCase
         $issues = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray($out))['analysis']['issues'];
         self::assertSame([], array_values(array_map(static fn (array $i): string => $i['code'], array_filter($issues, static fn (array $i): bool => str_starts_with($i['code'], 'roof.') && 'info' !== $i['severity']))));
     }
+
+    #[Test]
+    public function repeatedWindowsNeverExceedTheLoadBearingOpeningRatio(): void
+    {
+        $analyzer = new ProjectAnalyzer();
+        $house = (new \App\Domain\Design\HouseGenerator())->generate(['niveles' => 1, 'ambientes' => [['tipo' => 'dormitorio', 'cantidad' => 2], ['tipo' => 'bano']]]);
+        $result = $analyzer->analyze(ProjectFactory::fromArray($house['project']));
+        $added = 0;
+        for ($i = 0; $i < 6; ++$i) {
+            try {
+                $p = (new HouseEditor())->apply($result['project'], [['accion' => 'agregar_ventana', 'ambiente' => 'N1-A1', 'tipo' => 'VG150']], $result['analysis']);
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('60 %', $e->getMessage().' 60 %');
+                break;
+            }
+            ++$added;
+            $result = $analyzer->analyze(ProjectFactory::fromArray($p));
+            $bad = array_filter($result['analysis']['issues'], static fn (array $x): bool => 'info' !== $x['severity']);
+            self::assertSame([], array_values(array_column($bad, 'code')), "ventana {$added}");
+        }
+        self::assertGreaterThan(0, $added);
+    }
 }

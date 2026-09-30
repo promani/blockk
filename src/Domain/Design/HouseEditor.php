@@ -295,24 +295,27 @@ final class HouseEditor
             throw new \InvalidArgumentException(sprintf('el ambiente %s no tiene muro exterior libre%s para una ventana; %s.', $op['ambiente'], '' !== $want ? " hacia el {$want}" : '', $hint));
         }
         usort($gaps, static fn (array $x, array $y): int => [array_search($x[0], self::SUN_ORDER, true), $y[3] - $y[2]] <=> [array_search($y[0], self::SUN_ORDER, true), $x[3] - $x[2]]);
-        [$facing, $wi, $f0, $f1] = $gaps[0];
-        $gap = $f1 - $f0;
         $presets = Hcca::openingPresets();
         $asked = isset($op['tipo']) ? $this->preset((string) $op['tipo']) : 'V150';
         if ('window' !== $presets[$asked]['kind']->value) {
             throw new \InvalidArgumentException('agregar_ventana es para ventanas; para puertas usá agregar_vano.');
         }
-        $preset = null;
-        foreach ([$asked, 'VG150', 'V187', 'V150', 'V125', 'V100', 'V62'] as $c) {
-            if ($presets[$c]['w'] <= $gap && $presets[$c]['w'] <= $presets[$asked]['w']) {
-                $preset = $c;
-                break;
+        // El primer tramo donde entre la ventana (o la más grande posible hasta la pedida) sin pasar el 60 % de vanos
+        // del muro portante.
+        foreach ($gaps as [, $wi, $f0, $f1]) {
+            $wall = $p['levels'][$li]['walls'][$wi];
+            $len = abs($wall['x2'] - $wall['x1']) + abs($wall['y2'] - $wall['y1']);
+            $used = array_sum(array_map(static fn (array $o): int => $o['w'], array_filter($p['levels'][$li]['openings'], static fn (array $o): bool => $o['wall'] === $wall['id'])));
+            $room = $wall['t'] >= 15 ? (int) floor(0.6 * $len) - $used : PHP_INT_MAX;
+            foreach ([$asked, 'VG150', 'V187', 'V150', 'V125', 'V100', 'V62'] as $c) {
+                $w = $presets[$c]['w'];
+                if ($w <= $f1 - $f0 && $w <= $presets[$asked]['w'] && $w <= $room) {
+                    return $this->one($p, ['accion' => 'agregar_vano', 'muro' => $wall['id'], 'tipo' => $c, 'desde' => ($f0 + intdiv($f1 - $f0 - $w, 2)) * Hcca::GRID_CM / 100]);
+                }
             }
         }
-        $preset ??= 'V62';
-        $wall = $p['levels'][$li]['walls'][$wi];
 
-        return $this->one($p, ['accion' => 'agregar_vano', 'muro' => $wall['id'], 'tipo' => $preset, 'desde' => ($f0 + intdiv($gap - $presets[$preset]['w'], 2)) * Hcca::GRID_CM / 100]);
+        throw new \InvalidArgumentException(sprintf('en el ambiente %s no entra otra ventana%s sin pasar el 60 %% de vanos del muro portante.', $op['ambiente'], '' !== $want ? " hacia el {$want}" : ''));
     }
 
     /** @param array{0: int|float, 1: int|float} $ext */
