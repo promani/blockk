@@ -106,6 +106,37 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     log(roofs === 1, `techo con un clic dentro de la habitación (techos: ${roofs})`);
     checkConsole('proyecto en blanco');
 
+    // 3) Escalera: se coloca con el mouse dentro de la habitación (girándose si hace falta) y se elige con un clic en
+    //    un peldaño bajo y en uno alto, en isométrica y en planta.
+    const evo = await (await page.request.get(`${base}/api/templates/vivienda-evolutiva`)).json();
+    evo.levels[0].stairs = [];
+    await page.evaluate((t) => localStorage.setItem('blockk.project.v1', JSON.stringify(t)), evo);
+    await page.goto(`${base}/`);
+    await ready();
+    const box = await page.locator('#canvas').boundingBox();
+    const scr = (x, y, z) => page.evaluate(([x, y, z]) => window.blockk.cam.project(x, y, z), [x, y, z]);
+    for (const view of ['iso', 'plan']) {
+        await page.click(`[data-view="${view}"]`);
+        await page.evaluate(() => { const s = window.blockk.store; s.commit('Sin escaleras', (d) => { d.levels[0].stairs = []; }); });
+        await ready();
+        await page.click('.level-tab:has-text("Nivel 1")');
+        await page.keyboard.press('s');
+        const [sx, sy] = await scr(60, 60, 0);
+        await page.mouse.click(box.x + sx, box.y + sy);
+        await ready();
+        const st = await page.evaluate(() => ({ n: window.blockk.store.project.levels[0].stairs.length, sel: window.blockk.store.ui.selection?.type, bad: window.blockk.store.analysis.issues.filter((i) => i.code.startsWith('stair.') && i.severity === 'error').length }));
+        log(st.n === 1 && st.sel === 'stair' && st.bad === 0, `escalera colocada dentro de la habitación y elegida (${view})`);
+        const plan = await page.evaluate(() => window.blockk.store.analysis.floors.stairs[0]);
+        for (const [name, stp] of [['bajo', plan.steps[0]], ['alto', plan.steps[plan.steps.length - 1]]]) {
+            await page.evaluate(() => window.blockk.store.setUi({ selection: null }));
+            const [x, y] = await scr((stp.x0 + stp.x1) / 2, (stp.y0 + stp.y1) / 2, stp.z);
+            await page.mouse.click(box.x + x, box.y + y);
+            const sel = await page.evaluate(() => window.blockk.store.ui.selection?.type);
+            log(sel === 'stair', `clic en un peldaño ${name} elige la escalera (${view}): ${sel}`);
+        }
+    }
+    checkConsole('escalera');
+
     await browser.close();
     console.log(fails.length ? `\n${fails.length} falla(s)` : '\ntodo en orden');
     process.exit(fails.length ? 1 : 0);

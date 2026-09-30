@@ -407,7 +407,11 @@ export class Renderer {
 
     /** Hastial de bloque: polígono con las hiladas y las juntas verticales del despiece del servidor. */
     drawGable(ctx, cam, gb, poly) {
-        poly(gb.pts, drawTheme().block, 'rgba(30,41,59,.55)');
+        // Misma sombra que la cara de un muro con esa orientación (si no, el hastial se ve blanco, como un hueco).
+        const pal = PAL()[KIND.BLOCK];
+        const normal = gb.plane ? (gb.plane.axis === 'y' ? 'x' : 'y') : null;
+        const fill = normal && visibleFaces(cam.rot).xp.a === normal ? pal.xp : normal ? pal.yp : drawTheme().block;
+        poly(gb.pts, fill, 'rgba(30,41,59,.55)');
         if (cam.zoom < 0.07 || !gb.plane) return;
         const { axis, at, z } = gb.plane;
         const P = (u, v) => (axis === 'y' ? cam.project(at, u, z + v) : cam.project(u, at, z + v));

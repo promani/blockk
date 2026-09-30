@@ -1193,8 +1193,45 @@ export function createTools(app) {
         return { steps: steps.map((r) => sh(toPlan(r))), landings: landings.map((r) => sh(toPlan(r))), w: maxX - minX, h: maxY - minY, n, rise: cfg.levelHeight / n };
     };
     const cycleDir = () => { stairState.dir = DIRS[(DIRS.indexOf(stairState.dir) + 1) % 4]; app.refreshOptions(); app.render(); };
+    /**
+     * Dónde queda la escalera con el cursor en p: centrada en el cursor y, si el cursor está en una habitación de la
+     * planta baja, corrida para que entre en ella (a 12,5 cm de los ejes de los muros). ok = entra en la habitación.
+     */
+    const stairPlacement = (p) => {
+        // Si no entra hacia donde sube, se prueba girada (la dirección elegida sigue primero).
+        const order = [stairState.dir, ...DIRS.filter((d) => d !== stairState.dir)];
+        let first = null;
+        for (const dir of order) {
+            const r = placeStair({ ...stairState, dir }, p);
+            first ??= r;
+            if (r.ok) return r;
+        }
+        return first;
+    };
+    const placeStair = (st, p) => {
+        const g0 = stairGeometry(st, 0, 0);
+        const wu = Math.ceil(g0.w / G - 1e-6);
+        const hu = Math.ceil(g0.h / G - 1e-6);
+        let gx = Math.round(p.wx / G - wu / 2);
+        let gy = Math.round(p.wy / G - hu / 2);
+        const cx = Math.floor(p.wx / G);
+        const cy = Math.floor(p.wy / G);
+        const rooms = store.analysis?.levels?.[0]?.rooms ?? [];
+        let ok = false;
+        for (const rm of rooms) {
+            const cell = rm.fill?.find(([x, y, w, h]) => cx >= x && cx < x + w && cy >= y && cy < y + h);
+            if (!cell) continue;
+            const [fx, fy, fw, fh] = cell;
+            if (wu <= fw - 2) gx = Math.min(Math.max(gx, fx + 1), fx + fw - 1 - wu);
+            if (hu <= fh - 2) gy = Math.min(Math.max(gy, fy + 1), fy + fh - 1 - hu);
+            ok = gx >= fx && gy >= fy && gx + wu <= fx + fw && gy + hu <= fy + fh;
+            break;
+        }
+        return { gx, gy, ok, st, geo: stairGeometry(st, gx, gy) };
+    };
     T.stair = {
-        magnet: true,
+        magnet: false,
+        snap: 1,
         hotkey: 's',
         label: 'Escalera',
         hint: 'Clic dentro de una habitación de la planta baja. Recta, en L o en U (con descanso). X gira la dirección de subida. Abre el hueco en el piso de arriba.',
@@ -1206,13 +1243,22 @@ export function createTools(app) {
             h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: cycleDir }, `Sube hacia ${sideLabel(stairState.dir, store.project.north)} (X)`),
             stairState.shape === 'straight' ? null : selectT('Gira a', stairState.turn, [['right', 'la derecha'], ['left', 'la izquierda']], (v) => { stairState.turn = v; app.render(); })),
         down(p) {
-            if (!inLot(p.gx, p.gy)) return;
-            const st = { ...stairState };
-            const { w, h: hh } = stairGeometry(st, p.gx, p.gy);
+            const { gx, gy, ok, geo, st } = stairPlacement(p);
+            if (!inLot(gx, gy)) return;
+            if (!ok) {
+                app.setHint('La escalera tiene que quedar dentro de una habitación de la planta baja: probá en una más grande, girala (X) o cambiá la forma.');
+                return;
+            }
+            stairState.dir = st.dir;
+            let id = null;
             store.commit('Agregar escalera', (d) => {
-                d.levels[0].stairs.push({ id: nextId(d, 'e'), x: p.gx, y: p.gy, dir: st.dir, shape: st.shape, w: st.w, tread: st.tread, turn: st.turn });
+                id = nextId(d, 'e');
+                d.levels[0].stairs.push({ id, x: gx, y: gy, dir: st.dir, shape: st.shape, w: st.w, tread: st.tread, turn: st.turn });
             });
-            app.setHint(`Escalera de ${fmt(w / 100)} × ${fmt(hh / 100)} m agregada.`);
+            // Queda elegida para ajustarla en el panel (forma, giro, posición).
+            app.setTool('select');
+            store.setUi({ selection: { type: 'stair', id } });
+            app.setHint(`Escalera de ${fmt(geo.w / 100)} × ${fmt(geo.h / 100)} m agregada.`);
         },
         keyDown(e) {
             if (e.key === 'x' || e.key === 'X') {
@@ -1224,15 +1270,13 @@ export function createTools(app) {
         draw(ctx, cam) {
             const p = app.pointer;
             if (!p || !inLot(p.gx, p.gy)) return;
-            const g = stairGeometry(stairState, p.gx, p.gy);
-            const rooms = store.analysis?.levels?.[0]?.rooms ?? [];
-            const inside = rooms.some((rm) => rm.rect && p.gx * G >= rm.bbox.x * G - 1 && p.gy * G >= rm.bbox.y * G - 1 && p.gx * G + g.w <= (rm.bbox.x + rm.bbox.w) * G + 1 && p.gy * G + g.h <= (rm.bbox.y + rm.bbox.h) * G + 1);
+            const { gx, gy, ok: inside, geo: g, st } = stairPlacement(p);
             const ok = { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' };
             const bad = { fill: 'rgba(217,119,6,.4)', stroke: '#b45309' };
             for (const r of g.steps) ghostBox(ctx, cam, { x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: 0, z1: 12 }, inside ? ok : bad);
             for (const r of g.landings) ghostBox(ctx, cam, { x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: 0, z1: 14 }, inside ? ok : bad);
-            const [sx, sy] = cam.project(p.gx * G + g.w / 2, p.gy * G + g.h / 2, 30);
-            label(ctx, `${g.n} contrahuellas de ${fmt(g.rise, 1)} cm · ${fmt(g.w / 100)} × ${fmt(g.h / 100)} m${inside ? '' : ' · fuera de la habitación'}`, sx, sy - 18);
+            const [sx, sy] = cam.project(gx * G + g.w / 2, gy * G + g.h / 2, 30);
+            label(ctx, `${g.n} contrahuellas de ${fmt(g.rise, 1)} cm · ${fmt(g.w / 100)} × ${fmt(g.h / 100)} m${st.dir !== stairState.dir ? ` · sube hacia ${sideLabel(st.dir, store.project.north, false).toLowerCase()}` : ''}${inside ? '' : ' · no entra en la habitación'}`, sx, sy - 18);
         },
     };
 

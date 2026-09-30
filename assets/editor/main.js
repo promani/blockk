@@ -57,6 +57,7 @@ app.draw = () => draw(); // dibujo síncrono (mediciones de rendimiento)
 
 app.tools = createTools(app);
 const panels = mountPanels(app);
+app.setTool = (id) => setTool(id);
 mountAssistant(app);
 const guide = mountGuide(app, {
     go: (level, tool) => {
@@ -136,7 +137,7 @@ function pointerInfo(e) {
     const sx = e.clientX - r.left;
     const sy = e.clientY - r.top;
     const [wx, wy] = cam.unproject(sx, sy, planeZ());
-    const step = store.ui.snap;
+    const step = activeTool().snap ?? store.ui.snap;
     let gx = Math.round(wx / G);
     let gy = Math.round(wy / G);
     if (step > 1) {

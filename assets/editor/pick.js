@@ -45,8 +45,46 @@ function depthOf(cam, rect, wx, wy) {
     return X + Y;
 }
 
+/**
+ * Profundidad real del primer punto de la caja que toca el rayo del puntero (mayor = más cerca de la cámara), o null si
+ * no la toca. En isométrica, a lo largo del rayo z y X+Y crecen juntos hacia la cámara: basta el mayor z dentro de la
+ * caja. En planta gana la caja más alta.
+ */
+function rayDepth(cam, sx, sy, [x0, y0, x1, y1], z0, z1) {
+    if (cam.view === 'plan') {
+        const [x, y] = cam.unproject(sx, sy, 0);
+        return x >= x0 && x <= x1 && y >= y0 && y <= y1 ? z1 : null;
+    }
+    const [ax, ay] = cam.unproject(sx, sy, z0);
+    const [bx, by] = cam.unproject(sx, sy, z1);
+    let lo = 0;
+    let hi = 1;
+    for (const [a, b, min, max] of [[ax, bx, x0, x1], [ay, by, y0, y1]]) {
+        const d = b - a;
+        if (Math.abs(d) < 1e-9) {
+            if (a < min || a > max) return null;
+            continue;
+        }
+        let t0 = (min - a) / d;
+        let t1 = (max - a) / d;
+        if (t0 > t1) [t0, t1] = [t1, t0];
+        lo = Math.max(lo, t0);
+        hi = Math.min(hi, t1);
+    }
+    if (lo > hi) return null;
+    const z = z0 + (z1 - z0) * hi;
+    const [x, y] = cam.unproject(sx, sy, z);
+    const [X, Y] = Camera.rotate(x, y, cam.rot);
+    return X + Y + 2 * z;
+}
+
 /** Muro del nivel activo bajo el puntero (sx, sy). */
 export function pickWall(app, sx, sy) {
+    return pickWallHit(app, sx, sy)?.wall ?? null;
+}
+
+/** Igual que pickWall, con la profundidad del muro (para compararla con otros elementos). */
+function pickWallHit(app, sx, sy) {
     const { cam, store } = app;
     const level = store.level();
     const base = store.ui.level * store.config.levelHeight;
@@ -56,10 +94,30 @@ export function pickWall(app, sx, sy) {
         const rect = wallRect(w);
         const hull = boxHull(cam, rect, base, (w.h ?? 12) * 25);
         if (!inHull(hull, sx, sy)) continue;
-        const depth = depthOf(cam, rect, wx, wy);
+        const depth = rayDepth(cam, sx, sy, rect, base, base + (w.h ?? 12) * 25) ?? depthOf(cam, rect, wx, wy);
         if (!best || depth > best.depth) best = { wall: w, depth };
     }
-    return best?.wall ?? null;
+    return best;
+}
+
+/**
+ * Escalera bajo el puntero: se prueba cada peldaño y descanso como caja en pantalla (no un plano a media altura, que
+ * deja afuera los peldaños de abajo y de arriba). Devuelve la más cercana a la cámara.
+ */
+function pickStairHit(app, sx, sy) {
+    const { cam, store } = app;
+    const [wx, wy] = cam.unproject(sx, sy, 150);
+    let best = null;
+    for (const st of store.analysis?.floors?.stairs ?? []) {
+        for (const b of [...st.steps, ...st.landings]) {
+            const rect = [b.x0, b.y0, b.x1, b.y1];
+            const h = Math.max(12, st.riseCm);
+            if (!inHull(boxHull(cam, rect, Math.max(0, b.z - h), h), sx, sy)) continue;
+            const depth = rayDepth(cam, sx, sy, rect, Math.max(0, b.z - h), b.z) ?? depthOf(cam, rect, wx, wy);
+            if (!best || depth > best.depth) best = { id: st.id, depth };
+        }
+    }
+    return best;
 }
 
 /** Posición a lo largo del muro (unidades de 12,5 cm, fraccionaria) bajo el puntero, a media altura. */
@@ -117,7 +175,11 @@ const area = (p) => (p.geometry.rect.x1 - p.geometry.rect.x0) * (p.geometry.rect
 export function pickAt(app, sx, sy) {
     const { store, cam } = app;
     if (store.ui.level === 2) return pickRoof(app, sx, sy);
-    const wall = pickWall(app, sx, sy);
+    const hit = pickWallHit(app, sx, sy);
+    // En la planta baja, una escalera delante de la pared del fondo gana sobre la pared (y una pared delante, sobre ella).
+    const stair = store.ui.level === 0 ? pickStairHit(app, sx, sy) : null;
+    if (stair && (!hit || stair.depth > hit.depth)) return { type: 'stair', id: stair.id };
+    const wall = hit?.wall;
     if (wall) {
         const along = alongPosition(app, wall, sx, sy);
         const level = store.level();
@@ -143,14 +205,6 @@ export function pickAt(app, sx, sy) {
             for (const sl of store.analysis.floors.slabs ?? []) {
                 const r = sl.rect;
                 if (wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h) return { type: 'slab', id: sl.id };
-            }
-        }
-        if (store.ui.level === 0) {
-            // los peldaños suben: se prueba a media altura de la escalera
-            const [wx, wy] = cam.unproject(sx, sy, store.config.levelHeight / 2);
-            for (const st of store.analysis.floors.stairs ?? []) {
-                const b = st.bbox;
-                if (wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h) return { type: 'stair', id: st.id };
             }
         }
     }
