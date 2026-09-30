@@ -162,7 +162,62 @@ let pan = null;
 let lastDown = null;
 let spaceDown = false;
 
+/*
+ * En pantallas chicas el editor es de sólo lectura: sin herramientas ni paneles (los oculta el CSS con la misma
+ * consulta), un dedo mueve la vista, dos dedos hacen zoom y un doble toque encuadra la casa.
+ */
+const narrow = window.matchMedia('(max-width: 760px)');
+const readOnly = () => narrow.matches;
+const touches = new Map();
+let pinch = null;
+
+function viewDown(e) {
+    canvas.setPointerCapture(e.pointerId);
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) {
+        const [a, b] = [...touches.values()];
+        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) };
+        pan = null;
+        return;
+    }
+    const now = performance.now();
+    if (lastDown && now - lastDown.t < 350 && Math.hypot(e.clientX - lastDown.x, e.clientY - lastDown.y) < 24) {
+        lastDown = null;
+        fitView();
+        return;
+    }
+    lastDown = { t: now, x: e.clientX, y: e.clientY };
+    pan = { x: e.clientX, y: e.clientY };
+}
+
+function viewMove(e) {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && touches.size === 2) {
+        const [a, b] = [...touches.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        const r = canvas.getBoundingClientRect();
+        if (pinch.d > 0) cam.zoomAt(d / pinch.d, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, planeZ());
+        pinch.d = d;
+        app.render();
+    } else if (pan) {
+        cam.pan(e.clientX - pan.x, e.clientY - pan.y, planeZ());
+        pan = { x: e.clientX, y: e.clientY };
+        app.render();
+    }
+}
+
+function viewUp(e) {
+    touches.delete(e.pointerId);
+    if (touches.size < 2) pinch = null;
+    pan = null;
+}
+
 canvas.addEventListener('pointerdown', (e) => {
+    if (readOnly()) {
+        viewDown(e);
+        return;
+    }
     canvas.focus({ preventScroll: true });
     if (e.button === 1 || (e.button === 0 && (spaceDown || e.altKey))) {
         e.preventDefault();
@@ -188,6 +243,10 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 canvas.addEventListener('pointermove', (e) => {
+    if (readOnly()) {
+        viewMove(e);
+        return;
+    }
     if (pan) {
         cam.pan(e.clientX - pan.x, e.clientY - pan.y, planeZ());
         pan = { x: e.clientX, y: e.clientY };
@@ -201,7 +260,12 @@ canvas.addEventListener('pointermove', (e) => {
     app.render();
 });
 
+canvas.addEventListener('pointercancel', viewUp);
 canvas.addEventListener('pointerup', (e) => {
+    if (readOnly()) {
+        viewUp(e);
+        return;
+    }
     if (pan) {
         pan = null;
         canvas.classList.remove('panning');
@@ -234,7 +298,7 @@ document.addEventListener('keydown', (e) => {
         spaceDown = true;
         if (t === canvas) e.preventDefault();
     }
-    if (typing || $('dialog[open]')) return;
+    if (typing || $('dialog[open]') || readOnly()) return;
 
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 'z') {
@@ -721,8 +785,10 @@ $('#form-new').addEventListener('submit', async (e) => {
 
     const saved = loadProject() ?? blankProject();
     await store.load(saved);
+    // En sólo lectura se muestra la casa completa, con techo.
+    if (readOnly() && store.project.levels.some((l) => l.walls.length)) setLevel(ROOF_LEVEL);
     fitView();
     store.ensureSolar();
-    canvas.focus({ preventScroll: true });
+    if (!readOnly()) canvas.focus({ preventScroll: true });
     saveProject(store.project);
 })();

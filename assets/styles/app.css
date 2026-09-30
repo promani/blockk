@@ -402,3 +402,38 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
     .ai-steps { display: none; }
     .ai-dialog-side { margin: auto; height: calc(100vh - 32px); }
 }
+
+/* ---------------------------------------------------------------- celulares */
+.readonly-note { display: none; }
+@media (max-width: 760px) {
+    .topbar { height: auto; flex-wrap: wrap; gap: 6px 10px; padding: 8px 12px; overflow: visible; position: static; }
+    .brand { font-size: 1rem; }
+    .mainnav { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+    .mainnav a { padding: 6px 8px; font-size: .9rem; }
+    .topbar-slot { flex: 1 1 100%; margin-left: 0; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+    .topbar-actions { flex-wrap: nowrap; }
+    .page { padding: 16px 14px 32px; }
+    .page h1 { font-size: 1.45rem; }
+    .table td { white-space: normal; }
+    .table th, .table td { padding: 6px 8px; }
+    .table thead th { font-size: .72rem; }
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .kpi { padding: 10px 12px; min-width: 0; }
+    .kpi .v { font-size: 1.2rem; white-space: normal; overflow-wrap: anywhere; }
+    .grid-2 { grid-template-columns: minmax(0, 1fr); }
+    .blank-card { display: none; } /* dibujar desde cero requiere una pantalla más grande */
+
+    /* Editor de sólo lectura: sólo el lienzo, con la casa completa, y un aviso abajo. */
+    body.page-editor { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+    .page-editor .topbar-slot, .page-editor .toolbar, .page-editor .sidepanel, .page-editor .stagebar,
+    .page-editor .tooloptions, .page-editor .statusbar, .page-editor .zoomctl, .page-editor .guide,
+    .page-editor .viewpick, .page-editor .ai-fab, .page-editor #ai-dialog { display: none !important; }
+    .page-editor .editor { display: flex; flex: 1; min-height: 0; height: auto; }
+    .page-editor .stagewrap { flex: 1; }
+    .page-editor .stage { height: auto; flex: 1; }
+    .page-editor canvas { touch-action: none; }
+    .readonly-note { display: block; position: absolute; left: 12px; right: 12px; bottom: 12px; margin: 0; padding: 8px 12px; border-radius: 10px; background: rgba(30, 41, 59, .86); color: #fff; font-size: .85rem; text-align: center; pointer-events: none; }
+}
+@media (max-width: 420px) {
+    .brand span { display: none; }
+}

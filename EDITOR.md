@@ -17,6 +17,13 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
   abre la herramienta con un clic. Se minimiza.
 - **Botón flotante «✦ IA»** (abajo a la derecha, si el asistente está configurado): ver [LLM.md](LLM.md).
 
+## En el celular
+
+Con pantallas de hasta 760 px el editor es **de sólo lectura**: sin barra de herramientas, paneles ni controles, con
+la casa completa (pestaña Techo) y un aviso abajo de que para editar se requiere una pantalla más grande. Un dedo mueve
+la vista, dos dedos hacen zoom y un doble toque encuadra. El resto de las pantallas (Galería con el asistente, Cómputo y
+Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
+
 ## Herramientas
 
 | Herramienta | Tecla | Qué hace |
