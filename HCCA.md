@@ -40,8 +40,26 @@ Vanos predefinidos (`Hcca::openingPresets`): puertas P75, P87, P100, P150 (doble
 V187; ventiluces VT62, VT100 (antepecho alto); ventanal VG150 (hasta el piso). Todas miden múltiplos de 12,5 cm y el
 dintel queda en la hilada 9.
 
-La página `/catalogo` muestra las fichas, las reglas críticas, el módulo, una calculadora rápida de paño y mortero y
-preguntas frecuentes de obra seca.
+La página `/catalogo` muestra las fichas (con fotos e imágenes del manual técnico de Lika, en `public/img/piezas/`), las
+reglas críticas, el módulo, una calculadora rápida de paño y mortero y preguntas frecuentes de obra seca.
+
+### Referencia de fabricante: Lika ([manual técnico](docs/Lika-Manual-tecnico.pdf))
+
+Lika fabrica bloques de **50 × 25 cm**, no de 62,5 × 25 como el módulo genérico del sistema: sus datos se muestran como
+referencia y **no** entran en el cómputo. Si se quisiera trabajar con ese fabricante habría que parametrizar el módulo.
+
+| Bloque | Medidas (cm) | Uso | u/pallet | Peso pallet | Bloques/m² | Adhesivo |
+| --- | --- | --- | --- | --- | --- | --- |
+| 10 | 50 × 25 × 10 | Tabiques interiores | 120 | 1.320 kg | 8 | 3,25 kg/m² |
+| 15 | 50 × 25 × 15 | Muros exteriores o tabiques | 72 | 1.200 kg | 8 | 4,70 kg/m² |
+| 20 | 50 × 25 × 20 | Muros exteriores o portantes | 60 | 1.320 kg | 8 | 6,25 kg/m² |
+| 15U | 50 × 25 × 15 (canal 12 × 9) | Dinteles y encadenados | 42 | 700 kg | — | — |
+| 20U | 50 × 25 × 20 (canal 12 × 14) | Dinteles y encadenados | 40 | 860 kg | — | — |
+
+Otras recomendaciones del manual: juntas de hasta 8 mm con cuchara dentada; primera hilada sobre faja de nivelación
+hidrófuga (1:3 + hidrófugo), empezando por las esquinas; muros de más de 6 m con refuerzos verticales; dinteles de bloque
+U con apoyo ≥ ½ bloque y luz ≤ 2,5 m; no usar los bloques antes de 28 días de fabricados; pallets de 1,00 × 1,00 m
+(1,60 m de alto los bloques, 0,85 m los U).
 
 ## Cálculo de materiales
 
