@@ -67,5 +67,8 @@ Dejá la plantilla **sin errores ni advertencias**; una nota `info` (por ejemplo
    ```
    Corregí cada `issue` del JSON (trae el muro o vano al que apunta) hasta que no quede ninguno de severidad
    `error` o `warn`. Mirá las capturas: con techo y sin techo, al menos dos vistas.
-4. Corré la skill `verificar` (incluye `TemplateCatalogTest`) y recién ahí hacé commit.
-5. Mostrale al usuario una o dos capturas y un resumen: ambientes, m² útiles, bloques, pallets y costo de referencia.
+4. Generá las miniaturas de la Galería (planta e isométrica, con Chromium): `COMPOSER_ALLOW_SUPERUSER=1 composer miniaturas`.
+   Sólo dibuja las que faltan o cambiaron; `TemplateImagesTest` falla si quedaron viejas. Subí los `.webp` de
+   `public/img/plantillas/`.
+5. Corré la skill `verificar` (incluye `TemplateCatalogTest`) y recién ahí hacé commit.
+6. Mostrale al usuario una o dos capturas y un resumen: ambientes, m² útiles, bloques, pallets y costo de referencia.

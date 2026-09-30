@@ -2,6 +2,7 @@
 {% set entry = 'gallery' %}
 {% block title %}Galería de diseños{% endblock %}
 {% block body %}
+<script type="application/json" id="blockk-config">{{ config|raw }}</script>
 <main class="page">
     <header class="page-head">
         <h1>Galería de diseños y plantillas modulares</h1>
@@ -86,7 +87,16 @@
     <div class="cards" id="cards">
         {% for c in cards %}
         <article class="tcard card" data-tags="{{ c.tags|join('|') }}" data-slug="{{ c.slug }}">
+            {% if c.images %}
+            <div class="thumb carousel" data-carousel>
+                <div class="car-track">
+                    <img class="car-slide" src="{{ asset(c.images.plan) }}" alt="Planta de {{ c.name }}" width="640" height="400">
+                    <img class="car-slide" src="{{ asset(c.images.iso) }}" alt="Vista isométrica de {{ c.name }}" width="640" height="400" loading="lazy">
+                </div>
+            </div>
+            {% else %}
             <div class="thumb">{{ c.svg|raw }}</div>
+            {% endif %}
             <div class="tcard-body">
                 <h2>{{ c.name }}</h2>
                 <p class="muted">{{ c.description }}</p>

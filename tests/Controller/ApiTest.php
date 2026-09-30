@@ -56,8 +56,10 @@ final class ApiTest extends WebTestCase
         $client = static::createClient();
         $crawler = $client->request('GET', '/galeria');
 
-        self::assertGreaterThanOrEqual(5, $crawler->filter('.tcard')->count());
-        self::assertGreaterThanOrEqual(5, $crawler->filter('.tcard svg')->count());
+        $cards = $crawler->filter('.tcard')->count();
+        self::assertGreaterThanOrEqual(2, $cards);
+        // planta e isométrica pregeneradas en cada tarjeta
+        self::assertSame(2 * $cards, $crawler->filter('.tcard .carousel .car-slide')->count());
         self::assertStringContainsString('Descarte', $client->getResponse()->getContent());
     }
 

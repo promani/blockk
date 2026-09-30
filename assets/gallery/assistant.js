@@ -7,10 +7,14 @@ import { $, h, add, clear } from '../lib/dom.js';
 import { fmt } from '../lib/format.js';
 import { saveProject } from '../lib/storage.js';
 import { api, createChat, thumb, kpis, reviewLine } from '../lib/ai-chat.js';
+import { analyze, solarPath } from '../lib/api.js';
+import { carouselOf } from '../lib/carousel.js';
+import { getThumbs, putThumbs } from '../lib/thumbcache.js';
+import { renderThumbs } from '../editor/snapshot.js';
 
 export const LINK_KEY = 'blockk.ai.link';
 
-export function mountAssistant({ card, dialog, confirmReplace }) {
+export function mountAssistant({ card, dialog, confirmReplace, config }) {
     const list = $('#ai-design-list', card);
     const openBtn = $('#ai-open', dialog);
     const steps = [...dialog.querySelectorAll('#ai-steps li')];
@@ -81,14 +85,40 @@ export function mountAssistant({ card, dialog, confirmReplace }) {
         });
     }
 
+    /**
+     * Planta e isométrica de un diseño con el dibujo del editor. Se dibujan una vez por versión y quedan en el
+     * navegador; mientras tanto se ve la planta en SVG.
+     */
+    async function designThumbs(d, holder) {
+        const key = `${d.id}:${d.updated}:1`;
+        let views = await getThumbs(key);
+        if (!views) {
+            const { project } = await api(`/api/assistant/designs/${d.id}?client=${chat.client}`);
+            const [result, solar] = await Promise.all([analyze(project), solarPath(project.lat ?? -34.6, 'winter').catch(() => null)]);
+            views = renderThumbs({ project: result.project ?? project, analysis: result.analysis, config, solarPath: solar?.path });
+            putThumbs(key, views);
+        }
+        holder.replaceWith(carouselOf([{ src: views.plan, alt: `Planta de ${d.nombre}` }, { src: views.iso, alt: `Vista isométrica de ${d.nombre}` }]));
+    }
+    const lazy = 'IntersectionObserver' in window ? new window.IntersectionObserver((entries) => {
+        for (const e of entries) {
+            if (!e.isIntersecting) continue;
+            lazy.unobserve(e.target);
+            designThumbs(e.target.designData, e.target).catch(() => { /* queda la planta en SVG */ });
+        }
+    }, { rootMargin: '200px' }) : null;
+
     async function loadDesigns() {
         try {
             const { designs } = await api(`/api/assistant/designs?client=${chat.client}`);
             clear(list);
             $('#ai-designs', card).hidden = designs.length === 0;
             for (const d of designs) {
+                const holder = thumb(d.svg, `Planta de ${d.nombre}`);
+                holder.designData = d;
+                if (lazy) lazy.observe(holder);
                 add(list, h('article', { class: 'ai-design card' },
-                    thumb(d.svg, `Planta de ${d.nombre}`),
+                    holder,
                     h('div', { class: 'ai-design-body' },
                         h('strong', {}, d.nombre),
                         h('span', { class: 'muted small' }, `${fmt(d.resumen.superficieUtilM2, 1)} m² · ${d.resumen.niveles} planta${d.resumen.niveles > 1 ? 's' : ''} · ${new Date(d.updated * 1000).toLocaleDateString('es-AR')}`),

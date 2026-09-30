@@ -65,6 +65,11 @@
             "@php -S 127.0.0.1:8000 -t public"
         ],
         "test": "phpunit",
+        "miniaturas": [
+            "Composer\\Config::disableProcessTimeout",
+            ".claude/skills/capturas/scripts/servidor.sh",
+            "NODE_PATH=$(npm root -g) node bin/miniaturas.cjs"
+        ],
         "assets:compile": "@php bin/console asset-map:compile"
     },
     "conflict": {

@@ -40,6 +40,9 @@ services:
         factory: ['App\Assistant\Store\StoreFactory', 'create']
         arguments: ['%env(REDIS_URL)%', '%env(REDIS_PREFIX)%', '%kernel.project_dir%/var/assistant']
 
+    App\Domain\Templates\TemplateImages:
+        arguments: ['%kernel.project_dir%/public']
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 

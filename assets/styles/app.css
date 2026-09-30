@@ -209,6 +209,18 @@ label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-
 .tcard[hidden] { display: none; }
 .thumb { background: var(--surface); border-bottom: 1px solid var(--border); }
 .thumb svg { display: block; width: 100%; height: auto; }
+.carousel { position: relative; overflow: hidden; aspect-ratio: 16 / 10; }
+.car-track { display: flex; height: 100%; transition: transform .35s ease; }
+.car-slide { flex: 0 0 100%; width: 100%; height: 100%; object-fit: cover; display: block; }
+.car-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .85); color: var(--graphite); font-size: 1.2rem; line-height: 1; cursor: pointer; box-shadow: var(--shadow); opacity: 0; transition: opacity .15s; }
+.car-prev { left: 8px; } .car-next { right: 8px; }
+.carousel:hover .car-arrow, .carousel:focus-within .car-arrow { opacity: 1; }
+.car-dots { position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; gap: 6px; }
+.car-dots button { width: 8px; height: 8px; padding: 0; border-radius: 50%; border: 0; background: rgba(30, 41, 59, .3); cursor: pointer; }
+.car-dots button[aria-pressed="true"] { background: var(--graphite); }
+@media (hover: none) { .car-arrow { opacity: .9; } }
+@media (prefers-reduced-motion: reduce) { .car-track { transition: none; } }
+.ai-design .carousel { border-bottom: 1px solid var(--border); }
 .tcard-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .tcard-body .btn { margin-top: auto; align-self: flex-start; }
 .taglist { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }

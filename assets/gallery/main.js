@@ -2,6 +2,16 @@ import { $, $$ } from '../lib/dom.js';
 import { template } from '../lib/api.js';
 import { saveProject, blankProject, loadProject } from '../lib/storage.js';
 import { mountAssistant } from './assistant.js';
+import { carousel } from '../lib/carousel.js';
+import { renderThumbs } from '../editor/snapshot.js';
+
+const config = JSON.parse($('#blockk-config').textContent);
+
+/* Planta e isométrica de cada plantilla (imágenes pregeneradas). */
+for (const el of $$('[data-carousel]')) carousel(el);
+
+/* Para bin/miniaturas.cjs: dibuja las vistas con el mismo renderer del editor. */
+window.blockkThumbs = (opts) => renderThumbs({ config, ...opts });
 
 /* Filtros por etiqueta (1 planta, 2 plantas, evolutiva, quinchos, bajo descarte). */
 const chips = $$('.chip[data-filter]');
@@ -55,4 +65,4 @@ $('#blank-form').addEventListener('submit', async (e) => {
 });
 
 /* Asistente de diseño por chat (sólo si el servidor lo tiene configurado). */
-if ($('#ai')) mountAssistant({ card: $('#ai'), dialog: $('#ai-dialog'), confirmReplace });
+if ($('#ai')) mountAssistant({ card: $('#ai'), dialog: $('#ai-dialog'), confirmReplace, config });

@@ -6,6 +6,7 @@ namespace App\Controller;
 
 use App\Assistant\Assistant;
 use App\Domain\Templates\TemplateCatalog;
+use App\Domain\Templates\TemplateImages;
 use App\Domain\Templates\TemplateThumbnail;
 use App\Http\ClientConfig;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -16,7 +17,7 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 final class PageController extends AbstractController
 {
-    public function __construct(private readonly TemplateCatalog $templates, private readonly CacheInterface $cache, private readonly Assistant $assistant)
+    public function __construct(private readonly TemplateCatalog $templates, private readonly CacheInterface $cache, private readonly Assistant $assistant, private readonly TemplateImages $images)
     {
     }
 
@@ -36,18 +37,20 @@ final class PageController extends AbstractController
     public function gallery(): Response
     {
         // Las métricas de las plantillas salen del motor real; se cachean porque son deterministas.
-        $cards = $this->cache->get('gallery.cards.v2', function (ItemInterface $item): array {
+        $cards = $this->cache->get('gallery.cards.v3', function (ItemInterface $item): array {
             $item->expiresAfter(3600);
 
             return array_map(function (array $s): array {
-                $s['svg'] = TemplateThumbnail::svg($s['project']);
+                // Planta e isométrica pregeneradas con el dibujo del editor; si faltan, la planta en SVG.
+                $s['images'] = $this->images->find($s['slug'], $this->templates->project($s['slug']));
+                $s['svg'] = null === $s['images'] ? TemplateThumbnail::svg($s['project']) : null;
                 unset($s['project']);
 
                 return $s;
             }, $this->templates->all());
         });
 
-        return $this->render('gallery/index.html.twig', ['cards' => $cards, 'nav' => 'gallery', 'assistant' => $this->assistant->enabled()]);
+        return $this->render('gallery/index.html.twig', ['cards' => $cards, 'nav' => 'gallery', 'assistant' => $this->assistant->enabled(), 'config' => ClientConfig::json()]);
     }
 
     #[Route('/catalogo', name: 'catalog', methods: ['GET'])]
