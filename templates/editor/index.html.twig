@@ -13,6 +13,7 @@
         <button type="button" class="btn btn-ghost" id="btn-save" title="Descargar el proyecto (.json)">Guardar</button>
         <button type="button" class="btn btn-ghost" id="btn-open" title="Abrir un proyecto (.json)">Abrir</button>
         <input type="file" id="file-open" accept="application/json,.json" hidden>
+        {% if assistant %}<a class="btn btn-ghost" id="btn-ai" href="{{ path('gallery') }}?ia=proyecto#ai" title="Conversá con la IA para cambiar este proyecto">✦ Modificar con IA</a>{% endif %}
         <a class="btn btn-primary" href="{{ path('bom') }}">Ver cómputo →</a>
     </div>
 {% endblock %}

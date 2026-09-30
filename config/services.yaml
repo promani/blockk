@@ -31,6 +31,18 @@ services:
             - '../src/Domain/Solar/Season.php'
             - '../src/Domain/Templates/{TemplateBuilder,TemplateThumbnail}.php'
             - '../src/Http/'
+            - '../src/Assistant/Store/{RedisStore,FileStore,StoreFactory}.php'
+            - '../src/Assistant/{Prompt,LlmUnavailable}.php'
+
+    App\Assistant\LlmClient: '@App\Assistant\KimiClient'
+
+    App\Assistant\Store\KeyValueStore:
+        factory: ['App\Assistant\Store\StoreFactory', 'create']
+        arguments: ['%env(REDIS_URL)%', '%env(REDIS_PREFIX)%', '%kernel.project_dir%/var/assistant']
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
+
+when@test:
+    services:
+        App\Tests\Support\KimiMock: ~

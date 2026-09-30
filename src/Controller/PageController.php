@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Assistant\Assistant;
 use App\Domain\Templates\TemplateCatalog;
 use App\Domain\Templates\TemplateThumbnail;
 use App\Http\ClientConfig;
@@ -15,14 +16,14 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 final class PageController extends AbstractController
 {
-    public function __construct(private readonly TemplateCatalog $templates, private readonly CacheInterface $cache)
+    public function __construct(private readonly TemplateCatalog $templates, private readonly CacheInterface $cache, private readonly Assistant $assistant)
     {
     }
 
     #[Route('/', name: 'editor', methods: ['GET'])]
     public function editor(): Response
     {
-        return $this->render('editor/index.html.twig', ['config' => ClientConfig::json(), 'nav' => 'editor']);
+        return $this->render('editor/index.html.twig', ['config' => ClientConfig::json(), 'nav' => 'editor', 'assistant' => $this->assistant->enabled()]);
     }
 
     #[Route('/computo', name: 'bom', methods: ['GET'])]
@@ -46,7 +47,7 @@ final class PageController extends AbstractController
             }, $this->templates->all());
         });
 
-        return $this->render('gallery/index.html.twig', ['cards' => $cards, 'nav' => 'gallery']);
+        return $this->render('gallery/index.html.twig', ['cards' => $cards, 'nav' => 'gallery', 'assistant' => $this->assistant->enabled()]);
     }
 
     #[Route('/catalogo', name: 'catalog', methods: ['GET'])]

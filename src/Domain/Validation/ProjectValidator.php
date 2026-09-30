@@ -11,6 +11,7 @@ use App\Domain\Model\Axis;
 use App\Domain\Model\JoistField;
 use App\Domain\Model\Opening;
 use App\Domain\Model\Project;
+use App\Domain\Model\Slab;
 use App\Domain\Model\Wall;
 use App\Domain\Timber\TimberPlan;
 
@@ -193,9 +194,12 @@ final class ProjectValidator
                 $mx = intdiv($wall->x1 + $wall->x2, 2);
                 $my = intdiv($wall->y1 + $wall->y2, 2);
                 $onFloor = array_any($floors, static fn (JoistField $f): bool => $mx >= $f->x && $mx <= $f->x + $f->w && $my >= $f->y && $my <= $f->y + $f->h);
-                $issues[] = $onFloor
-                    ? new Issue(Issue::INFO, 'support.partition', 'Tabique de PA sobre entrepiso de madera: prever tirante doble bajo el tabique.', 1, $wall->id, $wall->x1, $wall->y1)
-                    : new Issue(Issue::ERROR, 'support.partition', 'Tabique de PA fuera del entrepiso y sin muro debajo: no tiene apoyo.', 1, $wall->id, $wall->x1, $wall->y1);
+                $onSlab = array_any($upper->level->slabs, static fn (Slab $s): bool => $mx >= $s->x && $mx <= $s->x + $s->w && $my >= $s->y && $my <= $s->y + $s->h);
+                $issues[] = match (true) {
+                    $onFloor => new Issue(Issue::INFO, 'support.partition', 'Tabique de PA sobre entrepiso de madera: prever tirante doble bajo el tabique.', 1, $wall->id, $wall->x1, $wall->y1),
+                    $onSlab => new Issue(Issue::INFO, 'support.partition', 'Tabique de PA sobre losa: incluir su peso en el cálculo de la losa.', 1, $wall->id, $wall->x1, $wall->y1),
+                    default => new Issue(Issue::ERROR, 'support.partition', 'Tabique de PA fuera del entrepiso y sin muro debajo: no tiene apoyo.', 1, $wall->id, $wall->x1, $wall->y1),
+                };
             }
         }
     }

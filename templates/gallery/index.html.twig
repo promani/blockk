@@ -8,6 +8,39 @@
         <p class="lead">Tipologías con dimensiones múltiplo de 62,5 cm. Las métricas (superficie, bloques, descarte) las calcula el mismo motor del editor.</p>
     </header>
 
+    {% if assistant %}
+    <section class="ai-card card" id="ai" aria-labelledby="ai-title">
+        <div class="ai-head">
+            <div>
+                <h2 id="ai-title">✦ Diseñá tu casa conversando</h2>
+                <p class="muted">Contale a la IA cuántas plantas y ambientes querés: te hace unas preguntas y te arma la casa, lista para abrir en el editor.</p>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" id="ai-reset" hidden>Nueva conversación</button>
+        </div>
+        <div class="ai-start" id="ai-start">
+            <button type="button" class="btn btn-primary" data-ai-start="nueva">Casa nueva</button>
+            <label class="ai-template">Partir de
+                <select id="ai-template">
+                    {% for c in cards %}<option value="{{ c.slug }}">{{ c.name }}</option>{% endfor %}
+                </select>
+                <button type="button" class="btn btn-outline" data-ai-start="plantilla">Usar</button>
+            </label>
+            <button type="button" class="btn btn-outline" data-ai-start="proyecto" id="ai-project" hidden>Modificar mi proyecto actual</button>
+        </div>
+        <div class="ai-chat" id="ai-chat" hidden>
+            <div class="ai-log" id="ai-log" aria-live="polite"></div>
+            <form class="ai-input" id="ai-form">
+                <input type="text" id="ai-text" maxlength="800" autocomplete="off" placeholder="Escribí tu respuesta o elegí una opción…" aria-label="Tu mensaje">
+                <button type="submit" class="btn btn-primary">Enviar</button>
+            </form>
+        </div>
+        <div class="ai-designs" id="ai-designs" hidden>
+            <h3>Tus diseños</h3>
+            <div class="ai-design-list" id="ai-design-list"></div>
+        </div>
+    </section>
+    {% endif %}
+
     <section class="blank-card card" aria-labelledby="blank-title">
         <div>
             <h2 id="blank-title">Proyecto en blanco</h2>

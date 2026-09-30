@@ -1,5 +1,6 @@
 # Blockk Studio — imagen de producción (PHP 8.4 + Apache). Sin base de datos: el proyecto se guarda en el navegador.
-# Variables en tiempo de ejecución: APP_SECRET (obligatoria), DEFAULT_URI (URL pública, opcional).
+# Variables en tiempo de ejecución: APP_SECRET (obligatoria), DEFAULT_URI (URL pública, opcional) y, para el chat de
+# diseño, KIMI_API_KEY, KIMI_MODEL y REDIS_URL (ver .env).
 FROM php:8.4-apache
 
 RUN apt-get update \
@@ -14,10 +15,12 @@ RUN apt-get update \
         echo 'realpath_cache_size=4096K'; \
         echo 'realpath_cache_ttl=600'; \
         echo 'expose_php=Off'; \
+        echo 'max_execution_time=300'; \
     } > /usr/local/etc/php/conf.d/blockk.ini
 
 # Apache en el puerto 8080, sirviendo public/ con el front controller de Symfony.
 RUN sed -i 's/^Listen 80$/Listen 8080/' /etc/apache2/ports.conf \
+    && echo 'ServerName localhost' > /etc/apache2/conf-available/servername.conf && a2enconf servername \
     && { \
         echo '<VirtualHost *:8080>'; \
         echo '    DocumentRoot /var/www/app/public'; \

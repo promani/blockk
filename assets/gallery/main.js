@@ -1,6 +1,7 @@
 import { $, $$ } from '../lib/dom.js';
 import { template } from '../lib/api.js';
 import { saveProject, blankProject } from '../lib/storage.js';
+import { mountAssistant } from './assistant.js';
 
 /* Filtros por etiqueta (1 planta, 2 plantas, evolutiva, quinchos, bajo descarte). */
 const chips = $$('.chip[data-filter]');
@@ -36,3 +37,6 @@ $('#blank-form').addEventListener('submit', (e) => {
     saveProject(blankProject({ name: String(f.name).trim() || 'Proyecto sin título', lotW: Number(f.lotW), lotD: Number(f.lotD), t: Number(f.t), north: Number(f.north) }));
     location.href = '/';
 });
+
+/* Asistente de diseño por chat (sólo si el servidor lo tiene configurado). */
+if ($('#ai')) mountAssistant($('#ai'));

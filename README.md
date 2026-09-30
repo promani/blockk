@@ -104,6 +104,30 @@ cobertura total de cada corrida y ausencia de piezas superpuestas en **todas** l
 cómputo (áreas exactas, pallets, mortero, hormigón/hierro, cierre de la cotización), madera, validación, solar, sugeridor,
 plantillas y la API HTTP.
 
+## Diseño con IA (chat en la Galería)
+
+En la Galería, «Diseñá tu casa conversando» abre un chat: la IA hace preguntas de opción múltiple (plantas,
+dormitorios, baños, cocina, extras, techo) y arma la casa, que se abre en el editor como cualquier plantilla. También
+puede partir de una plantilla o del proyecto actual (botón «✦ Modificar con IA» del editor).
+
+- **Modelo**: Kimi (Moonshot AI) por su API compatible con OpenAI, con llamadas a herramientas. El modelo no dibuja
+  muros: conversa y llama a `preguntar`, `generar_casa`, `editar_casa`, `cargar_plantilla` y `ver_casa`
+  (`src/Assistant/`). Toda casa pasa por el motor completo y sus observaciones vuelven al modelo para que las corrija.
+- **Generador** (`src/Domain/Design/HouseGenerator.php`): de un programa de ambientes a una casa válida y determinista
+  (dormitorios al norte, servicios al sur, pasillo, losas y escalera en U en 2 plantas, techo con la sección de cabio
+  que alcanza). Probado con programas al azar: o la casa sale sin errores ni advertencias, o se rechaza con un motivo.
+- **Persistencia**: conversaciones y «Tus diseños» en Redis (`REDIS_URL`), 60 días; sin login, cada navegador tiene un id
+  aleatorio y sólo ve lo suyo. Sin `REDIS_URL` se usan archivos en `var/assistant` (desarrollo).
+- **Límites**: 60 mensajes por hora por IP, `ASSISTANT_DAILY_LIMIT` por día en total y 40 por conversación.
+
+| Variable | Uso |
+| --- | --- |
+| `KIMI_API_KEY` | Clave de la API de Kimi. Sin clave el chat no aparece. |
+| `KIMI_MODEL` | Modelo (por ejemplo, el K2/K3 vigente en la consola de Moonshot). |
+| `KIMI_BASE_URL` | Por defecto `https://api.moonshot.ai/v1`. |
+| `REDIS_URL`, `REDIS_PREFIX` | Redis y prefijo de claves (`blockk:`). |
+| `ASSISTANT_DAILY_LIMIT` | Mensajes al modelo por día (500). |
+
 ## Skills para Claude Code
 
 En `.claude/skills/` hay tres skills que Claude Code carga al trabajar en este repo (también se invocan con `/<nombre>`):

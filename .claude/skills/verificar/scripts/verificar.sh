@@ -10,6 +10,11 @@ fail=0
 step() { printf '\n== %s\n' "$1"; }
 
 step "PHPUnit"
+# Con redis-server instalado, RedisStoreTest corre contra una instancia efímera en el puerto 6390.
+if command -v redis-server > /dev/null && ! redis-cli -p 6390 ping > /dev/null 2>&1; then
+    redis-server --port 6390 --save '' --appendonly no --daemonize yes > /dev/null
+fi
+redis-cli -p 6390 ping > /dev/null 2>&1 && export REDIS_TEST_URL=redis://127.0.0.1:6390
 vendor/bin/phpunit --colors=never 2>&1 | tail -4
 [ "${PIPESTATUS[0]}" -eq 0 ] || fail=1
 # PHPUnit regenera config/reference.php al arrancar el kernel: no es un cambio nuestro.
@@ -32,6 +37,10 @@ if [ "${1:-}" != "--rapido" ]; then
     step "Navegador: prueba de humo"
     "$ROOT/.claude/skills/capturas/scripts/servidor.sh" || fail=1
     node "$HERE/humo.cjs" || fail=1
+
+    step "Navegador: chat de diseño (Kimi falso)"
+    "$HERE/servidor-ia.sh" || fail=1
+    node "$HERE/asistente.cjs" || fail=1
 fi
 
 printf '\n'
