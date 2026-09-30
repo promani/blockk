@@ -2,7 +2,8 @@
 /**
  * Servidor que imita la API de Kimi (OpenAI Chat Completions) con un guion fijo, para probar el asistente sin gastar ni
  * depender de la red. Uso: node kimi-falso.cjs [puerto=8099]
- * y la app con KIMI_BASE_URL=http://127.0.0.1:8099/v1 KIMI_API_KEY=x KIMI_MODEL=falso.
+ * y la app con KIMI_BASE_URL=http://127.0.0.1:8099/v1 KIMI_API_KEY=x KIMI_MODEL=falso KIMI_MODEL_LIGHT=liviano
+ * (el liviano coordina: pregunta o delega; el pesado construye).
  * GET /__log devuelve cuántas llamadas recibió (para comprobar que el formulario inicial no llama al modelo).
  */
 const http = require('http');
@@ -10,14 +11,24 @@ const http = require('http');
 const port = Number(process.argv[2] ?? 8099);
 let n = 0;
 let calls = 0;
+const byModel = {};
 const call = (name, args, content = '') => ({ role: 'assistant', content, tool_calls: [{ id: `c${++n}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
 const q = (id, pregunta, opciones, multiple = false) => ({ id, pregunta, multiple, opciones: opciones.map(([oid, texto]) => ({ id: oid, texto })) });
+
+/** Modelo liviano (coordinador): pregunta si el pedido es ambiguo; si no, delega al pesado. */
+function coordinator(messages) {
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    const t = String(lastUser?.content ?? '');
+    if (/agrandala/i.test(t)) return call('preguntar', { preguntas: [q('cuanto', '¿Cuánto más grande?', [['poco', 'Un poco'], ['mucho', 'Bastante']]), q('que', '¿Qué sumamos?', [['dorm', 'Un dormitorio'], ['esc', 'Escritorio'], ['gal', 'Galería']], true)] });
+    if (/[¿?]\s*$/.test(t) && !/Sum|luz|familia/i.test(t)) return { role: 'assistant', content: 'Sí, se puede.' };
+    return call('delegar', { instrucciones: t });
+}
 
 function reply(messages) {
     const system = String(messages[0].content);
     const last = messages.at(-1);
     const text = String(last.content ?? '');
-    if (last.role === 'tool') {
+    if (last.role === 'tool' && last.name !== 'delegar') {
         if (text.includes('"resultado":"ok"')) {
             const casa = JSON.parse(text).casa;
             const errors = casa.observaciones.filter((o) => o.severidad === 'error');
@@ -40,7 +51,7 @@ function reply(messages) {
 http.createServer((req, res) => {
     if (req.url === '/__log') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ calls }));
+        res.end(JSON.stringify({ calls, byModel }));
         return;
     }
     let body = '';
@@ -52,8 +63,12 @@ http.createServer((req, res) => {
             return;
         }
         calls++;
-        const { messages } = JSON.parse(body);
+        const { messages, model } = JSON.parse(body);
+        byModel[model] = (byModel[model] ?? 0) + 1;
+        // el coordinador actúa hasta delegar; después, el pesado
+        const delegated = messages.at(-1)?.role === 'tool' && messages.at(-1)?.name === 'delegar';
+        const message = model === 'liviano' && !delegated ? coordinator(messages) : reply(messages);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ choices: [{ message: reply(messages), finish_reason: 'stop' }] }));
+        res.end(JSON.stringify({ choices: [{ message, finish_reason: 'stop' }] }));
     });
 }).listen(port, '127.0.0.1', () => console.log(`kimi falso en http://127.0.0.1:${port}/v1`));

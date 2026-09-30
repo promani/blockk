@@ -26,6 +26,7 @@ final class AssistantController extends AbstractController
         private readonly Assistant $assistant,
         private readonly Conversations $conversations,
         #[Autowire(env: 'int:ASSISTANT_DAILY_LIMIT')] private readonly int $dailyLimit,
+        #[Autowire(env: 'int:ASSISTANT_HOURLY_LIMIT')] private readonly int $hourlyLimit,
     ) {
     }
 
@@ -135,7 +136,7 @@ final class AssistantController extends AbstractController
             return $this->json(['error' => 'El asistente no está configurado.'], Response::HTTP_SERVICE_UNAVAILABLE);
         }
         $ip = $request->getClientIp() ?? 'unknown';
-        $ok = $this->conversations->allow('ip:'.sha1($ip).':h', 3600, 60)
+        $ok = $this->conversations->allow('ip:'.sha1($ip).':h', 3600, $this->hourlyLimit)
             && $this->conversations->allow('day:'.date('Ymd'), 86400, $this->dailyLimit);
 
         return $ok ? null : $this->json(['error' => 'Se alcanzó el límite de uso del asistente. Probá de nuevo más tarde.'], Response::HTTP_TOO_MANY_REQUESTS);

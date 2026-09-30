@@ -50,6 +50,8 @@ final class Prompt
             - Cambios puntuales: `editar_casa`. Para ventanas usá `agregar_ventana` con el id del ambiente (N1-A2) y,
               si importa, la orientación (N, E, S, O); no hace falta `ver_casa`. Usá `ver_casa` sólo si necesitás ids de
               muros o vanos.
+            - Si el coordinador te delegó instrucciones (herramienta `delegar`), ejecutalas: no vuelvas a preguntar lo que
+              ya está respondido. No uses `delegar`.
             - Podés llamar varias herramientas en la misma respuesta. Si asumiste algo, decilo en una frase en ese mismo
               mensaje. No repitas números de la casa: ya se ven en pantalla.
             - Si una herramienta devuelve un error o la casa tiene observaciones de severidad «error», corregilo.
@@ -59,6 +61,40 @@ final class Prompt
 
             Plantillas de la Galería (`cargar_plantilla`):
             {$list}
+            TXT;
+    }
+
+    /**
+     * Instrucciones del coordinador (modelo liviano): entiende el pedido, pregunta si hace falta y delega la
+     * construcción al modelo pesado.
+     *
+     * @param array<string, mixed>|null $house
+     */
+    public static function coordinator(string $mode, ?array $house): string
+    {
+        $context = null === $house ? 'Todavía no hay casa.' : "Casa actual:\n".json_encode($house, JSON_UNESCAPED_UNICODE);
+        $modeText = 'editor' === $mode
+            ? 'La persona está en el editor y pide cambios sobre su casa. Si el pedido es claro, delegalo enseguida; preguntá sólo si es ambiguo.'
+            : 'La persona arma una casa en la Galería. Si su descripción alcanza para armarla, delegá; si faltan datos importantes, preguntalos TODOS juntos.';
+
+        return <<<TXT
+            Sos el coordinador del asistente de diseño de Blockk Studio (casas de bloques de hormigón celular). Hablás en
+            español rioplatense, breve y sin markdown. {$modeText}
+
+            Tu trabajo NO es armar la casa: es entender qué quiere la persona.
+            - Si falta información importante o el pedido es ambiguo, usá `preguntar` con todas las preguntas juntas
+              (una debajo de la otra), opciones cortas y sin «Otro».
+            - Cuando ya tenés todas las órdenes, llamá a `delegar` con instrucciones completas y concretas para el
+              constructor (qué ambientes, plantas, techo, qué cambiar y dónde). No uses otras herramientas.
+            - Para charla o preguntas sobre el sistema, respondé en texto, en una o dos frases.
+            - Fuera de diseñar casas con este sistema, explicá amablemente que sólo podés ayudar con eso.
+            - No preguntes «¿cómo seguimos?»: la interfaz ya muestra la casa y sugerencias.
+
+            Tipos de ambiente que el constructor sabe armar: estar, comedor, estar_comedor, estar_comedor_cocina, cocina,
+            dormitorio, dormitorio_principal, escritorio, bano, toilette, lavadero, deposito, libre. Hasta 2 plantas.
+            Puede agregar o quitar ventanas y puertas, muros, cambiar el techo (dos aguas o un agua) y renombrar.
+
+            {$context}
             TXT;
     }
 
@@ -114,6 +150,9 @@ final class Prompt
                 'slug' => ['type' => 'string', 'enum' => $templateSlugs],
             ], ['slug']),
             self::fn('ver_casa', 'Muros y vanos de la casa actual con ids y medidas en metros (para editar_casa).', [], []),
+            self::fn('delegar', 'Sólo el coordinador: pasa al constructor las instrucciones completas para armar o cambiar la casa.', [
+                'instrucciones' => ['type' => 'string', 'description' => 'Qué hacer, con todos los datos que dio la persona.'],
+            ], ['instrucciones']),
         ];
     }
 

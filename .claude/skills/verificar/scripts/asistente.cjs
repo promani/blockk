@@ -104,6 +104,8 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     log(await page.isVisible('#confirm-replace'), '«Usar» también avisa');
     await page.click('#confirm-replace button[value="cancel"]');
 
+    const { byModel } = await (await fetch(`${kimi}/__log`)).json();
+    log(byModel.liviano > 0 && byModel.falso > 0, `el liviano coordina y el pesado construye (${JSON.stringify(byModel)})`);
     log(!errors.length, `sin errores de consola${errors.length ? ` → ${errors.slice(0, 3).join(' | ')}` : ''}`);
     await browser.close();
     console.log(fails.length ? `\n${fails.length} falla(s)` : '\ntodo en orden');

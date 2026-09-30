@@ -51,4 +51,23 @@ final class KimiClientTest extends TestCase
         self::assertFalse((new KimiClient($http, 'k', ' ', 'u'))->enabled());
         self::assertTrue((new KimiClient($http, 'k', 'm', 'u'))->enabled());
     }
+
+    #[Test]
+    public function theLightModelUsesTheSameKeyAndEndpoint(): void
+    {
+        $seen = [];
+        $http = new MockHttpClient(static function (string $method, string $url, array $options) use (&$seen): MockResponse {
+            $seen[] = [$url, json_decode($options['body'], true)['model']];
+
+            return new MockResponse('{"choices":[{"message":{"role":"assistant","content":"ok"}}]}');
+        });
+        $client = new KimiClient($http, 'k', 'kimi-for-coding', 'https://api.moonshot.ai/v1', 'kimi-k2.6');
+        self::assertTrue($client->hasLight());
+        $client->chat([], [], KimiClient::LIGHT);
+        $client->chat([], [], KimiClient::HEAVY);
+        self::assertSame([['https://api.moonshot.ai/v1/chat/completions', 'kimi-k2.6'], ['https://api.moonshot.ai/v1/chat/completions', 'kimi-for-coding']], $seen);
+
+        // sin modelo liviano, todo va al pesado
+        self::assertFalse((new KimiClient($http, 'k', 'pesado', 'https://x/v1'))->hasLight());
+    }
 }

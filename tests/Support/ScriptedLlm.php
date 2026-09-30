@@ -16,14 +16,27 @@ final class ScriptedLlm implements LlmClient
     /** @var list<list<array<string, mixed>>> */
     public array $received = [];
 
+    /** @var list<string> nivel de cada llamada (liviano / pesado) */
+    public array $tiers = [];
+
+    public function __construct(public bool $light = false)
+    {
+    }
+
     public function enabled(): bool
     {
         return true;
     }
 
-    public function chat(array $messages, array $tools): array
+    public function hasLight(): bool
+    {
+        return $this->light;
+    }
+
+    public function chat(array $messages, array $tools, string $tier = self::HEAVY): array
     {
         $this->received[] = $messages;
+        $this->tiers[] = $tier;
         $next = array_shift($this->queue) ?? throw new LlmUnavailable('guion agotado');
         if ($next instanceof \Throwable) {
             throw $next;

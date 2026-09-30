@@ -46,3 +46,7 @@ services:
 when@test:
     services:
         App\Tests\Support\KimiMock: ~
+        # conversaciones de los tests en un directorio propio, que tests/bootstrap.php vacía en cada corrida
+        App\Assistant\Store\KeyValueStore:
+            factory: ['App\Assistant\Store\StoreFactory', 'create']
+            arguments: ['', 'blockk:', '%kernel.project_dir%/var/assistant-test']

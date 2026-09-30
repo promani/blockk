@@ -202,11 +202,15 @@ final class Assistant
 
         $slugs = array_column($this->templates->all(), 'name', 'slug');
         $tools = Prompt::tools(array_keys($slugs));
+        // El turno siempre arranca con el modelo liviano (coordinador); cuando tiene las órdenes, delega al pesado.
+        $tier = $this->llm->hasLight() ? LlmClient::LIGHT : LlmClient::HEAVY;
 
         for ($step = 0; $step < self::MAX_STEPS; ++$step) {
-            $system = ['role' => 'system', 'content' => Prompt::system($slugs, $conv['modo'] ?? 'galeria', $this->context($conv))];
+            $system = ['role' => 'system', 'content' => LlmClient::LIGHT === $tier
+                ? Prompt::coordinator($conv['modo'] ?? 'galeria', $this->context($conv))
+                : Prompt::system($slugs, $conv['modo'] ?? 'galeria', $this->context($conv))];
             try {
-                $msg = $this->llm->chat([$system, ...$conv['messages']], $tools);
+                $msg = $this->llm->chat([$system, ...$conv['messages']], $tools, $tier);
             } catch (LlmUnavailable $e) {
                 $conv['events'][] = ['tipo' => 'error', 'texto' => 'El asistente no está disponible en este momento. Probá de nuevo en un rato.', 'detalle' => $e->getMessage()];
 
@@ -229,6 +233,17 @@ final class Assistant
                 return;
             }
 
+            if (LlmClient::LIGHT === $tier) {
+                if ($this->coordinate($conv, $calls)) {
+                    $tier = LlmClient::HEAVY;
+                    continue;
+                }
+                if ('pregunta' === (end($conv['events'])['tipo'] ?? null)) {
+                    return;
+                }
+                continue;
+            }
+
             $events = [];
             $asked = false;
             $failed = false;
@@ -237,7 +252,11 @@ final class Assistant
                 $name = (string) ($call['function']['name'] ?? '');
                 $raw = (string) ($call['function']['arguments'] ?? '{}');
                 $args = json_decode('' === $raw ? '{}' : $raw, true);
-                $result = is_array($args) ? $this->run($conv, $name, $args) : ['content' => 'Error: los argumentos no son JSON válido.', 'error' => true];
+                $result = match (true) {
+                    'delegar' === $name => ['content' => 'Ya sos el constructor: ejecutá las instrucciones con las otras herramientas.', 'error' => true],
+                    is_array($args) => $this->run($conv, $name, $args),
+                    default => ['content' => 'Error: los argumentos no son JSON válido.', 'error' => true],
+                };
                 $conv['messages'][] = ['role' => 'tool', 'tool_call_id' => (string) ($call['id'] ?? ''), 'name' => $name, 'content' => $result['content']];
                 if (isset($result['event'])) {
                     $events[] = $result['event'];
@@ -260,6 +279,37 @@ final class Assistant
             }
         }
         $conv['events'][] = ['tipo' => 'asistente', 'texto' => 'Se me complicó con este pedido. ¿Lo podés decir de otra forma?'];
+    }
+
+    /**
+     * Herramientas del coordinador. `preguntar` se muestra; `delegar` (o cualquier herramienta de construcción, que
+     * el coordinador no ejecuta) pasa el turno al modelo pesado. Devuelve true si hay que delegar.
+     *
+     * @param array<string, mixed>       $conv
+     * @param list<array<string, mixed>> $calls
+     */
+    private function coordinate(array &$conv, array $calls): bool
+    {
+        $handoff = [] !== array_filter($calls, static fn (array $c): bool => 'preguntar' !== ($c['function']['name'] ?? ''));
+        foreach ($calls as $call) {
+            $name = (string) ($call['function']['name'] ?? '');
+            $args = json_decode((string) ($call['function']['arguments'] ?? '{}'), true);
+            if ('preguntar' === $name && !$handoff) {
+                $result = $this->run($conv, $name, is_array($args) ? $args : []);
+                if (isset($result['event'])) {
+                    $conv['events'][] = $result['event'];
+                }
+            } else {
+                $result = ['content' => match ($name) {
+                    'delegar' => 'Delegado al constructor.',
+                    'preguntar' => 'No se mostró: primero actúa el constructor.',
+                    default => 'No ejecutado por el coordinador: lo hace el constructor con estos datos.',
+                }];
+            }
+            $conv['messages'][] = ['role' => 'tool', 'tool_call_id' => (string) ($call['id'] ?? ''), 'name' => $name, 'content' => $result['content']];
+        }
+
+        return $handoff;
     }
 
     /**

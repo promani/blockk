@@ -4,10 +4,19 @@ declare(strict_types=1);
 
 namespace App\Assistant;
 
-/** Modelo de lenguaje con llamadas a herramientas (formato de mensajes de OpenAI Chat Completions). */
+/**
+ * Modelo de lenguaje con llamadas a herramientas (formato de mensajes de OpenAI Chat Completions), en dos niveles:
+ * «liviano» (conversa, pregunta y decide) y «pesado» (arma o edita la casa).
+ */
 interface LlmClient
 {
+    public const string LIGHT = 'liviano';
+    public const string HEAVY = 'pesado';
+
     public function enabled(): bool;
+
+    /** ¿Hay un modelo liviano distinto del pesado? */
+    public function hasLight(): bool;
 
     /**
      * @param list<array<string, mixed>> $messages
@@ -17,5 +26,5 @@ interface LlmClient
      *
      * @throws LlmUnavailable
      */
-    public function chat(array $messages, array $tools): array;
+    public function chat(array $messages, array $tools, string $tier = self::HEAVY): array;
 }

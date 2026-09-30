@@ -6,6 +6,7 @@ namespace App\Tests\Assistant;
 
 use App\Assistant\Assistant;
 use App\Assistant\Conversations;
+use App\Assistant\LlmClient;
 use App\Assistant\LlmUnavailable;
 use App\Assistant\Store\FileStore;
 use App\Assistant\Wizard;
@@ -243,5 +244,64 @@ final class AssistantTest extends TestCase
         self::assertCount(1, $this->conversations->designs(self::CLIENT));
         self::assertNotNull($this->conversations->design($conv['id'], self::CLIENT));
         self::assertNull($this->conversations->design($conv['id'], 'ffffffffffffffffffffffff'));
+    }
+
+    private function twoTier(): Assistant
+    {
+        $this->llm = new ScriptedLlm(light: true);
+
+        return new Assistant($this->llm, $this->conversations, new ProjectAnalyzer(), new HouseGenerator(), new HouseEditor(), new HouseDescriber(), new TemplateCatalog());
+    }
+
+    #[Test]
+    public function theLightModelStartsTheTurnAndAsksWhenAmbiguous(): void
+    {
+        $assistant = $this->twoTier();
+        $this->llm->queue = [ScriptedLlm::ask('¿Cuánto más grande?', ['a' => 'Un poco', 'b' => 'Bastante'])];
+        $conv = $assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-minima'], 'editor', 'agrandala');
+
+        self::assertSame([LlmClient::LIGHT], $this->llm->tiers);
+        self::assertSame(['casa', 'usuario', 'pregunta'], $this->types($conv));
+        self::assertStringContainsString('coordinador', $this->llm->received[0][0]['content']);
+    }
+
+    #[Test]
+    public function whenTheLightModelHasTheOrdersTheHeavyOneBuildsTheHouse(): void
+    {
+        $assistant = $this->twoTier();
+        $this->llm->queue = [
+            ScriptedLlm::call('delegar', ['instrucciones' => '1 planta, 3 dormitorios, 1 baño'], 'd1'),
+            ScriptedLlm::call('generar_casa', ['niveles' => 1, 'ambientes' => [['tipo' => 'dormitorio', 'cantidad' => 3], ['tipo' => 'bano']]], 'g1'),
+        ];
+        $conv = $assistant->start(self::CLIENT, ['tipo' => 'nueva'], 'galeria', 'casa de una planta con 3 dormitorios y un baño');
+
+        self::assertSame([LlmClient::LIGHT, LlmClient::HEAVY], $this->llm->tiers);
+        self::assertSame(['usuario', 'casa'], $this->types($conv));
+        self::assertStringContainsString('coordinador te delegó', $this->llm->received[1][0]['content']);
+        self::assertStringContainsString('1 planta, 3 dormitorios', json_encode($this->llm->received[1], JSON_UNESCAPED_UNICODE));
+    }
+
+    #[Test]
+    public function aBuildToolCalledByTheLightModelIsHandedOffNotExecuted(): void
+    {
+        $assistant = $this->twoTier();
+        $this->llm->queue = [
+            ScriptedLlm::call('generar_casa', ['niveles' => 1, 'ambientes' => [['tipo' => 'dormitorio']]], 'x1'),
+            ScriptedLlm::call('generar_casa', ['niveles' => 1, 'ambientes' => [['tipo' => 'dormitorio', 'cantidad' => 2]]], 'x2'),
+        ];
+        $conv = $assistant->start(self::CLIENT, ['tipo' => 'nueva'], 'galeria', 'dos dormitorios');
+
+        self::assertSame([LlmClient::LIGHT, LlmClient::HEAVY], $this->llm->tiers);
+        self::assertSame(1, count(array_filter($conv['events'], static fn (array $e): bool => 'casa' === $e['tipo'])), 'sólo construye el pesado');
+        self::assertStringContainsString('No ejecutado por el coordinador', self::lastToolContent($this->llm->received[1]));
+    }
+
+    #[Test]
+    public function theWizardFormStillNeedsNoModelAtAll(): void
+    {
+        $assistant = $this->twoTier();
+        $conv = $assistant->start(self::CLIENT, ['tipo' => 'nueva']);
+        $assistant->reply($conv, '', ['plantas' => ['1'], 'dormitorios' => ['2'], 'banos' => ['1'], 'cocina' => ['integrada'], 'techo' => ['dos_aguas']]);
+        self::assertSame([], $this->llm->tiers);
     }
 }

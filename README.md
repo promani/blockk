@@ -124,15 +124,16 @@ plantillas y la API HTTP.
   que alcanza). Probado con programas al azar: o la casa sale sin errores ni advertencias, o se rechaza con un motivo.
 - **Persistencia**: conversaciones y «Tus diseños» en Redis (`REDIS_URL`), 60 días; sin login, cada navegador tiene un id
   aleatorio y sólo ve lo suyo. Sin `REDIS_URL` se usan archivos en `var/assistant` (desarrollo).
-- **Límites**: 60 mensajes por hora por IP, `ASSISTANT_DAILY_LIMIT` por día en total y 40 por conversación.
+- **Límites**: `ASSISTANT_HOURLY_LIMIT` por hora por IP, `ASSISTANT_DAILY_LIMIT` por día en total y 40 por conversación.
 
 | Variable | Uso |
 | --- | --- |
 | `KIMI_API_KEY` | Clave de la API de Kimi. Sin clave el chat no aparece. |
-| `KIMI_MODEL` | Modelo (por ejemplo, el K2/K3 vigente en la consola de Moonshot). |
+| `KIMI_MODEL` | Modelo pesado: arma el JSON de la casa y las acciones directas. |
+| `KIMI_MODEL_LIGHT` | Modelo liviano y más barato (misma clave y endpoint): arranca cada turno, pregunta y, cuando tiene las órdenes, delega al pesado. Vacío: todo lo hace `KIMI_MODEL`. |
 | `KIMI_BASE_URL` | Por defecto `https://api.moonshot.ai/v1`. |
 | `REDIS_URL`, `REDIS_PREFIX` | Redis y prefijo de claves (`blockk:`). |
-| `ASSISTANT_DAILY_LIMIT` | Mensajes al modelo por día (500). |
+| `ASSISTANT_DAILY_LIMIT`, `ASSISTANT_HOURLY_LIMIT` | Mensajes por día en total (500) y por hora por IP (60). |
 
 ## Skills para Claude Code
 
