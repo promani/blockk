@@ -48,7 +48,16 @@ final class Wizard
         if ($beds >= 2) {
             $rooms[] = ['tipo' => 'dormitorio_principal', 'nivel' => $up];
         }
-        $rooms[] = ['tipo' => 'dormitorio', 'nivel' => $up, 'cantidad' => $beds >= 2 ? $beds - 1 : 1];
+        // En 2 plantas, con 3 o más dormitorios uno queda abajo: las dos plantas tienen el mismo largo y así la baja
+        // no se llena de ambientes libres.
+        $downstairs = 2 === $levels && $beds >= 3 ? 1 : 0;
+        $rest = ($beds >= 2 ? $beds - 1 : 1) - $downstairs;
+        if ($rest > 0) {
+            $rooms[] = ['tipo' => 'dormitorio', 'nivel' => $up, 'cantidad' => $rest];
+        }
+        if ($downstairs) {
+            $rooms[] = ['tipo' => 'dormitorio', 'nivel' => 1];
+        }
         $rooms[] = ['tipo' => 'bano', 'nivel' => $up];
         match ($one('banos', '1')) {
             '2' => $rooms[] = ['tipo' => 'bano', 'nivel' => 1],

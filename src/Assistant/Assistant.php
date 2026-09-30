@@ -209,13 +209,16 @@ final class Assistant
             $system = ['role' => 'system', 'content' => LlmClient::LIGHT === $tier
                 ? Prompt::coordinator($conv['modo'] ?? 'galeria', $this->context($conv))
                 : Prompt::system($slugs, $conv['modo'] ?? 'galeria', $this->context($conv))];
+            $t0 = microtime(true);
             try {
                 $msg = $this->llm->chat([$system, ...$conv['messages']], $tools, $tier);
             } catch (LlmUnavailable $e) {
+                $this->log($conv, $step, $tier, $t0, 'ERROR '.$e->getMessage());
                 $conv['events'][] = ['tipo' => 'error', 'texto' => 'El asistente no está disponible en este momento. Probá de nuevo en un rato.', 'detalle' => $e->getMessage()];
 
                 return;
             }
+            $this->log($conv, $step, $tier, $t0, implode(',', array_map(static fn (array $c): string => (string) ($c['function']['name'] ?? '?'), (array) ($msg['tool_calls'] ?? []))) ?: 'texto');
             $calls = is_array($msg['tool_calls'] ?? null) ? array_values($msg['tool_calls']) : [];
             $content = is_string($msg['content'] ?? null) ? trim($msg['content']) : '';
             $keep = ['role' => 'assistant', 'content' => $content];
@@ -497,6 +500,20 @@ final class Assistant
         if (count($conv['events']) > 300) {
             $conv['events'] = array_slice($conv['events'], -300);
         }
+    }
+
+    /**
+     * Una línea por llamada al modelo en el log del servidor (en Docker, los logs del contenedor): para diagnosticar
+     * respuestas lentas o vueltas de más sin guardar el contenido de la conversación.
+     *
+     * @param array<string, mixed> $conv
+     */
+    private function log(array $conv, int $step, string $tier, float $t0, string $what): void
+    {
+        if ('cli' === PHP_SAPI) {
+            return; // tests y consola
+        }
+        error_log(sprintf('[asistente] conv=%s modo=%s turno=%d paso=%d modelo=%s %.1fs → %s', substr((string) $conv['id'], 0, 8), $conv['modo'] ?? '?', $conv['turns'], $step + 1, $tier, microtime(true) - $t0, $what));
     }
 
     /** @param array<string, mixed> $data */

@@ -121,18 +121,15 @@ final class HouseEditor
                 if ([] === ($p['roofs'] ?? [])) {
                     throw new \InvalidArgumentException('la casa no tiene techo; volvé a generarla.');
                 }
-                foreach ($p['roofs'] as $k => $r) {
-                    $r['type'] = 'un_agua' === $type ? 'shed' : 'gable';
-                    $r['dir'] = 'un_agua' === $type ? 'S' : ($r['w'] >= $r['h'] ? 'x' : 'y');
+                $roofs = [];
+                foreach ($p['roofs'] as $r) {
                     if (isset($op['pendiente']) && is_numeric($op['pendiente'])) {
                         $r['slope'] = max(10, min(60, (int) $op['pendiente']));
                     }
-                    // cabio más chico que alcanza: a dos aguas cubre media luz; a un agua, toda
-                    $span = 'un_agua' === $type ? $r['h'] : ('x' === $r['dir'] ? $r['h'] : $r['w']) / 2;
-                    $r['section'] = HouseGenerator::section($span);
                     $r['spacing'] = 50;
-                    $p['roofs'][$k] = $r;
+                    array_push($roofs, ...('un_agua' === $type ? $this->shed($p, $r) : [$this->gable($r)]));
                 }
+                $p['roofs'] = $roofs;
 
                 return $p;
             case 'renombrar':
@@ -146,6 +143,70 @@ final class HouseEditor
             default:
                 throw new \InvalidArgumentException(sprintf('acción desconocida; usá: %s.', implode(', ', self::ACTIONS)));
         }
+    }
+
+    /** Luz horizontal máxima (u) que cubre un cabio de la sección más grande a 50 cm (misma regla que RoofPlanner). */
+    private function maxRun(): float
+    {
+        $max = max(array_column(Hcca::timberSections(), 'maxSpanCm'));
+
+        return $max * (40 / 50) ** (1 / 3) / Hcca::GRID_CM;
+    }
+
+    /**
+     * @param array<string, mixed> $r
+     *
+     * @return array<string, mixed>
+     */
+    private function gable(array $r): array
+    {
+        $r['type'] = 'gable';
+        $r['dir'] = $r['w'] >= $r['h'] ? 'x' : 'y';
+        $r['section'] = HouseGenerator::section(('x' === $r['dir'] ? $r['h'] : $r['w']) / 2);
+
+        return $r;
+    }
+
+    /**
+     * Techo a un agua: cae hacia el lado corto si la luz alcanza; si no, dos faldones escalonados sobre un muro
+     * portante interior que cruce todo el techo; si tampoco hay, no se puede.
+     *
+     * @param array<string, mixed> $p
+     * @param array<string, mixed> $r
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function shed(array $p, array $r): array
+    {
+        $max = $this->maxRun();
+        $r['type'] = 'shed';
+        if ($r['h'] <= $max || $r['w'] <= $max) {
+            $r['dir'] = $r['h'] <= $max && ($r['h'] <= $r['w'] || $r['w'] > $max) ? 'S' : 'E';
+            $r['section'] = HouseGenerator::section('S' === $r['dir'] ? $r['h'] : $r['w']);
+
+            return [$r];
+        }
+        // muro portante (≥ 15 cm) horizontal que cruce el techo, lo más al centro posible
+        $walls = $p['levels'][(int) ($r['level'] ?? 0)]['walls'] ?? [];
+        $best = null;
+        foreach ($walls as $w) {
+            if ($w['y1'] !== $w['y2'] || $w['t'] < 15 || $w['y1'] <= $r['y'] || $w['y1'] >= $r['y'] + $r['h']) {
+                continue;
+            }
+            $covered = array_sum(array_map(static fn (array $o): int => max(0, min($o['x2'], $r['x'] + $r['w']) - max($o['x1'], $r['x'])), array_filter($walls, static fn (array $o): bool => $o['y1'] === $o['y2'] && $o['y1'] === $w['y1'] && $o['t'] >= 15)));
+            $a = $w['y1'] - $r['y'];
+            $b = $r['y'] + $r['h'] - $w['y1'];
+            if ($covered >= 0.8 * $r['w'] && $a <= $max && $b <= $max && (null === $best || abs($a - $b) < abs($best[0] - $best[1]))) {
+                $best = [$a, $b];
+            }
+        }
+        if (null === $best) {
+            throw new \InvalidArgumentException(sprintf('a un agua no se puede: la casa tiene %s m de fondo y un cabio cubre como máximo %s m, y no hay un muro portante interior que cruce toda la casa para partir el techo en dos faldones. Opciones: dejarlo a dos aguas o, si la casa tiene programa, volver a generarla con techo un_agua (el generador agrega ese muro).', $this->m($r['h']), $this->m((int) floor($max))));
+        }
+        $first = ['h' => $best[0], 'dir' => 'S', 'section' => HouseGenerator::section($best[0])] + $r;
+        $second = ['id' => $r['id'].'b', 'y' => $r['y'] + $best[0], 'h' => $best[1], 'dir' => 'S', 'section' => HouseGenerator::section($best[1])] + $r;
+
+        return [$first, $second];
     }
 
     /**

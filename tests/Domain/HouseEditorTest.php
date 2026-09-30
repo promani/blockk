@@ -71,4 +71,36 @@ final class HouseEditorTest extends TestCase
             }
         }
     }
+
+    #[Test]
+    public function aSingleSlopeRoofFallsToTheShortSideWhenTheRafterReaches(): void
+    {
+        $p = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray((new TemplateCatalog())->project('quincho-5x3-75')))['project'];
+        $out = (new HouseEditor())->apply($p, [['accion' => 'cambiar_techo', 'tipo' => 'un_agua']]);
+        self::assertSame('shed', $out['roofs'][0]['type']);
+        $issues = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray($out))['analysis']['issues'];
+        self::assertSame([], array_values(array_filter($issues, static fn (array $i): bool => str_starts_with($i['code'], 'roof.') && 'info' !== $i['severity'])));
+    }
+
+    #[Test]
+    public function aSingleSlopeRoofThatNoRafterCoversIsRefusedWithAlternatives(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('a un agua no se puede');
+        (new HouseEditor())->apply($this->house(), [['accion' => 'cambiar_techo', 'tipo' => 'un_agua']]);
+    }
+
+    #[Test]
+    public function aSingleSlopeRoofIsSplitOverAnInteriorLoadBearingWall(): void
+    {
+        // casa generada a dos aguas + un muro portante que cruza toda la casa por el pasillo
+        $house = (new \App\Domain\Design\HouseGenerator())->generate(['niveles' => 1, 'ambientes' => [['tipo' => 'dormitorio', 'cantidad' => 2], ['tipo' => 'bano']]]);
+        $p = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray($house['project']))['project'];
+        $out = (new HouseEditor())->apply($p, [['accion' => 'agregar_muro', 'nivel' => 1, 'x1' => 0, 'y1' => 4.875, 'x2' => 3.5, 'y2' => 4.875, 'espesorCm' => 15]]);
+        $out = (new HouseEditor())->apply((new ProjectAnalyzer())->analyze(ProjectFactory::fromArray($out))['project'], [['accion' => 'cambiar_techo', 'tipo' => 'un_agua']]);
+
+        self::assertCount(2, $out['roofs']);
+        $issues = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray($out))['analysis']['issues'];
+        self::assertSame([], array_values(array_map(static fn (array $i): string => $i['code'], array_filter($issues, static fn (array $i): bool => str_starts_with($i['code'], 'roof.') && 'info' !== $i['severity']))));
+    }
 }
