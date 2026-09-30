@@ -77,11 +77,11 @@
 
     <div class="filters" role="group" aria-label="Filtros estructurales">
         <button type="button" class="chip" data-filter="all" aria-pressed="true">Todas</button>
-        <button type="button" class="chip" data-filter="1 planta" aria-pressed="false">1 planta</button>
-        <button type="button" class="chip" data-filter="2 plantas" aria-pressed="false">2 plantas</button>
-        <button type="button" class="chip" data-filter="Vivienda evolutiva" aria-pressed="false">Vivienda evolutiva</button>
-        <button type="button" class="chip" data-filter="Quincho" aria-pressed="false">Quinchos</button>
-        <button type="button" class="chip" data-filter="Bajo descarte" aria-pressed="false">Bajo descarte</button>
+        {# sólo los filtros que tienen alguna plantilla #}
+        {% set tags = cards|reduce((all, c) => all|merge(c.tags), []) %}
+        {% for tag, name in {'1 planta': '1 planta', '2 plantas': '2 plantas', 'Vivienda evolutiva': 'Vivienda evolutiva', 'Quincho': 'Quinchos', 'Bajo descarte': 'Bajo descarte'} %}
+            {% if tag in tags %}<button type="button" class="chip" data-filter="{{ tag }}" aria-pressed="false">{{ name }}</button>{% endif %}
+        {% endfor %}
     </div>
 
     <div class="cards" id="cards">

@@ -23,11 +23,14 @@ const renderer = new Renderer(canvas);
 
 const UI_KEY = 'blockk.ui.v2';
 const ROOF_LEVEL = 2;
-/** Herramientas de cada pestaña: las principales con nombre y, bajo «Más», las de uso avanzado. */
+/**
+ * Herramientas de cada pestaña: las principales con nombre y, bajo «Más», las de uso avanzado. Techo está siempre:
+ * desde un nivel lleva a la pestaña Techo.
+ */
 const TOOLSETS = {
-    0: { main: ['select', 'move', 'room', 'wall', 'door', 'window', 'stair'], more: ['block', 'ubeam'] },
-    1: { main: ['select', 'move', 'room', 'wall', 'door', 'window', 'piso'], more: ['block', 'ubeam', 'beam'] },
-    2: { main: ['select', 'move', 'roof'], more: [] },
+    0: { main: ['select', 'room', 'wall', 'door', 'window', 'stair', 'roof'], more: ['block', 'ubeam'] },
+    1: { main: ['select', 'room', 'wall', 'door', 'window', 'piso', 'roof'], more: ['block', 'ubeam', 'beam'] },
+    2: { main: ['select', 'roof'], more: [] },
 };
 let showMore = false;
 
@@ -308,9 +311,9 @@ document.addEventListener('keydown', (e) => {
         return;
     }
     if (mod && e.key.toLowerCase() === 'a') {
-        // Ctrl+A: elegir toda la casa con la herramienta Mover
+        // Ctrl+A: elegir toda la casa para moverla
         e.preventDefault();
-        setTool('move');
+        setTool('select');
         app.selectAll();
         return;
     }
@@ -371,15 +374,17 @@ function setTool(id) {
 /** Motivo por el que una herramienta no está disponible ahora (null si lo está). */
 function toolDisabled(tool) {
     if (tool.id === 'roof') return null;
-    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select' && tool.id !== 'move') return 'En la pestaña Techo solo se dibujan y editan techos: volvé a un nivel para dibujar muros, losas o escaleras.';
+    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select') return 'En la pestaña Techo solo se dibujan y editan techos: volvé a un nivel para dibujar muros, losas o escaleras.';
     return tool.disabled?.() ?? null;
 }
 
 function refreshOptions() {
     const tool = activeTool();
-    // En la pestaña Techo, tanto Seleccionar como Techo muestran las opciones del techo (elegido o de los nuevos).
-    const opts = store.ui.level === ROOF_LEVEL ? app.roofOptions() : tool.options?.();
-    const title = store.ui.level === ROOF_LEVEL ? 'Techo' : tool.label;
+    // En la pestaña Techo, tanto Elegir como Techo muestran las opciones del techo (elegido o de los nuevos), salvo que
+    // haya un grupo elegido con un rectángulo: ahí van las de Elegir.
+    const roofOpts = store.ui.level === ROOF_LEVEL && !(tool.id === 'select' && app.multiCount());
+    const opts = roofOpts ? app.roofOptions() : tool.options?.();
+    const title = roofOpts ? 'Techo' : tool.label;
     add(clear($('#tooloptions')), h('span', { class: 'title' }, title), opts, h('span', { class: 'hint', title: tool.hint }, tool.hint));
     app.setHint(tool.hint);
 }

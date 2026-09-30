@@ -33,8 +33,9 @@ export function mountAssistant(app) {
         mode: 'editor',
         extra: () => ({ project: store.project }),
         house: (ev, isLast) => {
-            const state = applied.get(ev.version); // false: la casa de partida · true: aplicada · 'undone': deshecha
-            const title = state === false ? `Tu casa: ${ev.nombre}` : state === 'undone' ? `↶ Deshecho: ${ev.nombre}` : `✓ Aplicado: ${ev.nombre}`;
+            // false: la casa de partida · true: aplicada · 'undone': deshecha · 'failed': no se pudo · sin estado: aplicándose
+            const state = applied.get(ev.version);
+            const title = { false: `Tu casa: ${ev.nombre}`, true: `✓ Aplicado: ${ev.nombre}`, undone: `↶ Deshecho: ${ev.nombre}`, failed: `No se aplicó: ${ev.nombre}` }[state] ?? `Aplicando: ${ev.nombre}…`;
             return h('div', { class: 'ai-house ai-house-compact' },
                 h('div', { class: 'ai-house-body' },
                     h('strong', {}, title),
@@ -49,12 +50,18 @@ export function mountAssistant(app) {
             if (first && !applied.size) applied.set(first.version, false);
             const last = fresh.findLast((e) => e.tipo === 'casa');
             if (!last || applied.has(last.version)) return;
-            const d = await api(`/api/assistant/designs/${last.diseno}?client=${chat.client}`);
-            await store.commit(LABEL, (draft) => {
-                for (const k of Object.keys(draft)) delete draft[k];
-                Object.assign(draft, structuredClone(d.project));
-            });
-            applied.set(last.version, true);
+            applied.set(last.version, undefined); // aplicándose: no se vuelve a aplicar si llega otra actualización
+            try {
+                const d = await api(`/api/assistant/designs/${last.diseno}?client=${chat.client}`);
+                await store.commit(LABEL, (draft) => {
+                    for (const k of Object.keys(draft)) delete draft[k];
+                    Object.assign(draft, structuredClone(d.project));
+                });
+                applied.set(last.version, true);
+            } catch (e) {
+                applied.set(last.version, 'failed');
+                app.toast(`No se pudo aplicar la casa (${e.message}).`, 'error');
+            }
             chat.render();
         },
         onFirstMessage: (payload) => chat.start({ modo: 'editor', inicio: { tipo: 'proyecto', project: store.project, programa: linkedProgram() }, texto: payload.texto ?? '' }),

@@ -276,13 +276,167 @@ export function createTools(app) {
         ctx.restore();
     };
 
-    // ---------------- seleccionar ----------------
+    // ---------------- elegir varios elementos y moverlos juntos ----------------
+    /** Elementos cuya planta cae dentro del rectángulo (unidades), en todos los niveles: se mueven juntos, de arriba abajo. */
+    const collectIn = (x0, y0, x1, y1) => {
+        const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [] };
+        store.project.levels.forEach((lv, li) => {
+            for (const w of lv.walls) if (inside(w.x1, w.y1) && inside(w.x2, w.y2)) sel.walls.push([li, w.id]);
+            for (const sl of lv.slabs ?? []) if (inside(sl.x, sl.y) && inside(sl.x + sl.w, sl.y + sl.h)) sel.slabs.push([li, sl.id]);
+            for (const st of lv.stairs ?? []) {
+                const b = store.analysis?.floors?.stairs?.find((q) => q.id === st.id)?.bbox;
+                if (b && inside(b.x / G, b.y / G) && inside((b.x + b.w) / G, (b.y + b.h) / G)) sel.stairs.push([li, st.id]);
+            }
+            for (const t of lv.timber ?? []) {
+                const ok = t.kind === 'beam' ? inside(t.x1, t.y1) && inside(t.x2, t.y2) : inside(t.x, t.y) && inside(t.x + t.w, t.y + t.h);
+                if (ok) sel.timber.push([li, t.id]);
+            }
+        });
+        for (const r of store.project.roofs ?? []) if (inside(r.x, r.y) && inside(r.x + r.w, r.y + r.h)) sel.roofs.push([0, r.id]);
+        return sel;
+    };
+    const countSel = (sel) => (sel ? Object.values(sel).reduce((a, l) => a + l.length, 0) : 0);
+    /** Caja (unidades) de lo elegido. */
+    const selBox = (sel) => {
+        const xs = [];
+        const ys = [];
+        const p = store.project;
+        for (const [li, id] of sel.walls) { const w = p.levels[li].walls.find((q) => q.id === id); if (w) { xs.push(w.x1, w.x2); ys.push(w.y1, w.y2); } }
+        for (const [li, id] of sel.slabs) { const q = p.levels[li].slabs.find((z) => z.id === id); if (q) { xs.push(q.x, q.x + q.w); ys.push(q.y, q.y + q.h); } }
+        for (const [li, id] of sel.timber) { const t = p.levels[li].timber.find((z) => z.id === id); if (t) { if (t.kind === 'beam') { xs.push(t.x1, t.x2); ys.push(t.y1, t.y2); } else { xs.push(t.x, t.x + t.w); ys.push(t.y, t.y + t.h); } } }
+        for (const [, id] of sel.roofs) { const r = p.roofs.find((z) => z.id === id); if (r) { xs.push(r.x, r.x + r.w); ys.push(r.y, r.y + r.h); } }
+        for (const [, id] of sel.stairs) { const b = store.analysis?.floors?.stairs?.find((q) => q.id === id)?.bbox; if (b) { xs.push(b.x / G, (b.x + b.w) / G); ys.push(b.y / G, (b.y + b.h) / G); } }
+        return xs.length ? { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } : null;
+    };
+    /** Grupo elegido con un rectángulo (`sel`), rectángulo en curso (`band`), arrastre del grupo (`drag`) y clic pendiente (`press`). */
+    const multi = { sel: null, band: null, drag: null, press: null };
+    const clampOffset = (box, dx, dy) => ({
+        dx: Math.max(-box.x0, Math.min(lot().w - box.x1, dx)),
+        dy: Math.max(-box.y0, Math.min(lot().d - box.y1, dy)),
+    });
+    const applyMove = (sel, dx, dy) =>
+        store.commit('Mover', (d) => {
+            for (const [li, id] of sel.walls) { const w = d.levels[li].walls.find((q) => q.id === id); if (w) { w.x1 += dx; w.x2 += dx; w.y1 += dy; w.y2 += dy; } }
+            for (const [li, id] of sel.slabs) { const q = d.levels[li].slabs.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
+            for (const [li, id] of sel.stairs) { const q = d.levels[li].stairs.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
+            for (const [li, id] of sel.timber) {
+                const t = d.levels[li].timber.find((z) => z.id === id);
+                if (!t) continue;
+                if (t.kind === 'beam') { t.x1 += dx; t.x2 += dx; t.y1 += dy; t.y2 += dy; } else { t.x += dx; t.y += dy; }
+            }
+            for (const [, id] of sel.roofs) { const r = d.roofs.find((z) => z.id === id); if (r) { r.x += dx; r.y += dy; } }
+        });
+    /**
+     * Corre el grupo elegido, de a un movimiento por vez: el servidor normaliza los muros (los parte o los une y cambian
+     * sus ids), así que al terminar el grupo se vuelve a elegir con la caja ya corrida.
+     */
+    let moving = Promise.resolve();
+    const moveMulti = (dx, dy) => {
+        moving = moving.then(async () => {
+            const box = multi.sel && selBox(multi.sel);
+            if (!box) return;
+            const o = clampOffset(box, dx, dy);
+            if (!o.dx && !o.dy) return;
+            await applyMove(multi.sel, o.dx, o.dy);
+            if (multi.sel) setMulti(collectIn(box.x0 + o.dx, box.y0 + o.dy, box.x1 + o.dx, box.y1 + o.dy));
+        });
+    };
+    const setMulti = (sel) => {
+        multi.sel = countSel(sel) ? sel : null;
+        if (multi.sel) store.setUi({ selection: null });
+        app.refreshOptions();
+        app.render();
+    };
+    const selectAll = () => setMulti(collectIn(-1e4, -1e4, 1e4, 1e4));
+    app.selectAll = selectAll;
+    app.multiCount = () => countSel(multi.sel);
+    /** El punto (unidades) cae sobre el grupo elegido: se arrastra en vez de elegir otra cosa. */
+    const onMulti = (ux, uy) => {
+        const box = multi.sel && selBox(multi.sel);
+        return box && ux >= box.x0 - 1 && ux <= box.x1 + 1 && uy >= box.y0 - 1 && uy <= box.y1 + 1 ? box : null;
+    };
+    const bandZ = () => (store.ui.level === 2 ? (store.topLevel + 1) * cfg.levelHeight : base());
+
+    /** Dibujo del rectángulo en curso y del grupo elegido (corrido por el arrastre). */
+    const drawMulti = (ctx, cam) => {
+        if (multi.band) {
+            const [ax, ay] = multi.band.a;
+            const [bx, by] = multi.band.b;
+            outlineRect(ctx, cam, Math.min(ax, bx) * G, Math.min(ay, by) * G, Math.max(ax, bx) * G, Math.max(ay, by) * G, bandZ(), { stroke: '#2563eb', fill: 'rgba(37,99,235,.10)', width: 1.5, dash: [5, 4] });
+        }
+        const sel = multi.sel;
+        if (!sel) return;
+        const box = selBox(sel);
+        if (!box) return;
+        const dx = multi.drag?.dx ?? 0;
+        const dy = multi.drag?.dy ?? 0;
+        // muros elegidos (en su nivel), corridos por el arrastre
+        for (const [li, id] of sel.walls) {
+            const w = store.project.levels[li].walls.find((q) => q.id === id);
+            if (!w) continue;
+            const zb = li * cfg.levelHeight;
+            const t = w.t / 2;
+            const hz = (w.h ?? 12) * 25;
+            const [x0, x1] = [Math.min(w.x1, w.x2) + dx, Math.max(w.x1, w.x2) + dx].map((v) => v * G);
+            const [y0, y1] = [Math.min(w.y1, w.y2) + dy, Math.max(w.y1, w.y2) + dy].map((v) => v * G);
+            const b = w.y1 === w.y2 ? { x0, x1, y0: y0 - t, y1: y1 + t } : { x0: x0 - t, x1: x1 + t, y0, y1 };
+            if (dx || dy) ghostBox(ctx, cam, { ...b, z0: zb, z1: zb + hz }, { fill: 'rgba(37,99,235,.18)', stroke: 'rgba(37,99,235,.7)', width: 1 });
+            else outlineRect(ctx, cam, b.x0, b.y0, b.x1, b.y1, zb + hz, { stroke: '#2563eb', fill: 'rgba(37,99,235,.35)', width: 1.5 });
+        }
+        outlineRect(ctx, cam, (box.x0 + dx) * G, (box.y0 + dy) * G, (box.x1 + dx) * G, (box.y1 + dy) * G, 0, { stroke: '#2563eb', width: 2, dash: [8, 5] });
+        const [sx, sy] = cam.project(((box.x0 + box.x1) / 2 + dx) * G, ((box.y0 + box.y1) / 2 + dy) * G, 0);
+        label(ctx, dx || dy ? `→ ${fmt((dx * G) / 100)} m · ↓ ${fmt((dy * G) / 100)} m` : `${countSel(sel)} elemento${countSel(sel) > 1 ? 's' : ''} · arrastrá para mover`, sx, sy, { bg: 'rgba(37,99,235,.92)' });
+    };
+
+    /** Clic sin arrastre: elige lo que hay bajo el puntero (doble clic, la habitación). */
+    const pickClick = (p, detail) => {
+        app.hover = pickAt(app, p.sx, p.sy);
+        // Doble clic: la habitación de ese lugar (aunque un muro de adelante tape el piso en la vista isométrica).
+        if (detail >= 2 && store.ui.level <= 1) {
+            const [wx, wy] = app.cam.unproject(p.sx, p.sy, base());
+            const room = store.analysis?.levels?.[store.ui.level]?.rooms?.find((r) => r.fill?.some(([x, y, w, h]) => wx / G >= x && wx / G < x + w && wy / G >= y && wy / G < y + h));
+            if (room) app.hover = { type: 'room', id: room.id };
+        }
+        store.setUi({ selection: app.hover });
+    };
+
+    // ---------------- elegir ----------------
     T.select = {
         hotkey: 'v',
         label: 'Elegir',
-        hint: 'Clic en un muro, vano, losa, escalera o techo; doble clic elige la habitación. Arrastrá las manijas azules para cambiar el tamaño.',
-        reset() { drag = null; },
+        hint: `Clic en un muro, vano, losa, escalera o techo; doble clic elige la habitación. Arrastrá un rectángulo para elegir varios elementos y después movelos juntos (flechas: ${fmt(BL, 1)} cm).`,
+        options: () => {
+            const n = countSel(multi.sel);
+            return h('span', { class: 'row' },
+                h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: selectAll }, 'Toda la casa (Ctrl+A)'),
+                n ? h('span', { class: 'tag' }, `${n} elemento${n > 1 ? 's' : ''} elegido${n > 1 ? 's' : ''}`) : null,
+                n ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => setMulti(null) }, 'Soltar') : null);
+        },
+        reset() {
+            drag = null;
+            multi.band = null;
+            multi.drag = null;
+            multi.press = null;
+        },
         move(p) {
+            if (multi.drag) {
+                const d = multi.drag;
+                const raw = { dx: Math.round((p.wx - d.x0) / G / BU) * BU, dy: Math.round((p.wy - d.y0) / G / BU) * BU };
+                Object.assign(d, clampOffset(d.box, raw.dx, raw.dy));
+                app.render();
+                return;
+            }
+            if (multi.press && !multi.band && Math.hypot(p.sx - multi.press.sx, p.sy - multi.press.sy) > DRAG_PX) {
+                // el clic se volvió arrastre: rectángulo de selección desde donde se apretó
+                multi.band = { a: [multi.press.wx / G, multi.press.wy / G], b: [p.wx / G, p.wy / G] };
+                app.hover = null;
+            }
+            if (multi.band) {
+                multi.band.b = [p.wx / G, p.wy / G];
+                app.render();
+                return;
+            }
             if (drag) {
                 if (drag.kind === 'wall') drag.line = snapAxis(p, drag.horizontal ? 'ay' : 'ax', drag.line0);
                 else if (drag.kind === 'corner') {
@@ -298,7 +452,7 @@ export function createTools(app) {
                 app.render();
                 return;
             }
-            app.canvas.style.cursor = handleHit(p) ? 'grab' : '';
+            app.canvas.style.cursor = handleHit(p) || onMulti(p.wx / G, p.wy / G) ? 'grab' : '';
             const hit = pickAt(app, p.sx, p.sy);
             if (JSON.stringify(hit) !== JSON.stringify(app.hover)) {
                 app.hover = hit;
@@ -330,16 +484,43 @@ export function createTools(app) {
                 }
                 return;
             }
-            app.hover = pickAt(app, p.sx, p.sy);
-            // Doble clic: la habitación de ese lugar (aunque un muro de adelante tape el piso en la vista isométrica).
-            if (e?.detail >= 2 && store.ui.level <= 1) {
-                const [wx, wy] = app.cam.unproject(p.sx, p.sy, base());
-                const room = store.analysis?.levels?.[store.ui.level]?.rooms?.find((r) => r.fill?.some(([x, y, w, h]) => wx / G >= x && wx / G < x + w && wy / G >= y && wy / G < y + h));
-                if (room) app.hover = { type: 'room', id: room.id };
+            const box = onMulti(p.wx / G, p.wy / G);
+            if (box) {
+                multi.drag = { x0: p.wx, y0: p.wy, box, dx: 0, dy: 0 };
+                app.canvas.style.cursor = 'grabbing';
+                return;
             }
-            store.setUi({ selection: app.hover });
+            // Se decide al soltar: sin moverse es un clic (elige lo de abajo); arrastrando, un rectángulo.
+            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1 };
         },
-        up() {
+        up(p) {
+            if (multi.drag) {
+                const { dx, dy } = multi.drag;
+                multi.drag = null;
+                app.canvas.style.cursor = '';
+                moveMulti(dx, dy);
+                return;
+            }
+            if (multi.band) {
+                const [ax, ay] = multi.band.a;
+                const [bx, by] = multi.band.b;
+                multi.band = null;
+                multi.press = null;
+                const sel = collectIn(Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by));
+                if (!countSel(sel)) {
+                    store.setUi({ selection: null });
+                    app.toast('No hay nada completo dentro del rectángulo: tiene que abarcar muros enteros.');
+                }
+                setMulti(sel);
+                return;
+            }
+            if (multi.press) {
+                const press = multi.press;
+                multi.press = null;
+                if (multi.sel) setMulti(null);
+                pickClick(press, press.detail);
+                return;
+            }
             if (!drag) return;
             const d = drag;
             drag = null;
@@ -385,9 +566,23 @@ export function createTools(app) {
                 app.render();
                 return true;
             }
+            const dir = { ArrowLeft: [-BU, 0], ArrowRight: [BU, 0], ArrowUp: [0, -BU], ArrowDown: [0, BU] }[e.key];
+            if (dir && multi.sel) {
+                e.preventDefault();
+                moveMulti(dir[0], dir[1]);
+                return true;
+            }
+            if (e.key === 'Escape' && (multi.sel || multi.band || multi.drag)) {
+                multi.band = null;
+                multi.drag = null;
+                multi.press = null;
+                setMulti(null);
+                return true;
+            }
             return false;
         },
         draw(ctx, cam) {
+            drawMulti(ctx, cam);
             if (drag) {
                 const z = base();
                 if (drag.kind === 'wall') {
@@ -432,173 +627,6 @@ export function createTools(app) {
                 return;
             }
             for (const hd of handlesOf(cam)) drawHandle(ctx, hd, cam);
-        },
-    };
-
-    // ---------------- mover varios elementos juntos ----------------
-    /** Elementos cuya planta cae dentro del rectángulo (unidades), en todos los niveles: se mueven juntos, de arriba abajo. */
-    const collectIn = (x0, y0, x1, y1) => {
-        const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
-        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [] };
-        store.project.levels.forEach((lv, li) => {
-            for (const w of lv.walls) if (inside(w.x1, w.y1) && inside(w.x2, w.y2)) sel.walls.push([li, w.id]);
-            for (const sl of lv.slabs ?? []) if (inside(sl.x, sl.y) && inside(sl.x + sl.w, sl.y + sl.h)) sel.slabs.push([li, sl.id]);
-            for (const st of lv.stairs ?? []) {
-                const b = store.analysis?.floors?.stairs?.find((q) => q.id === st.id)?.bbox;
-                if (b && inside(b.x / G, b.y / G) && inside((b.x + b.w) / G, (b.y + b.h) / G)) sel.stairs.push([li, st.id]);
-            }
-            for (const t of lv.timber ?? []) {
-                const ok = t.kind === 'beam' ? inside(t.x1, t.y1) && inside(t.x2, t.y2) : inside(t.x, t.y) && inside(t.x + t.w, t.y + t.h);
-                if (ok) sel.timber.push([li, t.id]);
-            }
-        });
-        for (const r of store.project.roofs ?? []) if (inside(r.x, r.y) && inside(r.x + r.w, r.y + r.h)) sel.roofs.push([0, r.id]);
-        return sel;
-    };
-    const countSel = (sel) => (sel ? Object.values(sel).reduce((a, l) => a + l.length, 0) : 0);
-    /** Caja (unidades) de lo elegido. */
-    const selBox = (sel) => {
-        const xs = [];
-        const ys = [];
-        const p = store.project;
-        for (const [li, id] of sel.walls) { const w = p.levels[li].walls.find((q) => q.id === id); if (w) { xs.push(w.x1, w.x2); ys.push(w.y1, w.y2); } }
-        for (const [li, id] of sel.slabs) { const q = p.levels[li].slabs.find((z) => z.id === id); if (q) { xs.push(q.x, q.x + q.w); ys.push(q.y, q.y + q.h); } }
-        for (const [li, id] of sel.timber) { const t = p.levels[li].timber.find((z) => z.id === id); if (t) { if (t.kind === 'beam') { xs.push(t.x1, t.x2); ys.push(t.y1, t.y2); } else { xs.push(t.x, t.x + t.w); ys.push(t.y, t.y + t.h); } } }
-        for (const [, id] of sel.roofs) { const r = p.roofs.find((z) => z.id === id); if (r) { xs.push(r.x, r.x + r.w); ys.push(r.y, r.y + r.h); } }
-        for (const [, id] of sel.stairs) { const b = store.analysis?.floors?.stairs?.find((q) => q.id === id)?.bbox; if (b) { xs.push(b.x / G, (b.x + b.w) / G); ys.push(b.y / G, (b.y + b.h) / G); } }
-        return xs.length ? { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } : null;
-    };
-    const moveState = { sel: null, band: null, drag: null };
-    const clampOffset = (box, dx, dy) => ({
-        dx: Math.max(-box.x0, Math.min(lot().w - box.x1, dx)),
-        dy: Math.max(-box.y0, Math.min(lot().d - box.y1, dy)),
-    });
-    const applyMove = (sel, dx, dy) => {
-        if (!dx && !dy) return;
-        store.commit('Mover', (d) => {
-            for (const [li, id] of sel.walls) { const w = d.levels[li].walls.find((q) => q.id === id); if (w) { w.x1 += dx; w.x2 += dx; w.y1 += dy; w.y2 += dy; } }
-            for (const [li, id] of sel.slabs) { const q = d.levels[li].slabs.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
-            for (const [li, id] of sel.stairs) { const q = d.levels[li].stairs.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
-            for (const [li, id] of sel.timber) {
-                const t = d.levels[li].timber.find((z) => z.id === id);
-                if (!t) continue;
-                if (t.kind === 'beam') { t.x1 += dx; t.x2 += dx; t.y1 += dy; t.y2 += dy; } else { t.x += dx; t.y += dy; }
-            }
-            for (const [, id] of sel.roofs) { const r = d.roofs.find((z) => z.id === id); if (r) { r.x += dx; r.y += dy; } }
-        });
-    };
-    const selectAll = () => {
-        moveState.sel = collectIn(-1e4, -1e4, 1e4, 1e4);
-        app.refreshOptions();
-        app.render();
-    };
-    app.selectAll = selectAll;
-    T.move = {
-        hotkey: 'm',
-        label: 'Mover',
-        hint: `Arrastrá un rectángulo para elegir varios elementos (o «Toda la casa») y después arrastralos juntos. Flechas: ${fmt(BL, 1)} cm.`,
-        planeZ: () => (store.ui.level === 2 ? (store.topLevel + 1) * cfg.levelHeight : base()),
-        options: () => {
-            const n = countSel(moveState.sel);
-            return h('span', { class: 'row' },
-                h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: selectAll }, 'Toda la casa (Ctrl+A)'),
-                n ? h('span', { class: 'tag' }, `${n} elemento${n > 1 ? 's' : ''} elegido${n > 1 ? 's' : ''}`) : null,
-                n ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => { moveState.sel = null; app.refreshOptions(); app.render(); } }, 'Soltar') : null);
-        },
-        reset() { moveState.band = null; moveState.drag = null; },
-        down(p) {
-            const box = moveState.sel && selBox(moveState.sel);
-            const ux = p.wx / G;
-            const uy = p.wy / G;
-            if (box && ux >= box.x0 - 1 && ux <= box.x1 + 1 && uy >= box.y0 - 1 && uy <= box.y1 + 1) {
-                moveState.drag = { x0: p.wx, y0: p.wy, box, dx: 0, dy: 0 };
-                app.canvas.style.cursor = 'grabbing';
-                return;
-            }
-            moveState.band = { a: [ux, uy], b: [ux, uy] };
-        },
-        move(p) {
-            if (moveState.drag) {
-                const d = moveState.drag;
-                const raw = { dx: Math.round((p.wx - d.x0) / G / BU) * BU, dy: Math.round((p.wy - d.y0) / G / BU) * BU };
-                Object.assign(d, clampOffset(d.box, raw.dx, raw.dy));
-                app.render();
-            } else if (moveState.band) {
-                moveState.band.b = [p.wx / G, p.wy / G];
-                app.render();
-            }
-        },
-        up() {
-            if (moveState.drag) {
-                const { dx, dy } = moveState.drag;
-                moveState.drag = null;
-                app.canvas.style.cursor = '';
-                applyMove(moveState.sel, dx, dy);
-                return;
-            }
-            if (moveState.band) {
-                const [ax, ay] = moveState.band.a;
-                const [bx, by] = moveState.band.b;
-                moveState.band = null;
-                const sel = collectIn(Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by));
-                moveState.sel = countSel(sel) ? sel : null;
-                if (!moveState.sel) app.toast('No hay nada completo dentro del rectángulo: tiene que abarcar muros enteros.');
-                app.refreshOptions();
-                app.render();
-            }
-        },
-        keyDown(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
-                e.preventDefault();
-                selectAll();
-                return true;
-            }
-            const dir = { ArrowLeft: [-BU, 0], ArrowRight: [BU, 0], ArrowUp: [0, -BU], ArrowDown: [0, BU] }[e.key];
-            if (dir && moveState.sel) {
-                e.preventDefault();
-                const box = selBox(moveState.sel);
-                const { dx, dy } = clampOffset(box, dir[0], dir[1]);
-                applyMove(moveState.sel, dx, dy);
-                return true;
-            }
-            if (e.key === 'Escape' && (moveState.sel || moveState.band)) {
-                moveState.sel = null;
-                moveState.band = null;
-                app.refreshOptions();
-                app.render();
-                return true;
-            }
-            return false;
-        },
-        draw(ctx, cam) {
-            const z = T.move.planeZ();
-            if (moveState.band) {
-                const [ax, ay] = moveState.band.a;
-                const [bx, by] = moveState.band.b;
-                outlineRect(ctx, cam, Math.min(ax, bx) * G, Math.min(ay, by) * G, Math.max(ax, bx) * G, Math.max(ay, by) * G, z, { stroke: '#2563eb', fill: 'rgba(37,99,235,.10)', width: 1.5, dash: [5, 4] });
-            }
-            const sel = moveState.sel;
-            if (!sel) return;
-            const box = selBox(sel);
-            if (!box) return;
-            const dx = moveState.drag?.dx ?? 0;
-            const dy = moveState.drag?.dy ?? 0;
-            // muros elegidos (en su nivel), corridos por el arrastre
-            for (const [li, id] of sel.walls) {
-                const w = store.project.levels[li].walls.find((q) => q.id === id);
-                if (!w) continue;
-                const zb = li * cfg.levelHeight;
-                const t = w.t / 2;
-                const hz = (w.h ?? 12) * 25;
-                const [x0, x1] = [Math.min(w.x1, w.x2) + dx, Math.max(w.x1, w.x2) + dx].map((v) => v * G);
-                const [y0, y1] = [Math.min(w.y1, w.y2) + dy, Math.max(w.y1, w.y2) + dy].map((v) => v * G);
-                const b = w.y1 === w.y2 ? { x0, x1, y0: y0 - t, y1: y1 + t } : { x0: x0 - t, x1: x1 + t, y0, y1 };
-                if (dx || dy) ghostBox(ctx, cam, { ...b, z0: zb, z1: zb + hz }, { fill: 'rgba(37,99,235,.18)', stroke: 'rgba(37,99,235,.7)', width: 1 });
-                else outlineRect(ctx, cam, b.x0, b.y0, b.x1, b.y1, zb + hz, { stroke: '#2563eb', fill: 'rgba(37,99,235,.35)', width: 1.5 });
-            }
-            outlineRect(ctx, cam, (box.x0 + dx) * G, (box.y0 + dy) * G, (box.x1 + dx) * G, (box.y1 + dy) * G, 0, { stroke: '#2563eb', width: 2, dash: [8, 5] });
-            const [sx, sy] = cam.project(((box.x0 + box.x1) / 2 + dx) * G, ((box.y0 + box.y1) / 2 + dy) * G, 0);
-            label(ctx, dx || dy ? `→ ${fmt((dx * G) / 100)} m · ↓ ${fmt((dy * G) / 100)} m` : `${countSel(sel)} elementos · arrastrá para mover`, sx, sy, { bg: 'rgba(37,99,235,.92)' });
         },
     };
 
@@ -1090,7 +1118,9 @@ export function createTools(app) {
                 const rooms = store.analysis?.levels?.[0]?.rooms ?? [];
                 const room = rooms.find((rm) => rm.rect && a.gx >= rm.bbox.x && a.gx < rm.bbox.x + rm.bbox.w && a.gy >= rm.bbox.y && a.gy < rm.bbox.y + rm.bbox.h);
                 if (!room) {
-                    app.toast('Clic dentro de una habitación cerrada de la planta baja (o arrastrá un rectángulo).', 'error');
+                    // una habitación en L (o de otra forma) no admite una losa de un clic: se dibuja con un rectángulo
+                    const odd = rooms.some((rm) => rm.fill?.some(([x, y, w, hh]) => a.gx >= x && a.gx < x + w && a.gy >= y && a.gy < y + hh));
+                    app.toast(odd ? 'Esa habitación no es rectangular: arrastrá un rectángulo para dibujar la losa.' : 'Clic dentro de una habitación cerrada de la planta baja (o arrastrá un rectángulo).', 'error');
                     return;
                 }
                 const k = slabShrink;
@@ -1437,7 +1467,7 @@ export function createTools(app) {
     };
 
     // metadatos para la barra de herramientas
-    const SHORT = { move: 'Mover', select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', door: 'Puerta', window: 'Ventana', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
+    const SHORT = { select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', door: 'Puerta', window: 'Ventana', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
     for (const [id, t] of Object.entries(T)) {
         t.id = id;
         t.short = SHORT[id] ?? t.label;

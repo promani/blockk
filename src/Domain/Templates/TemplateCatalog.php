@@ -24,6 +24,12 @@ final class TemplateCatalog
         return array_map(fn (string $slug): array => $this->summary($slug), array_keys($this->definitions()));
     }
 
+    /** @return list<string> */
+    public function slugs(): array
+    {
+        return array_keys($this->definitions());
+    }
+
     public function has(string $slug): bool
     {
         return isset($this->definitions()[$slug]);

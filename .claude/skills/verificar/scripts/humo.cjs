@@ -90,10 +90,35 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     const after = await page.evaluate(() => window.blockk.store.project.levels[0].openings.length);
     log(after === 2, 'deshacer / rehacer');
 
+    // Elegir: rectángulo alrededor de la habitación y arrastre del grupo 1 m a la derecha
+    await page.click('.tool:has-text("Elegir")');
+    const drag = async (from, to) => {
+        const p = await toScreen(...from);
+        const q = await toScreen(...to);
+        await page.mouse.move(p[0], p[1]);
+        await page.mouse.down();
+        await page.mouse.move(q[0], q[1], { steps: 10 });
+        await page.mouse.up();
+    };
+    await drag([700, 600], [-20, -20]);
+    const picked = await page.evaluate(() => document.querySelector('#tooloptions .tag')?.textContent ?? '');
+    await drag([300, 250], [400, 250]);
+    await page.waitForTimeout(300);
+    await ready();
+    const minX = await page.evaluate(() => Math.min(...window.blockk.store.project.levels[0].walls.map((w) => w.x1)));
+    log(picked.startsWith('4 ') && minX === 8, `elegir con rectángulo y mover (${picked || 'nada'}; x = ${minX})`);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.blockk.store.undo());
+    await ready();
+
     await page.click('[data-view="iso"]');
     for (const tool of await page.$$eval('.tool .tool-name', (els) => els.map((e) => e.textContent))) {
-        await page.click(`.tool:has-text("${tool}")`).catch(() => {});
+        if (tool !== 'Techo') await page.click(`.tool:has-text("${tool}")`).catch(() => {});
     }
+    // Techo está siempre en la barra y lleva a la pestaña Techo
+    await page.click('.tool:has-text("Techo")');
+    const lvl = await page.evaluate(() => window.blockk.store.ui.level);
+    log(lvl === 2, `el botón Techo lleva a la pestaña Techo (nivel ${lvl})`);
     await page.click('.level-tab:has-text("Techo")');
     await page.click('[data-view="plan"]');
     await page.evaluate(() => { window.blockk.cam.fit(0, 0, 1000, 800, 0, 40); window.blockk.render(); });

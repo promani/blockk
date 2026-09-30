@@ -36,8 +36,10 @@ final class PageController extends AbstractController
     #[Route('/galeria', name: 'gallery', methods: ['GET'])]
     public function gallery(): Response
     {
-        // Las métricas de las plantillas salen del motor real; se cachean porque son deterministas.
-        $cards = $this->cache->get('gallery.cards.v3', function (ItemInterface $item): array {
+        // Las métricas de las plantillas salen del motor real; se cachean porque son deterministas. La clave lleva el
+        // hash de cada plantilla (el mismo de las miniaturas): si cambia una casa, no quedan tarjetas con imágenes viejas.
+        $hashes = array_map(fn (string $slug): string => TemplateImages::hash($this->templates->project($slug)), $this->templates->slugs());
+        $cards = $this->cache->get('gallery.cards.v3.'.sha1(implode('|', $hashes)), function (ItemInterface $item): array {
             $item->expiresAfter(3600);
 
             return array_map(function (array $s): array {
