@@ -30,6 +30,8 @@ export class Store extends EventTarget {
             snap: config.blockUnits, // retícula de dibujo: bloque entero
             cut: config.courses,
             thickness: 20,
+            showLot: true, // terreno pintado
+            showGrid: true, // retícula de 1 m / 5 m sobre el terreno
             solar: { show: true, hour: 12, season: 'winter', path: null, pathKey: '' },
         };
     }

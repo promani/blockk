@@ -16,7 +16,7 @@ final class HouseEditorTest extends TestCase
     /** @return array<string, mixed> */
     private function house(): array
     {
-        return (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray((new TemplateCatalog())->project('casa-minima')))['project'];
+        return (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray((new TemplateCatalog())->project('casa-en-l')))['project'];
     }
 
     #[Test]
@@ -75,7 +75,8 @@ final class HouseEditorTest extends TestCase
     #[Test]
     public function aSingleSlopeRoofFallsToTheShortSideWhenTheRafterReaches(): void
     {
-        $p = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray((new TemplateCatalog())->project('quincho-5x3-75')))['project'];
+        $quincho = (new \App\Domain\Templates\TemplateBuilder('Quincho'))->room(0, 0, 0, 40, 30)->opening(0, 'P150', 'x', 30, 14)->roof('gable', 'x')->build();
+        $p = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray($quincho))['project'];
         $out = (new HouseEditor())->apply($p, [['accion' => 'cambiar_techo', 'tipo' => 'un_agua']]);
         self::assertSame('shed', $out['roofs'][0]['type']);
         $issues = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray($out))['analysis']['issues'];

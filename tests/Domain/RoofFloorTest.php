@@ -343,4 +343,22 @@ final class RoofFloorTest extends TestCase
         self::assertSame(0, $small['bom']['raftersCount']);
         self::assertSame(0, array_sum(array_map(static fn (array $g): int => $g['blocks'], $small['geometry']['gables'])), 'Sus hastiales quedan debajo del techo alto: no se construyen');
     }
+
+    #[Test]
+    public function aLowerRoofAgainstAnUpperWallHasNoOverhangNorGableThere(): void
+    {
+        $p = (new TemplateBuilder('Evolutiva'))
+            ->room(0, 0, 0, 64, 40)->wall(0, 32, 0, 32, 40, 20)
+            ->room(1, 0, 0, 32, 40)->joists(0, 0, 32, 40, 'x')->upper()
+            ->roofPart(1, 0, 0, 32, 40, 'gable', 'y')
+            ->roofPart(0, 32, 0, 32, 40, 'shed', 'E', 30, '3x10')
+            ->build();
+        $parts = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray($p))['analysis']['roof']['parts'];
+        $low = array_values(array_filter($parts, static fn (array $r): bool => 0 === $r['level']))[0]['geometry'];
+
+        self::assertSame(400.0, (float) $low['outer']['x0'], 'contra la pared de la PA: sin alero');
+        self::assertSame(840.0, (float) $low['outer']['x1'], 'del lado libre: alero de 40 cm');
+        self::assertSame(-40.0, (float) $low['outer']['y0']);
+        self::assertNotContains('H', array_column($low['gables'], 'side'), 'sin muro alto: lo cierra la pared de la PA');
+    }
 }

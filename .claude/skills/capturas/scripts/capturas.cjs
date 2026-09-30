@@ -4,7 +4,7 @@
  *
  *   node capturas.cjs --slug casa-en-l --out /tmp/shots
  *   node capturas.cjs --project mi-casa.json --tabs "Nivel 1,Techo" --rots 0,2
- *   node capturas.cjs --slug casa-minima --focus 500,625,150 --rots 0   (x,y,radio en cm: primer plano)
+ *   node capturas.cjs --slug casa-en-l --focus 500,625,150 --rots 0   (x,y,radio en cm: primer plano)
  *
  * Imprime en JSON: ambientes, observaciones de la Revisión, totales y errores de consola. Sale con código 1 si hubo
  * errores de consola. Requiere el servidor corriendo (por defecto http://127.0.0.1:8000).

@@ -4,6 +4,7 @@ import { suggest } from '../lib/api.js';
 import { nextId } from '../lib/storage.js';
 import { roomColor } from './renderer.js';
 import { anchorLines } from './snap.js';
+import { sideLabel, cardinal } from '../lib/orient.js';
 import { collinearChain } from './wallmove.js';
 import { contextOf, CONTEXT_TITLE, roomWalls, facing, openingM2, issueMatches } from './context.js';
 
@@ -242,12 +243,13 @@ export function mountPanels(app) {
         const horizontal = w.y1 === w.y2;
         const neg = horizontal ? '▲' : '◀';
         const pos = horizontal ? '▼' : '▶';
-        const negName = horizontal ? 'norte' : 'oeste';
-        const posName = horizontal ? 'sur' : 'este';
+        const north = store.project.north;
+        const negName = horizontal ? `arriba (${cardinal('N', north)})` : `la izquierda (${cardinal('W', north)})`;
+        const posName = horizontal ? `abajo (${cardinal('S', north)})` : `la derecha (${cardinal('E', north)})`;
         const bu = cfg.blockUnits;
         const bl = fmt(cfg.blockL, 1);
         return [[-bu, `${neg} ${bl} cm`, negName], [bu, `${pos} ${bl} cm`, posName]].map(([d, text, name]) =>
-            h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: `Mover ${fmt(Math.abs(d) * G, 1)} cm hacia el ${name}`, onclick: () => app.moveWallBy(w.id, d) }, text));
+            h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: `Mover ${fmt(Math.abs(d) * G, 1)} cm hacia ${name}`, onclick: () => app.moveWallBy(w.id, d) }, text));
     }
 
     /**
@@ -258,10 +260,10 @@ export function mountPanels(app) {
         const lv = store.level();
         const b = room.bbox;
         const sides = [
-            ['N', '▲ Norte', 'x', b.y, -1, b.x, b.x + b.w],
-            ['S', '▼ Sur', 'x', b.y + b.h, 1, b.x, b.x + b.w],
-            ['O', '◀ Oeste', 'y', b.x, -1, b.y, b.y + b.h],
-            ['E', '▶ Este', 'y', b.x + b.w, 1, b.y, b.y + b.h],
+            ['N', `▲ ${sideLabel('N', store.project.north, false)}`, 'x', b.y, -1, b.x, b.x + b.w],
+            ['S', `▼ ${sideLabel('S', store.project.north, false)}`, 'x', b.y + b.h, 1, b.x, b.x + b.w],
+            ['O', `◀ ${sideLabel('W', store.project.north, false)}`, 'y', b.x, -1, b.y, b.y + b.h],
+            ['E', `▶ ${sideLabel('E', store.project.north, false)}`, 'y', b.x + b.w, 1, b.y, b.y + b.h],
         ];
         const out = [];
         for (const [, name, axis, v, outward, lo, hi] of sides) {
@@ -469,7 +471,7 @@ export function mountPanels(app) {
             add(el.props,
                 h('div', { class: 'kv-title' }, 'Escalera'),
                 field('Forma', sel(st.shape, [['straight', 'Recta'], ['L', 'En L con descanso'], ['U', 'En U con descanso']], (v) => upd((x) => { x.shape = v; }))),
-                field('Sube hacia', sel(st.dir, [['N', 'Norte (arriba)'], ['E', 'Este (derecha)'], ['S', 'Sur (abajo)'], ['W', 'Oeste (izquierda)']], (v) => upd((x) => { x.dir = v; }))),
+                field('Sube hacia', sel(st.dir, ['N', 'E', 'S', 'W'].map((d) => [d, sideLabel(d, store.project.north)]), (v) => upd((x) => { x.dir = v; }))),
                 st.shape !== 'straight' ? field('Gira a', sel(st.turn, [['right', 'la derecha'], ['left', 'la izquierda']], (v) => upd((x) => { x.turn = v; }))) : null,
                 field('Ancho (× 12,5 cm)', num(st.w, 7, 16, (v) => upd((x) => { x.w = v; }))),
                 field('Huella (cm)', num(st.tread, 25, 32, (v) => upd((x) => { x.tread = v; }))),
@@ -508,6 +510,9 @@ export function mountPanels(app) {
             h('div', { class: 'lot-row' },
                 h('label', {}, 'Ancho (m)', num(store.project.lot.w, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, w: v }; }))),
                 h('label', {}, 'Fondo (m)', num(store.project.lot.d, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, d: v }; })))),
+            h('div', { class: 'check-row' },
+                h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', checked: store.ui.showLot !== false, onchange: (e) => store.setUi({ showLot: e.target.checked }) }), 'Mostrar terreno'),
+                h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', checked: store.ui.showGrid !== false, onchange: (e) => store.setUi({ showGrid: e.target.checked }) }), 'Mostrar cuadrícula')),
             field('El norte queda hacia', sel(store.project.north, [[0, '↑ arriba del plano'], [45, '↗ arriba a la derecha'], [90, '→ la derecha'], [135, '↘ abajo a la derecha'], [180, '↓ abajo'], [225, '↙ abajo a la izquierda'], [270, '← la izquierda'], [315, '↖ arriba a la izquierda']], (v) => { store.patchProject({ north: Number(v) }); app.syncSolar?.(); })),
             h('div', { class: 'kv-title' }, 'Sol y orientación'),
             el.solar,

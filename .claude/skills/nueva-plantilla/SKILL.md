@@ -11,8 +11,12 @@ Las plantillas viven en `src/Domain/Templates/TemplateCatalog.php` (método `def
 ## Unidades y grilla
 
 - **1 unidad = 12,5 cm.** Todas las coordenadas del builder son enteros en unidades: 8 u = 1 m, 40 u = 5 m.
-- Un bloque mide 62,5 cm (5 u) × 25 cm de alto (1 hilada). Un muro normal tiene 12 hiladas (3 m).
-- Medidas múltiplo de 5 u (62,5 cm) dan menos cortes; el test exige **descarte < 4 %**.
+- Un bloque Lika mide 50 cm (4 u) × 25 cm de alto (1 hilada) (con `BLOCK_SYSTEM=generico`, 62,5 cm = 5 u). Un muro
+  normal tiene 12 hiladas (3 m).
+- Medidas múltiplo de 4 u (50 cm) dan menos cortes; el test exige **descarte < 4 %**.
+- Toda plantilla lleva **techo**; con dos plantas, además **escalera** y **piso** (losa o entrepiso), y ninguna
+  advertencia (`TemplateCatalogTest`). Un techo de la PB que choca contra un muro de la PA no lleva alero ni hastial
+  de ese lado (lo resuelve el `RoofPlanner`).
 - El terreno por defecto es de 24 × 20 m (192 × 160 u). El norte (`north = 0`) queda hacia arriba (y negativa) y
   la latitud por defecto es −34,6 (Buenos Aires): el sol viene del **norte**, así que el estar va al norte.
 

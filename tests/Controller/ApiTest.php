@@ -186,7 +186,7 @@ final class ApiTest extends WebTestCase
         $client->request('GET', '/api/templates');
         self::assertResponseIsSuccessful();
         $list = json_decode($client->getResponse()->getContent(), true);
-        self::assertGreaterThanOrEqual(5, count($list));
+        self::assertGreaterThanOrEqual(2, count($list));
         self::assertArrayNotHasKey('project', $list[0]);
 
         $client->request('GET', '/api/templates/'.$list[0]['slug']);

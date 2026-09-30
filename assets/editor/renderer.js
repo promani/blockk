@@ -101,7 +101,10 @@ export class Renderer {
     // ---------- suelo, retícula ----------
     drawGround(f) {
         const { ctx } = this;
-        const { cam, project } = f;
+        const { cam, project, ui } = f;
+        const showLot = ui?.showLot !== false;
+        const showGrid = ui?.showGrid !== false;
+        if (!showLot && !showGrid) return;
         const W = (project?.lot?.w ?? 24) * 100;
         const D = (project?.lot?.d ?? 20) * 100;
         const z = 0;
@@ -109,9 +112,22 @@ export class Renderer {
         ctx.beginPath();
         corners.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
         ctx.closePath();
-        ctx.fillStyle = '#e1e9d6';
-        ctx.fill();
+        if (showLot) {
+            ctx.fillStyle = '#e1e9d6';
+            ctx.fill();
+        }
+        if (showGrid) this.drawGrid(cam, W, D, z);
+        if (!showLot) return;
+        ctx.strokeStyle = 'rgba(30,41,59,.55)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        corners.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.closePath();
+        ctx.stroke();
+    }
 
+    drawGrid(cam, W, D, z) {
+        const { ctx } = this;
         // Retícula simple: una línea por metro (tenue) y una más marcada cada 5 m. El ajuste real (12,5 cm o el bloque) se ve como
         // puntos alrededor del cursor cuando se dibuja.
         ctx.lineWidth = 1;
@@ -126,12 +142,6 @@ export class Renderer {
         ctx.beginPath();
         for (let x = 0; x <= W + 0.1; x += 500) this.seg(cam, x, 0, x, D, z);
         for (let y = 0; y <= D + 0.1; y += 500) this.seg(cam, 0, y, W, y, z);
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(30,41,59,.55)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        corners.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-        ctx.closePath();
         ctx.stroke();
     }
 

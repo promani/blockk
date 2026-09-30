@@ -313,6 +313,7 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 .vp-eye { position: absolute; left: 50%; top: 50%; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; background: var(--panel); border: 2px solid var(--border); display: grid; place-items: center; color: var(--graphite); pointer-events: none; }
 .lot-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
 .lot-row input { width: 100%; }
+.check-row { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 6px; }
 /* resumen por contexto */
 .light { font-weight: 700; padding: 0 5px; border-radius: 6px; }
 .light.ok { background: #dcfce7; color: #166534; }

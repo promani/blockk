@@ -86,11 +86,11 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
 
     // --- Galería: aviso antes de reemplazar y «Modificar con IA»
     await page.goto(`${base}/galeria`);
-    await page.click('[data-ai-modify="casa-minima"]');
+    await page.click('[data-ai-modify="casa-en-l"]');
     log(await page.isVisible('#confirm-replace'), 'avisa antes de reemplazar el proyecto actual');
     await page.click('#confirm-replace button[value="cancel"]');
     log(!(await page.isVisible('#ai-dialog')), 'cancelar no abre el asistente');
-    await page.click('[data-ai-modify="casa-minima"]');
+    await page.click('[data-ai-modify="casa-en-l"]');
     await page.click('#confirm-replace button[value="ok"]');
     await idle();
     log((await page.locator('#ai-dialog .ai-house').count()) === 1 && await page.isVisible('#ai-dialog .ai-chip'), 'la plantilla aparece con sugerencias, sin esperar al modelo');
@@ -100,7 +100,7 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     log((await page.locator('#ai-dialog .ai-house').count()) === 2 && /Sin observaciones/.test(last), 'ventana agregada por ambiente donde hay lugar, sin observaciones');
     await shot('ia-plantilla');
     await page.click('#ai-dialog [data-close]');
-    await page.click('[data-use="casa-minima"]');
+    await page.click('[data-use="casa-en-l"]');
     log(await page.isVisible('#confirm-replace'), '«Usar» también avisa');
     await page.click('#confirm-replace button[value="cancel"]');
 

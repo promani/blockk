@@ -113,7 +113,7 @@ final class AssistantTest extends TestCase
             ['id' => 'plantas', 'pregunta' => '¿Plantas?', 'opciones' => ['1' => 'Una', '2' => 'Dos']],
             ['id' => 'extras', 'pregunta' => '¿Extras?', 'multiple' => true, 'opciones' => ['l' => 'Lavadero', 'e' => 'Escritorio', 'd' => 'Depósito']],
         ])];
-        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-minima'], 'galeria', 'quiero agrandarla');
+        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-en-l'], 'galeria', 'quiero agrandarla');
         self::assertSame(['casa', 'usuario', 'pregunta'], $this->types($conv));
         self::assertCount(2, $conv['events'][2]['preguntas']);
         self::assertTrue($conv['events'][2]['preguntas'][1]['multiple']);
@@ -128,7 +128,7 @@ final class AssistantTest extends TestCase
     #[Test]
     public function startingFromATemplateDoesNotCallTheModelUntilThePersonAsks(): void
     {
-        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-minima']);
+        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-en-l']);
         self::assertSame(['casa'], $this->types($conv));
         self::assertSame([], $this->llm->received);
         self::assertStringContainsString('(probable)', implode(' ', array_column($conv['events'][0]['resumen']['ambientes'], 'nombre')));
@@ -137,7 +137,7 @@ final class AssistantTest extends TestCase
     #[Test]
     public function windowsArePlacedByRoomAndOrientation(): void
     {
-        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-minima']);
+        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-en-l']);
         $before = count($conv['draft']['project']['levels'][0]['openings']);
         $living = array_values(array_filter($conv['draft']['summary']['ambientes'], static fn (array $a): bool => str_starts_with($a['nombre'], 'Estar')))[0];
 
@@ -153,7 +153,7 @@ final class AssistantTest extends TestCase
     #[Test]
     public function aWindowThatDoesNotFitIsExplained(): void
     {
-        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-minima']);
+        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-en-l']);
         $this->llm->queue = [ScriptedLlm::call('editar_casa', ['operaciones' => [['accion' => 'agregar_ventana', 'ambiente' => 'N1-A99']]]), ScriptedLlm::say('No existe.')];
         $conv = $this->assistant->reply($conv, 'ventana', []);
 
@@ -163,7 +163,7 @@ final class AssistantTest extends TestCase
     #[Test]
     public function inTheEditorTheCurrentProjectReplacesTheDraft(): void
     {
-        $template = (new TemplateCatalog())->project('casa-minima');
+        $template = (new TemplateCatalog())->project('casa-en-l');
         $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'proyecto', 'project' => $template], 'editor');
         self::assertSame('editor', $conv['modo']);
 
@@ -197,7 +197,7 @@ final class AssistantTest extends TestCase
     #[Test]
     public function aBadEditChangesNothingAndExplainsWhy(): void
     {
-        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-minima']);
+        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-en-l']);
         $project = $conv['draft']['project'];
 
         $this->llm->queue = [ScriptedLlm::call('editar_casa', ['operaciones' => [['accion' => 'renombrar', 'nombre' => 'X'], ['accion' => 'quitar_muro', 'muro' => 'no-existe']]]), ScriptedLlm::say('Uy.')];
@@ -240,7 +240,7 @@ final class AssistantTest extends TestCase
     #[Test]
     public function designsBelongToTheirBrowser(): void
     {
-        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-minima']);
+        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-en-l']);
         self::assertCount(1, $this->conversations->designs(self::CLIENT));
         self::assertNotNull($this->conversations->design($conv['id'], self::CLIENT));
         self::assertNull($this->conversations->design($conv['id'], 'ffffffffffffffffffffffff'));
@@ -258,7 +258,7 @@ final class AssistantTest extends TestCase
     {
         $assistant = $this->twoTier();
         $this->llm->queue = [ScriptedLlm::ask('¿Cuánto más grande?', ['a' => 'Un poco', 'b' => 'Bastante'])];
-        $conv = $assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-minima'], 'editor', 'agrandala');
+        $conv = $assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-en-l'], 'editor', 'agrandala');
 
         self::assertSame([LlmClient::LIGHT], $this->llm->tiers);
         self::assertSame(['casa', 'usuario', 'pregunta'], $this->types($conv));

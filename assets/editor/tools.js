@@ -4,6 +4,7 @@
  */
 import { h } from '../lib/dom.js';
 import { fmt } from '../lib/format.js';
+import { sideLabel } from '../lib/orient.js';
 import { pickAt, pickWall, alongPosition, G } from './pick.js';
 import { outlineRect, ghostBox, label, nodeMarker } from './overlay.js';
 import { nextId } from '../lib/storage.js';
@@ -1158,7 +1159,6 @@ export function createTools(app) {
     // ---------------- escalera (con descanso) ----------------
     const stairState = { shape: 'straight', dir: 'E', turn: 'right', w: 8, tread: 28 };
     const DIRS = ['E', 'S', 'W', 'N'];
-    const DIR_NAME = { N: '↑ Norte', E: '→ Este', S: '↓ Sur', W: '← Oeste' };
     /** Huellas de la escalera (cm, en planta), con la misma geometría que calcula el servidor. */
     const stairGeometry = (st, gx, gy) => {
         const n = Math.ceil(cfg.levelHeight / 18);
@@ -1203,7 +1203,7 @@ export function createTools(app) {
             selectT('Forma', stairState.shape, [['straight', 'Recta'], ['L', 'En L con descanso'], ['U', 'En U con descanso']], (v) => { stairState.shape = v; app.refreshOptions(); app.render(); }),
             selectT('Ancho', stairState.w, [7, 8, 9, 10, 12].map((v) => [v, `${fmt(v * G, 1)} cm`]), (v) => { stairState.w = Number(v); app.render(); }),
             selectT('Huella', stairState.tread, [25, 26, 28, 30, 32].map((v) => [v, `${v} cm`]), (v) => { stairState.tread = Number(v); app.render(); }),
-            h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: cycleDir }, `Sube hacia ${DIR_NAME[stairState.dir]} (X)`),
+            h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: cycleDir }, `Sube hacia ${sideLabel(stairState.dir, store.project.north)} (X)`),
             stairState.shape === 'straight' ? null : selectT('Gira a', stairState.turn, [['right', 'la derecha'], ['left', 'la izquierda']], (v) => { stairState.turn = v; app.render(); })),
         down(p) {
             if (!inLot(p.gx, p.gy)) return;
@@ -1238,7 +1238,7 @@ export function createTools(app) {
 
     // ---------------- techo (rectángulo, como una habitación) ----------------
     const roofDefaults = { type: 'gable', dir: 'x', slope: 30, overhang: 40, section: '3x8', spacing: 50, gableT: 20 };
-    const FALL_SIDES = [['S', 'Sur (abajo)'], ['N', 'Norte (arriba)'], ['E', 'Este (derecha)'], ['W', 'Oeste (izquierda)']];
+    const FALL_SIDES = ['S', 'N', 'E', 'W'];
     /** Nivel sobre el que apoyan los techos nuevos: por defecto el más alto con muros. */
     const roofLevel = () => Math.min(store.ui.roofLevel ?? store.topLevel, store.topLevel);
     const selectedRoof = () => {
@@ -1264,7 +1264,7 @@ export function createTools(app) {
     const newRoof = (d, r) => {
         const spec = { ...roofDefaults };
         if (spec.type === 'gable') spec.dir = r.w >= r.h ? 'x' : 'y';
-        else if (!FALL_SIDES.some(([v]) => v === spec.dir)) spec.dir = 'S';
+        else if (!FALL_SIDES.includes(spec.dir)) spec.dir = 'S';
         d.roofs.push({ id: nextId(d, 'r'), level: levelFor(d, r), x: r.x, y: r.y, w: r.w, h: r.h, type: spec.type, dir: spec.dir, slope: spec.slope, overhang: spec.overhang, section: spec.section, spacing: spec.spacing, gableA: true, gableB: true, gableT: spec.gableT });
     };
     const roofRoomAt = (a) => {
@@ -1298,7 +1298,7 @@ export function createTools(app) {
         return h('span', { class: 'row' }, target ? h('span', { class: 'tag' }, `Techo ${target.id}`) : null, target ? h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: () => app.deleteSelection() }, 'Quitar techo') : null, types,
             cur.type === 'gable'
                 ? selectT('Cumbrera', cur.dir, [['x', '↔ horizontal'], ['y', '↕ vertical']], (v) => set('Dirección de cumbrera', { dir: v }))
-                : selectT('Cae hacia', cur.dir, FALL_SIDES, (v) => set('Caída del techo', { dir: v })),
+                : selectT('Cae hacia', cur.dir, FALL_SIDES.map((d) => [d, sideLabel(d, store.project.north)]), (v) => set('Caída del techo', { dir: v })),
             numIn('Pendiente', cur.slope, 10, 100, 5, 'slope', '%'),
             numIn('Alero', cur.overhang, 0, 100, 5, 'overhang', 'cm'),
             selectT('Cabios', cur.section, Object.entries(cfg.timberSections).map(([k, x]) => [k, x.label.replace('Pino tratado ', '')]), (v) => set('Sección de cabios', { section: v })),

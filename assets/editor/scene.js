@@ -223,14 +223,20 @@ function buildTimber(timber, config) {
     return { boxes, fields: timber.fields ?? [] };
 }
 
+/** Borde exterior de la cubierta en planta (el alero puede faltar en los lados que chocan contra un muro de arriba). */
+export function roofOuter(g) {
+    if (g.outer) return g.outer;
+    const o = g.overhang ?? 0;
+    return { x0: g.rect.x0 - o, x1: g.rect.x1 + o, y0: g.rect.y0 - o, y1: g.rect.y1 + o };
+}
+
 /** Cada techo entra a la lista de cajas (su envolvente) para ordenarse junto con muros y pisos según la vista. */
 function buildRoofs(roof) {
     const boxes = [];
     for (const part of roof?.parts ?? []) {
         const g = part.geometry;
-        const o = g.overhang ?? 0;
         boxes.push({
-            x0: g.rect.x0 - o, x1: g.rect.x1 + o, y0: g.rect.y0 - o, y1: g.rect.y1 + o,
+            ...roofOuter(g),
             z0: g.zTop, z1: g.zTop + (g.riseCm ?? 0), zs: g.zTop,
             kind: KIND.ROOF, axis: 'x', adjA: false, adjB: false, top: true, level: 2, roof: part,
         });

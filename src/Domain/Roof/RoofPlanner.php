@@ -20,7 +20,6 @@ use App\Domain\Model\Wall;
 final class RoofPlanner
 {
     private const int BATTEN_SPACING_CM = 40;
-    private const float BLOCK_FACE_M2 = 0.625 * 0.25;
 
     /** @param list<LevelAnalysis> $levels */
     public function plan(Project $project, array $levels): RoofPlan
@@ -28,7 +27,8 @@ final class RoofPlanner
         $parts = [];
         $issues = [];
         foreach ($project->roofs as $part) {
-            $built = $this->planPart($part, $levels[$part->level]->level->walls);
+            $upper = $part->level + 1 < count($levels) ? $levels[$part->level + 1]->level->walls : [];
+            $built = $this->planPart($part, $levels[$part->level]->level->walls, $upper);
             if (0 === $part->level && $project->level(1)->walls !== [] && $this->coversUpperWalls($part, $project->level(1)->walls)) {
                 $built['issues'][] = $this->issue($part, 'warn', 'roof.covered', sprintf('El techo %s queda debajo de muros del Nivel 2: cambialo a «Sobre el Nivel 2» o achicá su rectángulo.', $part->id));
             }
@@ -184,10 +184,11 @@ final class RoofPlanner
 
     /**
      * @param list<Wall> $walls muros del nivel sobre el que apoya
+     * @param list<Wall> $upper muros del nivel de arriba: un borde del techo que choca contra ellos no lleva alero ni hastial
      *
      * @return array{id: string, level: int, type: string, geometry: array<string, mixed>, bom: array<string, mixed>, issues: list<array<string, mixed>>}
      */
-    private function planPart(RoofPart $roof, array $walls): array
+    private function planPart(RoofPart $roof, array $walls, array $upper = []): array
     {
         $G = Hcca::GRID_CM;
         $x0 = $roof->x * $G;
@@ -211,7 +212,19 @@ final class RoofPlanner
         $span = $c1 - $c0;
         $pt = static fn (float $along, float $across, float $z): array => $alongX ? [round($along, 2), round($across, 2), round($z, 2)] : [round($across, 2), round($along, 2), round($z, 2)];
         $issues = [];
-        $lr = ($a1 - $a0) + 2 * $o; // largo de cada faldón a lo largo de la cumbrera
+        // Alero por borde: donde el techo choca contra un muro del nivel de arriba (p. ej. el techo de la PB contra la
+        // pared de la PA) no hay alero, y en ese extremo tampoco hay hastial (lo cierra el muro de arriba).
+        $abuts = fn (float $line, bool $lineIsAlong, float $from, float $to): bool => [] !== $upper
+            && $this->coverage($upper, $lineIsAlong === $alongX ? Axis::X : Axis::Y, (int) round($line / $G), $from, $to, false) >= 0.5 * ($to - $from);
+        $endA0 = $abuts($a0, false, $c0, $c1);
+        $endA1 = $abuts($a1, false, $c0, $c1);
+        $sideC0 = $abuts($c0, true, $a0, $a1);
+        $sideC1 = $abuts($c1, true, $a0, $a1);
+        $oa0 = $endA0 ? 0.0 : $o;
+        $oa1 = $endA1 ? 0.0 : $o;
+        $oc0 = $sideC0 ? 0.0 : $o;
+        $oc1 = $sideC1 ? 0.0 : $o;
+        $lr = ($a1 - $a0) + $oa0 + $oa1; // largo de cada faldón a lo largo de la cumbrera
 
         $planes = [];
         $gables = [];
@@ -223,27 +236,32 @@ final class RoofPlanner
             $mid = ($c0 + $c1) / 2;
             $rise = $half * $s;
             $run = $half;
-            $rafterLen = hypot($half + $o, $rise + $o * $s);
-            $zLow = $zTop - $o * $s;
             $zRidge = $zTop + $rise;
-            foreach ([-1, 1] as $side) {
-                $edge = $mid + $side * ($half + $o);
-                $planes[] = ['pts' => [$pt($a0 - $o, $edge, $zLow), $pt($a1 + $o, $edge, $zLow), $pt($a1 + $o, $mid, $zRidge), $pt($a0 - $o, $mid, $zRidge)], 'areaM2' => round($rafterLen * $lr / 10000, 2)];
+            $lens = [];
+            foreach ([-1 => $oc0, 1 => $oc1] as $side => $oe) {
+                $len = hypot($half + $oe, $rise + $oe * $s);
+                $lens[] = $len;
+                $edge = $mid + $side * ($half + $oe);
+                $zEdge = $zTop - $oe * $s;
+                $planes[] = ['pts' => [$pt($a0 - $oa0, $edge, $zEdge), $pt($a1 + $oa1, $edge, $zEdge), $pt($a1 + $oa1, $mid, $zRidge), $pt($a0 - $oa0, $mid, $zRidge)], 'areaM2' => round($len * $lr / 10000, 2)];
             }
-            foreach ([$a0, $a1] as $a) {
-                $gables[] = $this->gable($roof, $a === $a0 ? 'A' : 'B', [$pt($a, $c0, $zBase), $pt($a, $c1, $zBase), $pt($a, $c1, $zTop), $pt($a, $mid, $zRidge), $pt($a, $c0, $zTop)], $span * ($rise / 2 + $lift));
+            $rafterLen = max($lens);
+            foreach ([[$a0, 'A', $endA0], [$a1, 'B', $endA1]] as [$a, $name, $closed]) {
+                if (!$closed) {
+                    $gables[] = $this->gable($roof, $name, [$pt($a, $c0, $zBase), $pt($a, $c1, $zBase), $pt($a, $c1, $zTop), $pt($a, $mid, $zRidge), $pt($a, $c0, $zTop)], $span * ($rise / 2 + $lift));
+                }
             }
-            $ridge = ['from' => $pt($a0 - $o, $mid, $zRidge), 'to' => $pt($a1 + $o, $mid, $zRidge)];
+            $ridge = ['from' => $pt($a0 - $oa0, $mid, $zRidge), 'to' => $pt($a1 + $oa1, $mid, $zRidge)];
             $n = (int) ceil($lr / $roof->spacing) + 1;
             for ($i = 0; $i < $n; ++$i) {
-                $al = $a0 - $o + $i * $lr / max(1, $n - 1);
-                foreach ([-1, 1] as $side) {
-                    $rafterLines[] = ['from' => $pt($al, $mid + $side * ($half + $o), $zLow), 'to' => $pt($al, $mid, $zRidge)];
+                $al = $a0 - $oa0 + $i * $lr / max(1, $n - 1);
+                foreach ([-1 => $oc0, 1 => $oc1] as $side => $oe) {
+                    $rafterLines[] = ['from' => $pt($al, $mid + $side * ($half + $oe), $zTop - $oe * $s), 'to' => $pt($al, $mid, $zRidge)];
                 }
             }
             $pieces = 2 * $n;
-            $coverM2 = 2 * $rafterLen * $lr / 10000;
-            $battenMl = 2 * ((int) ceil($rafterLen / self::BATTEN_SPACING_CM) + 1) * $lr / 100;
+            $coverM2 = array_sum($lens) * $lr / 10000;
+            $battenMl = array_sum(array_map(static fn (float $l): int => (int) ceil($l / self::BATTEN_SPACING_CM) + 1, $lens)) * $lr / 100;
             $ridgeMl = $lr / 100;
             $ridgeLen = $a1 - $a0;
             if ($ridgeLen > 475) {
@@ -256,20 +274,27 @@ final class RoofPlanner
             $high = $lowIsFirst ? $c1 : $c0;
             $rise = $span * $s;
             $run = $span;
-            $rafterLen = hypot($span + 2 * $o, $rise + 2 * $o * $s);
-            $lowOuter = $low + ($lowIsFirst ? -$o : $o);
-            $highOuter = $high + ($lowIsFirst ? $o : -$o);
-            $zLow = $zTop - $o * $s;
-            $zHigh = $zTop + $rise + $o * $s;
-            $planes[] = ['pts' => [$pt($a0 - $o, $lowOuter, $zLow), $pt($a1 + $o, $lowOuter, $zLow), $pt($a1 + $o, $highOuter, $zHigh), $pt($a0 - $o, $highOuter, $zHigh)], 'areaM2' => round($rafterLen * $lr / 10000, 2)];
-            foreach ([$a0, $a1] as $a) {
-                $gables[] = $this->gable($roof, $a === $a0 ? 'A' : 'B', [$pt($a, $low, $zBase), $pt($a, $high, $zBase), $pt($a, $high, $zTop + $rise), $pt($a, $low, $zTop)], $span * ($rise / 2 + $lift));
+            [$oLow, $oHigh] = $lowIsFirst ? [$oc0, $oc1] : [$oc1, $oc0];
+            $highClosed = $lowIsFirst ? $sideC1 : $sideC0;
+            $rafterLen = hypot($span + $oLow + $oHigh, $rise + ($oLow + $oHigh) * $s);
+            $lowOuter = $low + ($lowIsFirst ? -$oLow : $oLow);
+            $highOuter = $high + ($lowIsFirst ? $oHigh : -$oHigh);
+            $zLow = $zTop - $oLow * $s;
+            $zHigh = $zTop + $rise + $oHigh * $s;
+            $planes[] = ['pts' => [$pt($a0 - $oa0, $lowOuter, $zLow), $pt($a1 + $oa1, $lowOuter, $zLow), $pt($a1 + $oa1, $highOuter, $zHigh), $pt($a0 - $oa0, $highOuter, $zHigh)], 'areaM2' => round($rafterLen * $lr / 10000, 2)];
+            foreach ([[$a0, 'A', $endA0], [$a1, 'B', $endA1]] as [$a, $name, $closed]) {
+                if (!$closed) {
+                    $gables[] = $this->gable($roof, $name, [$pt($a, $low, $zBase), $pt($a, $high, $zBase), $pt($a, $high, $zTop + $rise), $pt($a, $low, $zTop)], $span * ($rise / 2 + $lift));
+                }
             }
-            // Muro alto: el muro del lado alto se levanta hasta la cumbre del faldón (parte fija del techo a un agua).
-            $gables[] = $this->gable($roof, 'H', [$pt($a0, $high, $zBase), $pt($a1, $high, $zBase), $pt($a1, $high, $zTop + $rise), $pt($a0, $high, $zTop + $rise)], ($a1 - $a0) * ($rise + $lift), true);
+            // Muro alto: el muro del lado alto se levanta hasta la cumbre del faldón (parte fija del techo a un agua), salvo
+            // que el faldón apoye contra un muro del nivel de arriba.
+            if (!$highClosed) {
+                $gables[] = $this->gable($roof, 'H', [$pt($a0, $high, $zBase), $pt($a1, $high, $zBase), $pt($a1, $high, $zTop + $rise), $pt($a0, $high, $zTop + $rise)], ($a1 - $a0) * ($rise + $lift), true);
+            }
             $n = (int) ceil($lr / $roof->spacing) + 1;
             for ($i = 0; $i < $n; ++$i) {
-                $al = $a0 - $o + $i * $lr / max(1, $n - 1);
+                $al = $a0 - $oa0 + $i * $lr / max(1, $n - 1);
                 $rafterLines[] = ['from' => $pt($al, $lowOuter, $zLow), 'to' => $pt($al, $highOuter, $zHigh)];
             }
             $pieces = $n;
@@ -324,6 +349,10 @@ final class RoofPlanner
             'geometry' => [
                 'rect' => ['x0' => $x0, 'y0' => $y0, 'x1' => $x1, 'y1' => $y1],
                 'overhang' => $o,
+                // borde exterior de la cubierta (con el alero de cada lado)
+                'outer' => $alongX
+                    ? ['x0' => $x0 - $oa0, 'x1' => $x1 + $oa1, 'y0' => $y0 - $oc0, 'y1' => $y1 + $oc1]
+                    : ['x0' => $x0 - $oc0, 'x1' => $x1 + $oc1, 'y0' => $y0 - $oa0, 'y1' => $y1 + $oa1],
                 'zTop' => $zBase,
                 'riseCm' => round($rise, 1),
                 'rafterLenCm' => round($rafterLen, 1),
@@ -476,11 +505,11 @@ final class RoofPlanner
      *
      * @param list<Wall> $walls
      */
-    private function coverage(array $walls, Axis $axis, int $lineUnits, float $a0, float $a1): float
+    private function coverage(array $walls, Axis $axis, int $lineUnits, float $a0, float $a1, bool $bearing = true): float
     {
         $spans = [];
         foreach ($walls as $w) {
-            if ($w->axis() === $axis && $w->lineU() === $lineUnits && $w->isLoadBearing() && $w->h === Hcca::COURSES) {
+            if ($w->axis() === $axis && $w->lineU() === $lineUnits && (!$bearing || ($w->isLoadBearing() && $w->h === Hcca::COURSES))) {
                 $s = max($w->startU() * Hcca::GRID_CM, $a0);
                 $e = min($w->endU() * Hcca::GRID_CM, $a1);
                 if ($e > $s) {

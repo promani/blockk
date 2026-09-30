@@ -5,7 +5,7 @@ import { downloadBlob, slug } from '../lib/download.js';
 import { Store } from './store.js';
 import { Camera } from './camera.js';
 import { Renderer } from './renderer.js';
-import { buildScene } from './scene.js';
+import { buildScene, roofOuter } from './scene.js';
 import { createTools, openingBox } from './tools.js';
 import { mountPanels } from './panels.js';
 import { wireBox, snapDots, magnetHit } from './overlay.js';
@@ -88,7 +88,7 @@ const levelLabel = () => config.levelShort[store.ui.level] ?? 'Techo';
 
 function persistUi() {
     try {
-        localStorage.setItem(UI_KEY, JSON.stringify({ view: store.ui.view }));
+        localStorage.setItem(UI_KEY, JSON.stringify({ view: store.ui.view, showLot: store.ui.showLot, showGrid: store.ui.showGrid }));
     } catch { /* sin persistencia */ }
 }
 
@@ -563,8 +563,8 @@ function selectionBox(sel) {
         const part = store.analysis?.roof?.parts?.find((p) => p.id === (sel.type === 'roof' ? sel.id : String(sel.id).split(':')[0]));
         if (!part || sel.type === 'gable') return null;
         const g = part.geometry;
-        const o = g.overhang ?? 0;
-        return { x0: g.rect.x0 - o, y0: g.rect.y0 - o, x1: g.rect.x1 + o, y1: g.rect.y1 + o, z0: g.zTop - 10, z1: g.zTop + g.riseCm };
+        const r = roofOuter(g);
+        return { ...r, z0: g.zTop - 10, z1: g.zTop + g.riseCm };
     }
     if (sel.type === 'slab') {
         const sl = store.analysis?.floors?.slabs?.find((x) => x.id === sel.id);
@@ -647,7 +647,7 @@ function sceneKey() {
     const { level, cut, snap, solar } = store.ui;
     const s = store.ui.solar.show ? store.sun() : null;
     const p = store.project;
-    return [sceneVersion, level, cut, snap, solar.show, s ? `${s.alt.toFixed(2)}:${s.az.toFixed(2)}` : '-', p.north, p.lot.w, p.lot.d].join(',');
+    return [sceneVersion, level, cut, snap, solar.show, store.ui.showLot, store.ui.showGrid, s ? `${s.alt.toFixed(2)}:${s.az.toFixed(2)}` : '-', p.north, p.lot.w, p.lot.d].join(',');
 }
 
 function draw() {
@@ -689,7 +689,8 @@ let contextKey = '';
 store.addEventListener('ui', (e) => {
     // La hora y la época del sol sólo cambian el dibujo: no se redibujan los paneles (cortaría el arrastre del deslizador).
     const keys = Object.keys(e.detail ?? {});
-    if (keys.length && keys.every((k) => k === 'solar')) {
+    if (keys.some((k) => k === 'showLot' || k === 'showGrid')) persistUi();
+    if (keys.length && keys.every((k) => k === 'solar' || k === 'showLot' || k === 'showGrid')) {
         app.render();
         return;
     }
@@ -773,6 +774,8 @@ $('#form-new').addEventListener('submit', async (e) => {
     try {
         const ui = JSON.parse(localStorage.getItem(UI_KEY) ?? '{}');
         if (ui.view) store.setUi({ view: ui.view }, { silent: true });
+        if (ui.showLot === false) store.setUi({ showLot: false }, { silent: true });
+        if (ui.showGrid === false) store.setUi({ showGrid: false }, { silent: true });
     } catch { /* ok */ }
     cam.view = store.ui.view;
     for (const b of $$('#view-toggle button')) b.setAttribute('aria-pressed', String(b.dataset.view === store.ui.view));

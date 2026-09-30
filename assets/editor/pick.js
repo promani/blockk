@@ -1,6 +1,7 @@
 /** Selección por geometría en pantalla: envolvente convexa de cada muro (iso) o rectángulo (planta). */
 import { Camera } from './camera.js';
 import { convexHull } from './renderer.js';
+import { roofOuter } from './scene.js';
 
 export const G = 12.5;
 
@@ -87,8 +88,8 @@ function pickRoof(app, sx, sy) {
         const [wx, wy] = cam.unproject(sx, sy, 0);
         const hits = parts.filter((p) => {
             const g = p.geometry;
-            const o = g.overhang ?? 0;
-            return wx >= g.rect.x0 - o && wx <= g.rect.x1 + o && wy >= g.rect.y0 - o && wy <= g.rect.y1 + o;
+            const r = roofOuter(g);
+            return wx >= r.x0 && wx <= r.x1 && wy >= r.y0 && wy <= r.y1;
         });
         hits.sort((a, b) => b.level - a.level || area(a) - area(b));
         return hits[0] ? { type: 'roof', id: hits[0].id } : null;

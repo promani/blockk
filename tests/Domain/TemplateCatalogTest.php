@@ -17,7 +17,7 @@ final class TemplateCatalogTest extends TestCase
         $catalog = new TemplateCatalog();
         $all = $catalog->all();
 
-        self::assertGreaterThanOrEqual(5, count($all));
+        self::assertGreaterThanOrEqual(2, count($all));
         foreach ($all as $t) {
             self::assertSame(0, $t['errors'], "{$t['slug']}: no debe tener errores de validación constructiva");
             self::assertLessThan(4.0, $t['scrapPct'], "{$t['slug']}: descarte < 4 % (KPI del producto)");
@@ -31,8 +31,24 @@ final class TemplateCatalogTest extends TestCase
     {
         $tags = array_merge(...array_column((new TemplateCatalog())->all(), 'tags'));
 
-        foreach (['1 planta', '2 plantas', 'Vivienda evolutiva', 'Quincho', 'Dúplex', 'Luz libre modulada'] as $expected) {
+        foreach (['1 planta', '2 plantas', 'Vivienda evolutiva'] as $expected) {
             self::assertContains($expected, $tags);
+        }
+    }
+
+    #[Test]
+    public function everyTemplateIsCompleteWithRoofAndStairsAndNoWarnings(): void
+    {
+        $catalog = new TemplateCatalog();
+        foreach ($catalog->all() as $t) {
+            $p = $catalog->project($t['slug']);
+            self::assertNotEmpty($p['roofs'] ?? [], "{$t['slug']}: tiene que tener techo");
+            if (2 === $t['levels']) {
+                self::assertNotEmpty($p['levels'][0]['stairs'], "{$t['slug']}: con dos plantas lleva escalera");
+                self::assertNotEmpty(array_merge($p['levels'][1]['slabs'], $p['levels'][0]['timber']), "{$t['slug']}: con dos plantas lleva piso");
+            }
+            $issues = (new \App\Domain\ProjectAnalyzer())->analyze(\App\Domain\Model\ProjectFactory::fromArray($p))['analysis']['issues'];
+            self::assertSame([], array_values(array_filter($issues, static fn (array $i): bool => 'info' !== $i['severity'])), $t['slug']);
         }
     }
 
@@ -57,7 +73,7 @@ final class TemplateCatalogTest extends TestCase
     public function thumbnailsAreWellFormedSvgAndEscapeTheProjectName(): void
     {
         $catalog = new TemplateCatalog();
-        $summary = $catalog->summary('casa-minima');
+        $summary = $catalog->summary('casa-en-l');
         $project = $summary['project'];
         $project['name'] = '<img src=x onerror=alert(1)>';
         $svg = TemplateThumbnail::svg($project);

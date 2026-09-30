@@ -86,8 +86,7 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 ## Archivo
 
-*Nuevo*, *Guardar* (descarga el `.json`) y *Abrir*. El proyecto se guarda solo en el navegador (`localStorage`).
-«Ver cómputo →» abre el cómputo.
+*Nuevo*, *Guardar* (descarga el `.json`) y *Abrir*. El proyecto se guarda solo en el navegador (`localStorage`). El cómputo está en la pestaña «Cómputo» de la barra superior.
 
 ## Otras pantallas
 

@@ -56,7 +56,7 @@ final class HouseDescriber
         $a = $result['analysis'];
         $out = $this->summary($result, $names);
         $out['lote'] = $p['lot'] ?? null;
-        $out['norte'] = 'arriba (y negativa); x crece hacia el este, y hacia el sur. Coordenadas en metros.';
+        $out['norte'] = sprintf('a %d° del «arriba» del plano, en sentido horario (0 = arriba, 90 = derecha); x crece hacia la derecha e y hacia abajo. Coordenadas en metros.', (int) ($p['north'] ?? 0));
         $out['muros'] = [];
         $out['vanos'] = [];
         foreach ($p['levels'] as $li => $level) {

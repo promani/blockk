@@ -25,10 +25,10 @@ final class TemplateImagesTest extends TestCase
     #[Test]
     public function theHashChangesWithTheProject(): void
     {
-        $p = (new TemplateCatalog())->project('casa-minima');
+        $p = (new TemplateCatalog())->project('casa-en-l');
         $q = $p;
         $q['name'] = 'Otra';
         self::assertNotSame(TemplateImages::hash($p), TemplateImages::hash($q));
-        self::assertMatchesRegularExpression('#^img/plantillas/casa-minima-[0-9a-f]{10}-iso\.webp$#', TemplateImages::paths('casa-minima', $p)['iso']);
+        self::assertMatchesRegularExpression('#^img/plantillas/casa-en-l-[0-9a-f]{10}-iso\.webp$#', TemplateImages::paths('casa-en-l', $p)['iso']);
     }
 }
