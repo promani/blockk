@@ -98,7 +98,7 @@ export function mountAssistant({ card, dialog, confirmReplace, config }) {
         let views = await getThumbs(key);
         if (!views) {
             const { project } = await api(`/api/assistant/designs/${d.id}?client=${chat.client}`);
-            const [result, solar] = await Promise.all([analyze(project), solarPath(project.lat ?? -34.6, 'winter').catch(() => null)]);
+            const [result, solar] = await Promise.all([analyze(project), solarPath(project.lat ?? -34.6, 'winter', project.lon ?? -58.4, project.tz ?? -3).catch(() => null)]);
             views = renderThumbs({ project: result.project ?? project, analysis: result.analysis, config, solarPath: solar?.path });
             putThumbs(key, views);
         }

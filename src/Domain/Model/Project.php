@@ -27,6 +27,9 @@ final readonly class Project
         public bool $upper = false,
         /** @var list<RoofPart> */
         public array $roofs = [],
+        /** longitud (°, oeste negativa) y huso horario (horas respecto de UTC): pasan la hora oficial a hora solar */
+        public float $longitude = -58.4,
+        public float $utcOffset = -3.0,
     ) {
         if (count($levels) > Hcca::MAX_LEVELS) {
             throw new \InvalidArgumentException('La mampostería autoportante HCCA admite como máximo 2 niveles (PB + PA).');
@@ -57,7 +60,7 @@ final readonly class Project
     /** @param list<Level> $levels */
     public function withLevels(array $levels): self
     {
-        return new self($this->name, $levels, $this->settings, $this->north, $this->latitude, $this->lotW, $this->lotD, $this->upper, $this->roofs);
+        return new self($this->name, $levels, $this->settings, $this->north, $this->latitude, $this->lotW, $this->lotD, $this->upper, $this->roofs, $this->longitude, $this->utcOffset);
     }
 
     public function withLevel(int $index, Level $level): self
@@ -76,6 +79,8 @@ final readonly class Project
             'name' => $this->name,
             'north' => $this->north,
             'lat' => $this->latitude,
+            'lon' => $this->longitude,
+            'tz' => $this->utcOffset,
             'lot' => ['w' => $this->lotW, 'd' => $this->lotD],
             'upper' => $this->upperEnabled(),
             'roofs' => array_map(static fn (RoofPart $r): array => $r->toArray(), $this->roofs),

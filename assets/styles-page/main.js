@@ -14,7 +14,7 @@ try {
 let sample = null;
 async function loadSample() {
     const project = await template('casa-en-l');
-    const [result, solar] = await Promise.all([analyze(project), solarPath(project.lat ?? -34.6, 'winter').catch(() => null)]);
+    const [result, solar] = await Promise.all([analyze(project), solarPath(project.lat ?? -34.6, 'winter', project.lon ?? -58.4, project.tz ?? -3).catch(() => null)]);
     sample = { project: result.project, analysis: result.analysis, config, solarPath: solar?.path };
     drawPreview();
 }

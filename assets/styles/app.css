@@ -472,3 +472,16 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 .preview-canvas canvas { width: 100%; height: auto; display: block; }
 .preview-ui { margin-top: 14px; padding: 14px 16px; }
 @media (max-width: 760px) { .styles-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* brújula del norte (Configuraciones generales) */
+.north-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.north-dial { width: 104px; height: 104px; flex: none; cursor: grab; touch-action: none; }
+.north-dial:active { cursor: grabbing; }
+.north-dial:focus-visible { outline: 2px solid var(--green); border-radius: 50%; }
+.nd-ring { fill: var(--panel); stroke: var(--border); stroke-width: 2; }
+.nd-tick { stroke: var(--muted); stroke-width: 1.2; }
+.nd-n { fill: #d92d20; }
+.nd-s { fill: #94a3b8; }
+.nd-hub { fill: var(--graphite); }
+.nd-label { font: 700 12px system-ui, sans-serif; fill: #d92d20; }
+.north-info { display: flex; flex-direction: column; gap: 4px; }

@@ -14,8 +14,8 @@ export function cardinal(side, north = 0) {
     return CARDINAL[Math.round(a / 45) % 8];
 }
 
-/** «↑ Arriba (norte)». */
+/** «↑ Arriba»: los lados se nombran por el plano; el norte real es una configuración general del proyecto. */
 export function sideLabel(side, north = 0, arrow = true) {
     const p = PLAN[side];
-    return `${arrow ? `${ARROW[side]} ` : ''}${p[0].toUpperCase()}${p.slice(1)} (${cardinal(side, north)})`;
+    return `${arrow ? `${ARROW[side]} ` : ''}${p[0].toUpperCase()}${p.slice(1)}`;
 }

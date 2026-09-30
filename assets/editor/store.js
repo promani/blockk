@@ -179,12 +179,15 @@ export class Store extends EventTarget {
 
     /** Trayectoria solar del servidor para la latitud y época actuales (con caché por clave). */
     async ensureSolar() {
-        const key = `${this.project.lat}:${this.ui.solar.season}`;
+        const lon = this.project.lon ?? -58.4;
+        const tz = this.project.tz ?? -3;
+        const key = `${this.project.lat}:${lon}:${tz}:${this.ui.solar.season}`;
         if (this.ui.solar.pathKey === key && this.ui.solar.path) return;
         try {
-            const data = await solarPath(this.project.lat, this.ui.solar.season);
+            const data = await solarPath(this.project.lat, this.ui.solar.season, lon, tz);
             this.ui.solar.path = data.path;
             this.ui.solar.label = data.label;
+            this.ui.solar.noon = data.solarNoon;
             this.ui.solar.pathKey = key;
             this.emit('solar');
         } catch {

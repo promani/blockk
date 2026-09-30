@@ -12,8 +12,10 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
 - **Ver adentro**: un deslizador baja la altura visible de los muros del nivel (no cambia el proyecto).
 - **Brújula con el sol** (arriba a la derecha) y sombras según época, latitud y hora.
 - **Panel derecho**: *Selección* o *Configuraciones generales* (terreno —con «Mostrar terreno» y «Mostrar cuadrícula»—,
-  norte, sol y ajustes del proyecto cuando no hay nada elegido). Los lados de techos y escaleras se nombran por el plano
-  (arriba, derecha…) con su punto cardinal según el norte elegido, **Resumen** y **Revisión**, que se adaptan a lo que se está haciendo.
+  **norte** con una brújula que se arrastra (de a 5°, Mayús de a 1°, o escribiendo el ángulo), sol y ajustes del
+  proyecto cuando no hay nada elegido). El sol se calcula con latitud, longitud y huso horario (ciudades cargadas o a
+  mano): la hora del deslizador es la oficial y se informa el mediodía solar. Los lados de techos y escaleras se
+  nombran por el plano (arriba, derecha…), sin puntos cardinales, **Resumen** y **Revisión**, que se adaptan a lo que se está haciendo.
 - **Guía «Próximo paso»**: propone la siguiente acción (habitación, puerta, ventanas, nivel 2, piso, escalera, techo) y
   abre la herramienta con un clic. Se minimiza.
 - **Botón flotante «✦ IA»** (abajo a la derecha, si el asistente está configurado): ver [LLM.md](LLM.md).
@@ -34,9 +36,9 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 | Habitación | `R` | Arrastrar en diagonal dibuja cuatro muros; empezando desde una pared existente, se comparte. |
 | Muro | `W` | Muro a muro; al volver al punto de partida la cadena se cierra sola (igual que Habitación). |
 | Puerta / Ventana | `P` / `N` | Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Tipos predefinidos (P75…P150, V62…V187, ventiluces, ventanal). |
-| Escalera | `S` | Clic dentro de una habitación del Nivel 1: recta, en L o en U. `X` gira. |
+| Escalera | `S` | Clic dentro de una habitación del Nivel 1: recta, en L o en U. Sigue al cursor, se acomoda dentro de la habitación y, si no entra, se gira sola. `X` gira. |
 | Piso | `L` | En el Nivel 2: clic dentro de una habitación de abajo; losa de hormigón o entrepiso de madera, con el hueco de la escalera recortado. |
-| Techo | `H` | En la pestaña Techo: rectángulo o clic dentro de un ambiente; a un agua o a dos aguas, pendiente, alero y cabios. |
+| Techo | `H` | En la pestaña Techo: rectángulo o clic dentro de un ambiente; a un agua o a dos aguas, pendiente, alero y cabios. El alero va sólo donde cae el agua (y no contra un muro de la planta alta). |
 | Bloque, Viga U, Viga de madera | `B`, `U`, `T` | Bajo «Más»: un bloque suelto, un encadenado U intermedio, una viga de madera. |
 
 ## Asistencias al dibujar

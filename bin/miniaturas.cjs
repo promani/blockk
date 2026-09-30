@@ -36,7 +36,7 @@ const dir = path.join(root, 'public', 'img', 'plantillas');
                 const json = async (r) => { if (!r.ok) throw new Error(`${r.url}: ${r.status}`); return r.json(); };
                 const project = await json(await fetch(`/api/templates/${slug}`));
                 const result = await json(await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(project) }));
-                const solar = await json(await fetch(`/api/solar?lat=${project.lat ?? -34.6}&season=winter`)).catch(() => null);
+                const solar = await json(await fetch(`/api/solar?lat=${project.lat ?? -34.6}&season=winter&lon=${project.lon ?? -58.4}&tz=${project.tz ?? -3}`)).catch(() => null);
                 return window.blockkThumbs({ project: result.project, analysis: result.analysis, solarPath: solar?.path });
             }, t.slug);
             for (const [view, rel] of Object.entries(t.paths)) {

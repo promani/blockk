@@ -64,7 +64,9 @@ final class ProjectApiController extends AbstractController
     {
         $lat = (float) $request->query->get('lat', -34.6);
         $season = Season::tryFrom((string) $request->query->get('season', 'winter'));
-        if ($lat < -66.0 || $lat > 66.0 || null === $season) {
+        $lon = $request->query->has('lon') ? (float) $request->query->get('lon') : null;
+        $tz = (float) $request->query->get('tz', 0);
+        if ($lat < -66.0 || $lat > 66.0 || null === $season || (null !== $lon && ($lon < -180.0 || $lon > 180.0)) || $tz < -12.0 || $tz > 14.0) {
             return $this->json(['error' => 'invalid_query'], Response::HTTP_BAD_REQUEST);
         }
 
@@ -72,7 +74,10 @@ final class ProjectApiController extends AbstractController
             'lat' => $lat,
             'season' => $season->value,
             'label' => $season->label($lat),
-            'path' => $this->sun->path($lat, $season),
+            // con longitud: hora oficial del reloj; sin ella, hora solar
+            'clock' => null !== $lon,
+            'solarNoon' => null !== $lon ? round($this->sun->solarNoon($season->dayOfYear($lat), $lon, $tz), 3) : 12.0,
+            'path' => $this->sun->path($lat, $season, $lon, $tz),
         ]);
     }
 

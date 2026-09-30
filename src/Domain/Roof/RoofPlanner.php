@@ -220,10 +220,13 @@ final class RoofPlanner
         $endA1 = $abuts($a1, false, $c0, $c1);
         $sideC0 = $abuts($c0, true, $a0, $a1);
         $sideC1 = $abuts($c1, true, $a0, $a1);
-        $oa0 = $endA0 ? 0.0 : $o;
-        $oa1 = $endA1 ? 0.0 : $o;
-        $oc0 = $sideC0 ? 0.0 : $o;
-        $oc1 = $sideC1 ? 0.0 : $o;
+        // El alero va sólo donde cae el agua: los dos aleros de un techo a dos aguas y el lado bajo de uno a un agua.
+        // Los extremos (hastiales) y el lado alto no vuelan.
+        $oa0 = 0.0;
+        $oa1 = 0.0;
+        $lowC0 = $shed && in_array($roof->dir, ['N', 'W'], true);
+        $oc0 = $sideC0 || ($shed && !$lowC0) ? 0.0 : $o;
+        $oc1 = $sideC1 || ($shed && $lowC0) ? 0.0 : $o;
         $lr = ($a1 - $a0) + $oa0 + $oa1; // largo de cada faldón a lo largo de la cumbrera
 
         $planes = [];

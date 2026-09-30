@@ -54,13 +54,31 @@ final class SolarTest extends TestCase
     }
 
     #[Test]
-    public function pathCoversSixToNineteenEveryFifteenMinutes(): void
+    public function pathCoversFiveToTwentyOneEveryFifteenMinutes(): void
     {
         $path = (new SunCalculator())->path(-34.6, Season::Winter);
 
-        self::assertCount(((19 - 6) * 4) + 1, $path);
-        self::assertSame(6.0, $path[0]['h']);
-        self::assertSame(19.0, $path[array_key_last($path)]['h']);
+        self::assertCount(((21 - 5) * 4) + 1, $path);
+        self::assertSame(5.0, $path[0]['h']);
+        self::assertSame(21.0, $path[array_key_last($path)]['h']);
+    }
+
+    #[Test]
+    public function withLongitudeTheClockNoonIsNotTheSolarNoon(): void
+    {
+        $sun = new SunCalculator();
+        // Buenos Aires (58,4° O, UTC−3) el 21 de junio: el sol cruza el meridiano cerca de las 12:52 de reloj.
+        $noon = $sun->solarNoon(172, -58.4, -3.0);
+        self::assertEqualsWithDelta(12.87, $noon, 0.05);
+        $path = $sun->path(-34.6, Season::Winter, -58.4, -3.0);
+        $at12 = array_values(array_filter($path, static fn (array $p): bool => 12.0 === $p['h']))[0];
+        // a las 12:00 el sol todavía está al noreste (acimut entre 0° y 90°), no exactamente al norte
+        self::assertGreaterThan(5.0, $at12['az']);
+        self::assertLessThan(90.0, $at12['az']);
+        // en Madrid (hemisferio norte) al mediodía el sol queda al sur
+        $madrid = $sun->path(40.4, Season::Winter, -3.7, 1.0);
+        $mid = array_values(array_filter($madrid, static fn (array $p): bool => 13.0 === $p['h']))[0];
+        self::assertEqualsWithDelta(180.0, $mid['az'], 25.0);
     }
 
     #[Test]

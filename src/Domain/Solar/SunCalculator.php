@@ -29,19 +29,30 @@ final class SunCalculator
     }
 
     /**
-     * Trayectoria del día de 06:00 a 19:00 cada 15 minutos (el cliente interpola sobre esta tabla).
+     * Trayectoria del día de 05:00 a 21:00 cada 15 minutos (el cliente interpola sobre esta tabla). Sin longitud, `h` es
+     * hora solar (el sol pasa por el meridiano a las 12); con longitud y huso, `h` es la hora oficial del reloj.
      *
      * @return list<array{h: float, alt: float, az: float}>
      */
-    public function path(float $latitude, Season $season): array
+    public function path(float $latitude, Season $season, ?float $longitude = null, float $utcOffset = 0.0): array
     {
         $doy = $season->dayOfYear($latitude);
+        $shift = null === $longitude ? 0.0 : 12.0 - $this->solarNoon($doy, $longitude, $utcOffset);
         $path = [];
-        for ($m = 6 * 60; $m <= 19 * 60; $m += 15) {
+        for ($m = 5 * 60; $m <= 21 * 60; $m += 15) {
             $h = $m / 60.0;
-            $path[] = ['h' => $h, ...$this->position($latitude, $doy, $h)];
+            $path[] = ['h' => $h, ...$this->position($latitude, $doy, $h + $shift)];
         }
 
         return $path;
+    }
+
+    /** Hora oficial del mediodía solar: corrección por longitud respecto del meridiano del huso y ecuación del tiempo. */
+    public function solarNoon(int $dayOfYear, float $longitude, float $utcOffset): float
+    {
+        $b = deg2rad(360 / 365 * ($dayOfYear - 81));
+        $eot = 9.87 * sin(2 * $b) - 7.53 * cos($b) - 1.5 * sin($b); // minutos
+
+        return 12.0 - ($longitude - 15.0 * $utcOffset) / 15.0 - $eot / 60.0;
     }
 }

@@ -57,9 +57,9 @@ final class RoofFloorTest extends TestCase
         self::assertEqualsWithDelta(56.25, $roof['parts'][0]['geometry']['riseCm'], 0.1);
         self::assertEqualsWithDelta(300.0, $roof['parts'][0]['geometry']['zTop'], 0.01);
         self::assertEqualsWithDelta(hypot(187.5 + 40, 56.25 + 12), $roof['parts'][0]['geometry']['rafterLenCm'], 0.2);
-        // Largo de faldón 5,00 + 2 × 0,40 = 5,80 m → 13 cabios por faldón a 50 cm.
-        self::assertSame(26, $roof['bom']['raftersCount']);
-        self::assertEqualsWithDelta(2 * hypot(227.5, 68.25) * 580 / 10000, $roof['bom']['coverM2'], 0.05);
+        // El alero va sólo en la caída: faldón de 5,00 m (sin vuelo en los hastiales) → 11 cabios por faldón a 50 cm.
+        self::assertSame(22, $roof['bom']['raftersCount']);
+        self::assertEqualsWithDelta(2 * hypot(227.5, 68.25) * 500 / 10000, $roof['bom']['coverM2'], 0.05);
         // Dos hastiales de 3,75 m: triángulo de 56,25 cm más la faja de 4 cm hasta el apoyo de los cabios.
         self::assertEqualsWithDelta(2 * 3.75 * (0.5625 / 2 + 0.04), $roof['bom']['gableMasonryM2'], 0.01);
         self::assertNotContains('roof.rafter-span', $this->codes($a));
@@ -327,9 +327,12 @@ final class RoofFloorTest extends TestCase
         $cross = $this->analyze(Fixtures::room(40, 40)->roofPart(0, 0, 0, 40, 40, 'gable', 'x')->roofPart(0, 0, 0, 40, 40, 'gable', 'y'));
 
         foreach ($cross['roof']['parts'] as $p) {
-            self::assertEqualsWithDelta(50.0, $p['bom']['visiblePct'], 3.0);
+            // cada uno queda mitad debajo del otro, salvo los aleros (que asoman por los extremos del otro)
+            self::assertEqualsWithDelta(55.0, $p['bom']['visiblePct'], 6.0);
         }
-        self::assertEqualsWithDelta($one['roof']['bom']['coverM2'], $cross['roof']['bom']['coverM2'], 0.5);
+        // No se cuenta dos veces: la cruz suma sólo los aleros que asoman (mucho menos que dos techos enteros).
+        self::assertGreaterThan($one['roof']['bom']['coverM2'], $cross['roof']['bom']['coverM2']);
+        self::assertLessThan(1.2 * $one['roof']['bom']['coverM2'], $cross['roof']['bom']['coverM2']);
     }
 
     #[Test]
@@ -358,7 +361,7 @@ final class RoofFloorTest extends TestCase
 
         self::assertSame(400.0, (float) $low['outer']['x0'], 'contra la pared de la PA: sin alero');
         self::assertSame(840.0, (float) $low['outer']['x1'], 'del lado libre: alero de 40 cm');
-        self::assertSame(-40.0, (float) $low['outer']['y0']);
+        self::assertSame(0.0, (float) $low['outer']['y0'], 'los extremos no vuelan: el alero va sólo donde cae el agua');
         self::assertNotContains('H', array_column($low['gables'], 'side'), 'sin muro alto: lo cierra la pared de la PA');
     }
 }

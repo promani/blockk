@@ -172,7 +172,13 @@ final class ApiTest extends WebTestCase
         self::assertResponseIsSuccessful();
         $json = json_decode($client->getResponse()->getContent(), true);
         self::assertSame('Invierno (21 jun)', $json['label']);
-        self::assertCount(53, $json['path']);
+        self::assertCount(65, $json['path']);
+        self::assertFalse($json['clock']);
+
+        $client->request('GET', '/api/solar?lat=-34.6&season=winter&lon=-58.4&tz=-3');
+        $json = json_decode($client->getResponse()->getContent(), true);
+        self::assertTrue($json['clock']);
+        self::assertEqualsWithDelta(12.87, $json['solarNoon'], 0.05);
 
         $client->request('GET', '/api/solar?lat=999&season=winter');
         self::assertResponseStatusCodeSame(400);

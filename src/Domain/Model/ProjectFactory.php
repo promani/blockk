@@ -55,6 +55,8 @@ final class ProjectFactory
             lotD: $this->intInRange($lot['d'] ?? 20, 4, 100, 'lot.d'),
             upper: (bool) ($data['upper'] ?? false) || !$levels[1]->isEmpty(),
             roofs: $this->roofs($data, $levels),
+            longitude: $this->floatInRange($data['lon'] ?? -58.4, -180.0, 180.0, 'lon'),
+            utcOffset: $this->floatInRange($data['tz'] ?? -3.0, -12.0, 14.0, 'tz'),
         );
 
         if ([] !== $this->errors) {

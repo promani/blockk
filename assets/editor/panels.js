@@ -4,12 +4,13 @@ import { suggest } from '../lib/api.js';
 import { nextId } from '../lib/storage.js';
 import { roomColor } from './renderer.js';
 import { anchorLines } from './snap.js';
-import { sideLabel, cardinal } from '../lib/orient.js';
+import { sideLabel } from '../lib/orient.js';
 import { collinearChain } from './wallmove.js';
 import { contextOf, CONTEXT_TITLE, roomWalls, facing, openingM2, issueMatches } from './context.js';
 
 const G = 12.5;
-const CITIES = [['Buenos Aires', -34.6], ['Córdoba', -31.4], ['Rosario', -32.9], ['Mendoza', -32.9], ['Mar del Plata', -38.0], ['Neuquén', -38.9], ['Tucumán', -26.8], ['Salta', -24.8], ['Bariloche', -41.1], ['Ushuaia', -54.8], ['Madrid', 40.4], ['Ciudad de México', 19.4]];
+/** [nombre, latitud, longitud, huso horario (UTC)] */
+const CITIES = [['Buenos Aires', -34.6, -58.4, -3], ['Córdoba', -31.4, -64.2, -3], ['Rosario', -32.9, -60.7, -3], ['Mendoza', -32.9, -68.8, -3], ['Mar del Plata', -38.0, -57.6, -3], ['Neuquén', -38.9, -68.1, -3], ['Tucumán', -26.8, -65.2, -3], ['Salta', -24.8, -65.4, -3], ['Bariloche', -41.1, -71.3, -3], ['Ushuaia', -54.8, -68.3, -3], ['Montevideo', -34.9, -56.2, -3], ['Santiago de Chile', -33.4, -70.7, -4], ['Madrid', 40.4, -3.7, 1], ['Ciudad de México', 19.4, -99.1, -6]];
 const SEASONS = [['winter', 'Invierno'], ['summer', 'Verano'], ['equinox', 'Equinoccio']];
 
 const wallLen = (w) => Math.abs(w.x2 - w.x1) + Math.abs(w.y2 - w.y1);
@@ -238,14 +239,96 @@ export function mountPanels(app) {
     }
     app.deleteSelection = deleteSelection;
 
+    /**
+     * Brújula para orientar el terreno: se arrastra la aguja hacia donde queda el norte real (de a 5°, con Mayús de a
+     * 1°) o se escribe el ángulo. 0° = arriba del plano, en sentido horario. Mientras se arrastra sólo se redibuja; al
+     * soltar se guarda en el proyecto.
+     */
+    function northDial() {
+        const R = 44;
+        const NS = 'http://www.w3.org/2000/svg';
+        const svg = (tag, attrs) => {
+            const el = document.createElementNS(NS, tag);
+            for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+            return el;
+        };
+        const dial = svg('svg', { viewBox: '-56 -56 112 112', class: 'north-dial', role: 'slider', tabindex: '0', 'aria-label': 'Hacia dónde queda el norte', 'aria-valuemin': '0', 'aria-valuemax': '359' });
+        dial.append(svg('circle', { r: R, class: 'nd-ring' }));
+        for (let d = 0; d < 360; d += 15) {
+            const a = (d * Math.PI) / 180;
+            const r0 = d % 90 === 0 ? R - 9 : d % 45 === 0 ? R - 6 : R - 3;
+            dial.append(svg('line', { x1: Math.sin(a) * r0, y1: -Math.cos(a) * r0, x2: Math.sin(a) * R, y2: -Math.cos(a) * R, class: 'nd-tick' }));
+        }
+        const needle = svg('g', { class: 'nd-needle' });
+        needle.append(svg('path', { d: `M0 ${-R + 12} L7 2 L0 -3 L-7 2 Z`, class: 'nd-n' }), svg('path', { d: `M0 ${R - 16} L6 2 L0 -3 L-6 2 Z`, class: 'nd-s' }));
+        const label = svg('text', { class: 'nd-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
+        label.textContent = 'N';
+        dial.append(needle, label, svg('circle', { r: 3, class: 'nd-hub' }));
+        const input = h('input', { type: 'number', min: 0, max: 359, step: 1, class: 'w-narrow', 'aria-label': 'Ángulo del norte en grados' });
+        const hint = h('span', { class: 'muted small' });
+        const DIRS8 = ['arriba', 'arriba a la derecha', 'a la derecha', 'abajo a la derecha', 'abajo', 'abajo a la izquierda', 'a la izquierda', 'arriba a la izquierda'];
+        const show = (v) => {
+            needle.setAttribute('transform', `rotate(${v})`);
+            const a = (v * Math.PI) / 180;
+            label.setAttribute('x', String(Math.sin(a) * (R + 8) * 0.78));
+            label.setAttribute('y', String(-Math.cos(a) * (R + 8) * 0.78));
+            dial.setAttribute('aria-valuenow', String(v));
+            input.value = String(v);
+            hint.textContent = `El norte queda ${DIRS8[Math.round(v / 45) % 8]} del plano.`;
+        };
+        const commit = (v) => {
+            store.patchProject({ north: ((Math.round(v) % 360) + 360) % 360 });
+            app.syncSolar?.();
+        };
+        const angleAt = (e, fine) => {
+            const r = dial.getBoundingClientRect();
+            const a = (Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2))) * 180) / Math.PI;
+            const step = fine ? 1 : 5;
+            return ((Math.round(a / step) * step) % 360 + 360) % 360;
+        };
+        let dragging = false;
+        dial.addEventListener('pointerdown', (e) => {
+            dragging = true;
+            dial.setPointerCapture(e.pointerId);
+            const v = angleAt(e, e.shiftKey);
+            store.project.north = v;
+            show(v);
+            app.render();
+        });
+        dial.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            const v = angleAt(e, e.shiftKey);
+            if (v === store.project.north) return;
+            store.project.north = v;
+            show(v);
+            app.render();
+        });
+        const end = () => {
+            if (!dragging) return;
+            dragging = false;
+            commit(store.project.north);
+        };
+        dial.addEventListener('pointerup', end);
+        dial.addEventListener('pointercancel', end);
+        dial.addEventListener('keydown', (e) => {
+            const d = { ArrowRight: 5, ArrowUp: 5, ArrowLeft: -5, ArrowDown: -5 }[e.key];
+            if (!d) return;
+            e.preventDefault();
+            commit(store.project.north + (e.shiftKey ? Math.sign(d) : d));
+        });
+        input.addEventListener('change', () => commit(Number(input.value) || 0));
+        show(store.project.north ?? 0);
+        return h('div', { class: 'north-row' }, dial, h('div', { class: 'north-info' }, h('label', { class: 'field-inline' }, input, '°'), hint,
+            h('span', { class: 'muted small' }, 'Arrastrá la aguja hacia donde queda el norte real.')));
+    }
+
     /** Botones para correr un muro un bloque hacia cada lado (perpendicular a su eje). */
     function moveButtons(w) {
         const horizontal = w.y1 === w.y2;
         const neg = horizontal ? '▲' : '◀';
         const pos = horizontal ? '▼' : '▶';
-        const north = store.project.north;
-        const negName = horizontal ? `arriba (${cardinal('N', north)})` : `la izquierda (${cardinal('W', north)})`;
-        const posName = horizontal ? `abajo (${cardinal('S', north)})` : `la derecha (${cardinal('E', north)})`;
+        const negName = horizontal ? 'arriba' : 'la izquierda';
+        const posName = horizontal ? 'abajo' : 'la derecha';
         const bu = cfg.blockUnits;
         const bl = fmt(cfg.blockL, 1);
         return [[-bu, `${neg} ${bl} cm`, negName], [bu, `${pos} ${bl} cm`, posName]].map(([d, text, name]) =>
@@ -513,7 +596,8 @@ export function mountPanels(app) {
             h('div', { class: 'check-row' },
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', checked: store.ui.showLot !== false, onchange: (e) => store.setUi({ showLot: e.target.checked }) }), 'Mostrar terreno'),
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', checked: store.ui.showGrid !== false, onchange: (e) => store.setUi({ showGrid: e.target.checked }) }), 'Mostrar cuadrícula')),
-            field('El norte queda hacia', sel(store.project.north, [[0, '↑ arriba del plano'], [45, '↗ arriba a la derecha'], [90, '→ la derecha'], [135, '↘ abajo a la derecha'], [180, '↓ abajo'], [225, '↙ abajo a la izquierda'], [270, '← la izquierda'], [315, '↖ arriba a la izquierda']], (v) => { store.patchProject({ north: Number(v) }); app.syncSolar?.(); })),
+            h('div', { class: 'kv-title' }, 'Norte'),
+            northDial(),
             h('div', { class: 'kv-title' }, 'Sol y orientación'),
             el.solar,
             h('div', { class: 'kv-title' }, 'Ajustes del proyecto'),
@@ -572,16 +656,21 @@ export function mountPanels(app) {
     function buildSolar() {
         const sol = store.ui.solar;
         solarUi.season = sel(sol.season, SEASONS, (v) => { store.setUi({ solar: { season: v } }); store.ensureSolar(); });
-        solarUi.lat = h('input', { type: 'number', min: -66, max: 66, step: 0.1, value: store.project.lat, 'aria-label': 'Latitud', onchange: (e) => { const v = Math.max(-66, Math.min(66, Number(e.target.value) || 0)); store.patchProject({ lat: v }); store.ensureSolar(); syncSolar(); } });
-        solarUi.city = sel('', [['', 'Ciudad…'], ...CITIES.map(([n, l]) => [l, n])], (v) => { if (v === '') return; store.patchProject({ lat: Number(v) }); store.ensureSolar(); syncSolar(); });
-        solarUi.hour = h('input', { type: 'range', min: 6, max: 19, step: 0.25, value: sol.hour, 'aria-label': 'Hora solar', oninput: (e) => { store.setUi({ solar: { hour: Number(e.target.value) } }); syncSolar(); } });
+        const place = (patch) => { store.patchProject(patch); store.ensureSolar(); syncSolar(); };
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
+        solarUi.lat = h('input', { type: 'number', min: -66, max: 66, step: 0.1, value: store.project.lat, class: 'w-narrow', 'aria-label': 'Latitud', onchange: (e) => place({ lat: clamp(e.target.value, -66, 66) }) });
+        solarUi.lon = h('input', { type: 'number', min: -180, max: 180, step: 0.1, value: store.project.lon ?? -58.4, class: 'w-narrow', 'aria-label': 'Longitud', onchange: (e) => place({ lon: clamp(e.target.value, -180, 180) }) });
+        solarUi.tz = h('input', { type: 'number', min: -12, max: 14, step: 0.5, value: store.project.tz ?? -3, class: 'w-narrow', 'aria-label': 'Huso horario (UTC)', onchange: (e) => place({ tz: clamp(e.target.value, -12, 14) }) });
+        solarUi.city = sel('', [['', 'Ciudad…'], ...CITIES.map(([n], i) => [i, n])], (v) => { if (v === '') return; const [, lat, lon, tz] = CITIES[Number(v)]; place({ lat, lon, tz }); });
+        solarUi.hour = h('input', { type: 'range', min: 5, max: 21, step: 0.25, value: sol.hour, 'aria-label': 'Hora oficial', oninput: (e) => { store.setUi({ solar: { hour: Number(e.target.value) } }); syncSolar(); } });
         solarUi.out = h('output', {});
         solarUi.play = h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: togglePlay }, '▶');
         solarUi.show = h('input', { type: 'checkbox', checked: sol.show, onchange: (e) => { store.setUi({ solar: { show: e.target.checked } }); } });
         solarUi.info = h('p', { class: 'small muted' });
         add(el.solar,
             h('div', { class: 'solar-row' }, h('label', { class: 'field-inline' }, 'Época', solarUi.season)),
-            h('div', { class: 'solar-row' }, h('label', { class: 'field-inline' }, 'Latitud', solarUi.lat), solarUi.city),
+            h('div', { class: 'solar-row' }, solarUi.city),
+            h('div', { class: 'solar-row' }, h('label', { class: 'field-inline' }, 'Lat.', solarUi.lat), h('label', { class: 'field-inline' }, 'Long.', solarUi.lon), h('label', { class: 'field-inline' }, 'UTC', solarUi.tz)),
             h('div', { class: 'solar-row' }, solarUi.play, solarUi.hour, solarUi.out),
             h('div', { class: 'solar-row' }, h('label', { class: 'field-inline' }, solarUi.show, 'Mostrar sombras y sol')),
             solarUi.info,
@@ -600,7 +689,7 @@ export function mountPanels(app) {
         solarUi.play.textContent = '⏸';
         timer = setInterval(() => {
             let hr = store.ui.solar.hour + 0.15;
-            if (hr > 19) hr = 6;
+            if (hr > 21) hr = 5;
             store.setUi({ solar: { hour: hr } });
             solarUi.hour.value = hr;
             syncSolar();
@@ -613,8 +702,14 @@ export function mountPanels(app) {
         const mm = String(Math.round((sol.hour - hh) * 60)).padStart(2, '0');
         solarUi.out.textContent = `${String(hh).padStart(2, '0')}:${mm}`;
         solarUi.lat.value = store.project.lat;
+        solarUi.lon.value = store.project.lon ?? -58.4;
+        solarUi.tz.value = store.project.tz ?? -3;
         const s = store.sun();
-        solarUi.info.textContent = s ? `${sol.label ?? ''} · altura solar ${fmt(s.alt, 1)}° · acimut ${fmt(s.az, 0)}° (desde el norte). Hora solar aparente.` : 'Cargando trayectoria solar…';
+        const hm = (x) => `${Math.floor(x)}:${String(Math.round((x % 1) * 60)).padStart(2, '0')}`;
+        const where = (az) => ['norte', 'noreste', 'este', 'sureste', 'sur', 'suroeste', 'oeste', 'noroeste'][Math.round(az / 45) % 8];
+        solarUi.info.textContent = !s ? 'Cargando trayectoria solar…'
+            : s.alt <= 0 ? `${sol.label ?? ''} · el sol está bajo el horizonte a esa hora.`
+                : `${sol.label ?? ''} · sol al ${where(s.az)} (acimut ${fmt(s.az, 0)}°), a ${fmt(s.alt, 1)}° de altura. Hora oficial; el mediodía solar es a las ${hm(sol.noon ?? 12)}.`;
     }
     app.syncSolar = syncSolar;
 

@@ -18,6 +18,7 @@ const post = (url, body, signal) => request(url, { method: 'POST', body: JSON.st
 
 export const analyze = (project, signal) => post('/api/analyze', project, signal);
 export const suggest = (project) => post('/api/suggest', project);
-export const solarPath = (lat, season) => request(`/api/solar?lat=${encodeURIComponent(lat)}&season=${encodeURIComponent(season)}`);
+/** Trayectoria solar; con longitud y huso (UTC) las horas son de reloj (hora oficial), si no, hora solar. */
+export const solarPath = (lat, season, lon = null, tz = 0) => request(`/api/solar?lat=${encodeURIComponent(lat)}&season=${encodeURIComponent(season)}${lon === null || lon === undefined ? '' : `&lon=${encodeURIComponent(lon)}&tz=${encodeURIComponent(tz)}`}`);
 export const template = (slug) => request(`/api/templates/${encodeURIComponent(slug)}`);
 export const calcPanel = (params) => request(`/api/calc/panel?${new URLSearchParams(params)}`);
