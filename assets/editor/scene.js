@@ -237,7 +237,9 @@ function buildRoofs(roof) {
         const g = part.geometry;
         boxes.push({
             ...roofOuter(g),
-            z0: g.zTop, z1: g.zTop + (g.riseCm ?? 0), zs: g.zTop,
+            // Se ordena por su punto más alto: así el techo (con sus hastiales) se pinta después de la parte de un muro de
+            // la planta alta que queda por debajo de él (un techo bajo pegado a la planta alta la tapa, no al revés).
+            z0: g.zTop, z1: g.zTop + (g.riseCm ?? 0), zs: g.zTop + (g.riseCm ?? 0),
             kind: KIND.ROOF, axis: 'x', adjA: false, adjB: false, top: true, level: 2, roof: part,
         });
     }
