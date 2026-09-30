@@ -20,6 +20,9 @@ documento del área: [VISION.md](VISION.md), [ARCHITECTURE.md](ARCHITECTURE.md),
 - Reglas constructivas y cálculo: **sólo en PHP** (`src/Domain`); el JS no duplica reglas. Constantes en
   `src/Domain/Hcca.php`.
 - Unidades: coordenadas en unidades de 12,5 cm (enteros); geometría interna en ticks de 0,5 mm.
+- Bloques: **Lika 50 × 25 cm** por defecto (`BLOCK_SYSTEM=lika`; `generico` = 62,5 cm). Nada de largos fijos: usar
+  `Hcca::blockL()`/`thicknesses()` en PHP y `config.blockL`/`blockUnits` en el JS. Los tests del módulo de 62,5 llaman a
+  `Hcca::useSystem('generico')`.
 - Editor: `assets/editor/`; asistente: `src/Assistant/` + `assets/lib/ai-chat.js`; generador de casas:
   `src/Domain/Design/`.
 - Tests: `tests/` (PHPUnit). `phpunit.dist.xml` fuerza variables de Kimi falsas: los tests nunca usan credenciales

@@ -27,6 +27,7 @@ use App\Domain\Model\Wall;
 final class CourseBuilder
 {
     /** Largos posibles de la primera pieza de un tramo, en orden de preferencia (ticks). */
+    /** Largos preferidos para la primera pieza de una hilada (los que superan el bloque del sistema se descartan). */
     private const array START_LENGTHS = [1250, 625, 750, 500, 1000, 875, 375, 250, 1125];
 
     public function build(Level $level, Topology $topology): CourseModel
@@ -191,16 +192,49 @@ final class CourseBuilder
 
         $run = new Run($axis, $line, $a, $b, $t, array_map(static fn (Wall $w): string => $w->id, $walls), [], $voids);
 
-        foreach ($this->partition($a, $b, $voids, $uSpans) as [$sa, $sb, $kind, $role]) {
-            $pieceKey = (PieceKind::U === $kind ? 'U:' : 'B:').$t;
-            $lengths = $this->chooseLayout($sb - $sa, $sa, $prev, $pieceKey, $packer, $warnings, $course, $axis, $line);
-            $packer->commit($pieceKey, array_values(array_filter($lengths, static fn (int $l): bool => Hcca::BLOCK_L !== $l)));
+        $parts = $this->partition($a, $b, $voids, $uSpans);
+        $lay = function (int $i) use (&$parts, $prev, $t, $packer, $course, $axis, $line): array {
+            [$sa, $sb, $kind] = $parts[$i];
+            $w = [];
+            $lengths = $this->chooseLayout($sb - $sa, $sa, $prev, (PieceKind::U === $kind ? 'U:' : 'B:').$t, $packer, $w, $course, $axis, $line);
+
+            return [$lengths, $w];
+        };
+        $layouts = [];
+        foreach (array_keys($parts) as $i) {
+            $layouts[$i] = $lay($i);
+        }
+        // Un remanente de bloque macizo < 25 cm pegado a un tramo U deja tres juntas en menos de un bloque y la hilada
+        // de arriba no puede trabar (con bloques de 50 cm pasa seguido): el U lo absorbe y se vuelve a despiezar.
+        foreach (array_keys($parts) as $i) {
+            if (!isset($parts[$i + 1]) || $parts[$i][1] !== $parts[$i + 1][0]) {
+                continue;
+            }
+            $blockThenU = PieceKind::Block === $parts[$i][2] && PieceKind::U === $parts[$i + 1][2];
+            $uThenBlock = PieceKind::U === $parts[$i][2] && PieceKind::Block === $parts[$i + 1][2];
+            if ($blockThenU && count($layouts[$i][0]) > 1 && end($layouts[$i][0]) < 2 * Hcca::MIN_BOND) {
+                $r = array_pop($layouts[$i][0]);
+                $parts[$i][1] -= $r;
+                $parts[$i + 1][0] -= $r;
+                $layouts[$i + 1] = $lay($i + 1);
+            } elseif ($uThenBlock && count($layouts[$i + 1][0]) > 1 && $layouts[$i + 1][0][0] < 2 * Hcca::MIN_BOND) {
+                $r = array_shift($layouts[$i + 1][0]);
+                $parts[$i][1] += $r;
+                $parts[$i + 1][0] += $r;
+                $layouts[$i] = $lay($i);
+            }
+        }
+        foreach ($parts as $i => [$sa, , $kind, $role]) {
+            [$lengths, $w] = $layouts[$i];
+            array_push($warnings, ...$w);
+            $packer->commit((PieceKind::U === $kind ? 'U:' : 'B:').$t, array_values(array_filter($lengths, static fn (int $l): bool => Hcca::blockL() !== $l)));
             $pos = $sa;
             foreach ($lengths as $len) {
                 $run->pieces[] = new Piece($pos, $pos + $len, $kind, $role);
                 $pos += $len;
             }
         }
+
         return $run;
     }
 
@@ -357,13 +391,15 @@ final class CourseBuilder
      */
     private function chooseLayout(int $span, int $origin, array $previousJoints, string $pieceKey, StockPacker $packer, array &$warnings, int $course, Axis $axis, int $line): array
     {
-        if ($span <= Hcca::BLOCK_L) {
+        if ($span <= Hcca::blockL()) {
             return [$span];
         }
 
         $best = null;
         $bestScore = null;
-        foreach (self::START_LENGTHS as $pref => $start) {
+        $L = Hcca::blockL();
+        $starts = array_values(array_unique(array_filter([$L, intdiv($L, 2), ...self::START_LENGTHS], static fn (int $l): bool => $l <= $L)));
+        foreach ($starts as $pref => $start) {
             $base = $this->layout($span, $start);
             foreach ([$base, array_reverse($base)] as $variant => $lengths) {
                 $joints = [];
@@ -376,7 +412,7 @@ final class CourseBuilder
                 foreach ($joints as $j) {
                     $clearance = min($clearance, self::distanceToNearest($previousJoints, $j));
                 }
-                $cuts = array_values(array_filter($lengths, static fn (int $l): bool => Hcca::BLOCK_L !== $l));
+                $cuts = array_values(array_filter($lengths, static fn (int $l): bool => Hcca::blockL() !== $l));
                 $score = [
                     $clearance < Hcca::MIN_BOND ? 1 : 0,
                     min($lengths) < Hcca::MIN_PIECE ? 1 : 0,
@@ -405,7 +441,7 @@ final class CourseBuilder
     /**
      * Ningún patrón estándar respeta la traba (p. ej. sobre dinteles, donde conviven dos retículas de
      * juntas desfasadas). Búsqueda exacta por programación dinámica sobre una retícula de 2,5 cm:
-     * piezas de 12,5 a 62,5 cm, juntas a >= 12,5 cm de las anteriores, mínima cantidad de cortes.
+     * piezas de 12,5 cm al largo del bloque, juntas a >= 12,5 cm de las anteriores, mínima cantidad de cortes.
      *
      * @param list<int> $previousJoints
      *
@@ -429,18 +465,18 @@ final class CourseBuilder
             [$cuts, $count] = $best[$m];
             $pos = $m * $step;
             $rest = $span - $pos;
-            if ($rest >= Hcca::MIN_PIECE && $rest <= Hcca::BLOCK_L) {
-                $cand = [$cuts + (Hcca::BLOCK_L === $rest ? 0 : 1), $count + 1, $m];
+            if ($rest >= Hcca::MIN_PIECE && $rest <= Hcca::blockL()) {
+                $cand = [$cuts + (Hcca::blockL() === $rest ? 0 : 1), $count + 1, $m];
                 if (null === $final || $cand < $final) {
                     $final = $cand;
                 }
             }
-            for ($len = Hcca::MIN_PIECE; $len <= Hcca::BLOCK_L; $len += $step) {
+            for ($len = Hcca::MIN_PIECE; $len <= Hcca::blockL(); $len += $step) {
                 $q = $pos + $len;
                 if ($span - $q < Hcca::MIN_PIECE || !$allowed($origin + $q)) {
                     continue;
                 }
-                $cand = [$cuts + (Hcca::BLOCK_L === $len ? 0 : 1), $count + 1, $m];
+                $cand = [$cuts + (Hcca::blockL() === $len ? 0 : 1), $count + 1, $m];
                 $mq = intdiv($q, $step);
                 if (!isset($best[$mq]) || $cand < $best[$mq]) {
                     $best[$mq] = $cand;
@@ -474,15 +510,15 @@ final class CourseBuilder
     {
         $start = min($start, $span);
         $rest = $span - $start;
-        $full = intdiv($rest, Hcca::BLOCK_L);
-        $end = $rest - $full * Hcca::BLOCK_L;
-        $lengths = [$start, ...array_fill(0, $full, Hcca::BLOCK_L)];
+        $full = intdiv($rest, Hcca::blockL());
+        $end = $rest - $full * Hcca::blockL();
+        $lengths = [$start, ...array_fill(0, $full, Hcca::blockL())];
         if ($end >= Hcca::MIN_PIECE) {
             $lengths[] = $end;
         } elseif ($end > 0) {
             if ($full > 0) {
                 array_pop($lengths);
-                $total = Hcca::BLOCK_L + $end;
+                $total = Hcca::blockL() + $end;
                 $lengths[] = intdiv($total, 2);
                 $lengths[] = $total - intdiv($total, 2);
             } else {

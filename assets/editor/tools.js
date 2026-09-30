@@ -18,6 +18,8 @@ const wallLen = (w) => Math.abs(w.x2 - w.x1) + Math.abs(w.y2 - w.y1);
 export function createTools(app) {
     const { store } = app;
     const cfg = store.config;
+    const BU = cfg.blockUnits; // bloque entero en unidades de 12,5 cm
+    const BL = cfg.blockL; // largo del bloque en cm
     const base = () => store.ui.level * cfg.levelHeight;
     const lot = () => ({ w: store.project.lot.w * 8, d: store.project.lot.d * 8 });
     const inLot = (gx, gy) => gx >= 0 && gy >= 0 && gx <= lot().w && gy <= lot().d;
@@ -31,8 +33,8 @@ export function createTools(app) {
             store.setUi({ thickness: Number(v) });
         });
 
-    /** Todo se dibuja en bloques enteros de 62,5 cm; el imán y los anclajes permiten pegarse a muros existentes. */
-    const step = () => 5;
+    /** Todo se dibuja en bloques enteros; el imán y los anclajes permiten pegarse a muros existentes. */
+    const step = () => BU;
 
     /**
      * Extremo de un tramo desde `origin`: se alinea con una pared existente cercana (imán o misma recta) y, si no hay,
@@ -167,7 +169,7 @@ export function createTools(app) {
     const handleHit = (p) => handlesOf(app.cam).find((hd) => Math.hypot(p.sx - hd.sx, p.sy - hd.sy) < 14);
 
     let drag = null;
-    const stepU = () => 5;
+    const stepU = () => BU;
     const dragDelta = (p, axis) => Math.round(((axis === 'x' ? p.wx - drag.x0 : p.wy - drag.y0) / G) / stepU()) * stepU();
     const clampLot = (v, lim) => Math.min(lim, Math.max(0, v));
     /**
@@ -493,7 +495,7 @@ export function createTools(app) {
     T.move = {
         hotkey: 'm',
         label: 'Mover',
-        hint: 'Arrastrá un rectángulo para elegir varios elementos (o «Toda la casa») y después arrastralos juntos. Flechas: 62,5 cm.',
+        hint: `Arrastrá un rectángulo para elegir varios elementos (o «Toda la casa») y después arrastralos juntos. Flechas: ${fmt(BL, 1)} cm.`,
         planeZ: () => (store.ui.level === 2 ? (store.topLevel + 1) * cfg.levelHeight : base()),
         options: () => {
             const n = countSel(moveState.sel);
@@ -517,7 +519,7 @@ export function createTools(app) {
         move(p) {
             if (moveState.drag) {
                 const d = moveState.drag;
-                const raw = { dx: Math.round((p.wx - d.x0) / G / 5) * 5, dy: Math.round((p.wy - d.y0) / G / 5) * 5 };
+                const raw = { dx: Math.round((p.wx - d.x0) / G / BU) * BU, dy: Math.round((p.wy - d.y0) / G / BU) * BU };
                 Object.assign(d, clampOffset(d.box, raw.dx, raw.dy));
                 app.render();
             } else if (moveState.band) {
@@ -550,7 +552,7 @@ export function createTools(app) {
                 selectAll();
                 return true;
             }
-            const dir = { ArrowLeft: [-5, 0], ArrowRight: [5, 0], ArrowUp: [0, -5], ArrowDown: [0, 5] }[e.key];
+            const dir = { ArrowLeft: [-BU, 0], ArrowRight: [BU, 0], ArrowUp: [0, -BU], ArrowDown: [0, BU] }[e.key];
             if (dir && moveState.sel) {
                 e.preventDefault();
                 const box = selBox(moveState.sel);
@@ -617,7 +619,7 @@ export function createTools(app) {
             if (!room) return;
             const dx = p.gx - room.a.gx;
             const dy = p.gy - room.a.gy;
-            // El lado se ajusta a la pared vecina más cercana (habitación contigua) o, si no hay, a múltiplos de 62,5 cm.
+            // El lado se ajusta a la pared vecina más cercana (habitación contigua) o, si no hay, a múltiplos del bloque.
             const lines = wallLines(store);
             const ex = snapSpan(p.gx, room.a.gx, lines.xs);
             const ey = snapSpan(p.gy, room.a.gy, lines.ys);
@@ -690,7 +692,7 @@ export function createTools(app) {
             if (opts.module) {
                 const len = Math.max(0, Math.abs(e.gx - start.gx) + Math.abs(e.gy - start.gy));
                 const sign = Math.sign(e.gx - start.gx + (e.gy - start.gy)) || 1;
-                const q = Math.max(5, Math.round(len / 5) * 5) * sign;
+                const q = Math.max(BU, Math.round(len / BU) * BU) * sign;
                 return e.gy === start.gy ? { gx: start.gx + q, gy: start.gy } : { gx: start.gx, gy: start.gy + q };
             }
             return e;
@@ -755,7 +757,7 @@ export function createTools(app) {
                 if (opts.module && !dragged) {
                     // clic simple: un bloque en la orientación elegida
                     const a = start;
-                    const b = axis === 'x' ? { gx: a.gx + 5, gy: a.gy } : { gx: a.gx, gy: a.gy + 5 };
+                    const b = axis === 'x' ? { gx: a.gx + BU, gy: a.gy } : { gx: a.gx, gy: a.gy + BU };
                     commitSeg(a, b);
                     start = null;
                     end = null;
@@ -803,13 +805,13 @@ export function createTools(app) {
                     const box = { x0: horizontal ? x0 : x0 - t / 2, x1: horizontal ? x1 : x1 + t / 2, y0: horizontal ? y0 - t / 2 : y0, y1: horizontal ? y1 + t / 2 : y1, z0: z, z1: z + cfg.levelHeight };
                     ghostBox(ctx, cam, box, { fill: 'rgba(139,197,63,.35)', stroke: '#3f6212' });
                     const len = Math.abs(end.gx - start.gx) + Math.abs(end.gy - start.gy);
-                    const modular = len % 5 === 0;
+                    const modular = len % BU === 0;
                     const closes = chainStart && end.gx === chainStart.gx && end.gy === chainStart.gy && (start.gx !== chainStart.gx || start.gy !== chainStart.gy);
                     if (closes) nodeMarker(ctx, cam, end.gx * G, end.gy * G, z, '#2563eb');
-                    if (len > 0) dimLabel(ctx, cam, x0, y0, x1, y1, z + cfg.levelHeight, `${fmt((len * G) / 100)} m · ${fmt((len * G) / 62.5, 1)} bloques${modular ? '' : ' · con cortes'}${closes ? ' · cierra la habitación' : ''}`);
+                    if (len > 0) dimLabel(ctx, cam, x0, y0, x1, y1, z + cfg.levelHeight, `${fmt((len * G) / 100)} m · ${fmt((len * G) / BL, 1)} bloques${modular ? '' : ' · con cortes'}${closes ? ' · cierra la habitación' : ''}`);
                 } else if (opts.module && app.pointer && !start) {
                     const a = { gx: app.pointer.gx, gy: app.pointer.gy };
-                    const b = axis === 'x' ? { gx: a.gx + 5, gy: a.gy } : { gx: a.gx, gy: a.gy + 5 };
+                    const b = axis === 'x' ? { gx: a.gx + BU, gy: a.gy } : { gx: a.gx, gy: a.gy + BU };
                     const horizontal = axis === 'x';
                     ghostBox(ctx, cam, { x0: a.gx * G - (horizontal ? 0 : t / 2), x1: b.gx * G + (horizontal ? 0 : t / 2), y0: a.gy * G - (horizontal ? t / 2 : 0), y1: b.gy * G + (horizontal ? t / 2 : 0), z0: z, z1: z + 25 }, { fill: 'rgba(139,197,63,.4)' });
                 } else if (app.pointer && inLot(app.pointer.gx, app.pointer.gy)) {
@@ -820,7 +822,7 @@ export function createTools(app) {
         };
     };
     T.wall = segmentTool({ key: 'w', label: 'Muro', hint: 'Clic en cada esquina (o arrastrá un muro). Al volver al punto de partida la habitación se cierra; Esc o doble clic terminan.', commitLabel: 'Agregar muro' });
-    T.block = segmentTool({ key: 'b', label: 'Bloque suelto', hint: 'Clic: un bloque de 62,5 cm. Arrastre: hilera de bloques enteros (múltiplos de 62,5 cm). X gira la orientación.', module: true, commitLabel: 'Agregar bloques' });
+    T.block = segmentTool({ key: 'b', label: 'Bloque suelto', hint: `Clic: un bloque de ${fmt(BL, 1)} cm. Arrastre: hilera de bloques enteros. X gira la orientación.`, module: true, commitLabel: 'Agregar bloques' });
 
     // ---------------- puertas y ventanas ----------------
     const openingTool = (kind) => {
@@ -889,14 +891,14 @@ export function createTools(app) {
         hint: 'Coloca bloques U rellenos con hormigón en una hilada (encadenado intermedio, refuerzo). Los dinteles y la corona se generan solos.',
         options: () => h('span', { class: 'row' },
             selectT('Hilada', uCourse, Array.from({ length: cfg.crownCourse }, (_, i) => [i, `${i + 1} (${fmt(((i + 1) * cfg.blockH) / 100)} m)`]), (v) => { uCourse = Number(v); app.render(); }),
-            selectT('Largo', uModules, [1, 2, 3, 4, 6, 8].map((m) => [m, `${m} bloque${m > 1 ? 's' : ''} (${fmt(m * 0.625)} m)`]), (v) => { uModules = Number(v); app.render(); })),
+            selectT('Largo', uModules, [1, 2, 3, 4, 6, 8].map((m) => [m, `${m} bloque${m > 1 ? 's' : ''} (${fmt((m * BL) / 100)} m)`]), (v) => { uModules = Number(v); app.render(); })),
         reset() { uGhost = null; },
         move(p) {
             const wall = pickWall(app, p.sx, p.sy);
             if (!wall) {
                 uGhost = null;
             } else {
-                const len = uModules * 5;
+                const len = uModules * BU;
                 const maxPos = wallLen(wall) - len;
                 uGhost = maxPos < 0 ? { wall, ok: false, pos: 0, len } : { wall, ok: true, len, pos: clamp(Math.round(alongPosition(app, wall, p.sx, p.sy) - len / 2), 0, maxPos) };
             }

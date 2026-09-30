@@ -200,7 +200,8 @@ final class ApiTest extends WebTestCase
         $client = static::createClient();
         $client->request('GET', '/api/calc/panel?length=5&height=2.75&t=20&openings=0&waste=5');
         self::assertResponseIsSuccessful();
-        self::assertSame(93, json_decode($client->getResponse()->getContent(), true)['blocks']);
+        // Lika: 13,75 m² × 8 bloques/m² + 5 %
+        self::assertSame(116, json_decode($client->getResponse()->getContent(), true)['blocks']);
 
         $client->request('GET', '/api/calc/panel?length=5&height=2.75&t=13');
         self::assertResponseStatusCodeSame(400);

@@ -25,6 +25,6 @@ final readonly class Piece
 
     public function isFull(): bool
     {
-        return Hcca::BLOCK_L === $this->length();
+        return Hcca::blockL() === $this->length();
     }
 }

@@ -14,6 +14,17 @@ use PHPUnit\Framework\TestCase;
 
 final class BomCalculatorTest extends TestCase
 {
+    /** Estos casos fijan números del módulo genérico de 62,5 cm; Lika tiene los suyos en LikaBlocksTest. */
+    protected function setUp(): void
+    {
+        Hcca::useSystem('generico');
+    }
+
+    protected function tearDown(): void
+    {
+        Hcca::useSystem('lika');
+    }
+
     /** @return array<string, mixed> */
     private function bom(TemplateBuilder $b): array
     {

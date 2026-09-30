@@ -9,11 +9,17 @@ use App\Domain\Model\ProjectFactory;
 use App\Domain\ProjectAnalyzer;
 use App\Domain\Templates\TemplateBuilder;
 use App\Tests\Support\Fixtures;
+use App\Domain\Hcca;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 final class RoofFloorTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        Hcca::useSystem('lika');
+    }
+
     /** @return array<string, mixed> */
     private function analyze(TemplateBuilder $b): array
     {
@@ -278,6 +284,7 @@ final class RoofFloorTest extends TestCase
     #[Test]
     public function gableBlocksAreLaidCourseByCourseAndAddedToTheTotals(): void
     {
+        Hcca::useSystem('generico'); // números del módulo de 62,5 cm (y espesor de 7,5)
         // Luz 3,75 m, pendiente 30 %: altura 56,25 cm + 4 cm de apoyo de los cabios sobre el borde exterior del muro →
         // 3 hiladas de ancho 375 / 235 / 68,3 cm, con traba de medio bloque.
         $with = $this->analyze(Fixtures::room(40, 30)->roofPart(0, 0, 0, 40, 30, 'gable', 'x'));
@@ -301,6 +308,7 @@ final class RoofFloorTest extends TestCase
     #[Test]
     public function shedRoofRaisesAHighWallWithBlocks(): void
     {
+        Hcca::useSystem('generico'); // números del módulo de 62,5 cm (y espesor de 7,5)
         $a = $this->analyze(Fixtures::room(40, 30)->roofPart(0, 0, 0, 40, 30, 'shed', 'S', 30, '3x10'));
         $h = array_values(array_filter($a['roof']['parts'][0]['geometry']['gables'], static fn (array $g): bool => 'H' === $g['side']))[0];
 

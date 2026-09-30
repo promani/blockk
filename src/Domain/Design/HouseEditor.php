@@ -100,8 +100,8 @@ final class HouseEditor
                     throw new \InvalidArgumentException('el muro tiene que ser horizontal o vertical y tener largo.');
                 }
                 $t = (int) ($op['espesorCm'] ?? 10);
-                if (!in_array((float) $t, Hcca::THICKNESSES_CM, true)) {
-                    throw new \InvalidArgumentException('espesor inválido (7,5, 10, 15 o 20 cm).');
+                if (!in_array((float) $t, Hcca::thicknesses(), true)) {
+                    throw new \InvalidArgumentException(sprintf('espesor inválido (%s cm).', implode(', ', Hcca::thicknesses())));
                 }
                 $p['levels'][$li]['walls'][] = ['id' => $this->nextId($p, 'w'), 'x1' => min($x1, $x2), 'y1' => min($y1, $y2), 'x2' => max($x1, $x2), 'y2' => max($y1, $y2), 't' => $t];
 

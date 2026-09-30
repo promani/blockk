@@ -112,7 +112,7 @@ export class Renderer {
         ctx.fillStyle = '#e1e9d6';
         ctx.fill();
 
-        // Retícula simple: una línea por metro (tenue) y una más marcada cada 5 m. El ajuste real (12,5 o 62,5 cm) se ve como
+        // Retícula simple: una línea por metro (tenue) y una más marcada cada 5 m. El ajuste real (12,5 cm o el bloque) se ve como
         // puntos alrededor del cursor cuando se dibuja.
         ctx.lineWidth = 1;
         if (100 * cam.zoom * (cam.view === 'plan' ? 1 : 0.87) >= 8) {

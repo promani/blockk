@@ -56,7 +56,7 @@ final class StockPacker
                 }
             }
             if (null === $best) {
-                $temp[] = Hcca::BLOCK_L - $len;
+                $temp[] = Hcca::blockL() - $len;
                 ++$opened;
             } elseif (null === $fromTemp) {
                 $used[$best] = ($used[$best] ?? 0) + 1;
@@ -82,7 +82,7 @@ final class StockPacker
                 $this->take($key, $rest, $i);
                 $this->give($key, $rest - $len);
             } else {
-                $this->give($key, Hcca::BLOCK_L - $len);
+                $this->give($key, Hcca::blockL() - $len);
             }
             unset($sorted);
         }

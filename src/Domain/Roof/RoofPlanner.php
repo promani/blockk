@@ -358,7 +358,7 @@ final class RoofPlanner
         $enabled = $fixed || ('A' === $side ? $roof->gableA : $roof->gableB);
         $layout = $this->layGable($pts, $hidden);
         $pieces = $enabled ? array_merge(...array_map(static fn (array $c): array => $c['pieces'], $layout['courses'] ?: [['pieces' => []]])) : [];
-        $full = count(array_filter($pieces, static fn (int $l): bool => $l >= Hcca::BLOCK_L));
+        $full = count(array_filter($pieces, static fn (int $l): bool => $l >= Hcca::blockL()));
 
         return [
             'id' => $roof->id.':'.$side,
@@ -380,7 +380,7 @@ final class RoofPlanner
 
     /**
      * Traba de un hastial (o del muro alto de un techo a un agua): hiladas de 25 cm desde el coronamiento; en cada hilada se cubre
-     * el ancho del polígono en su cara inferior (la más ancha) con bloques de 62,5 cm corridos medio bloque en hiladas alternas.
+     * el ancho del polígono en su cara inferior (la más ancha) con bloques enteros corridos medio bloque en hiladas alternas.
      * Las piezas de los extremos se cortan en diagonal siguiendo la pendiente; se computan por su largo inferior.
      *
      * @param list<array{float, float, float}> $pts
@@ -430,9 +430,9 @@ final class RoofPlanner
                     continue;
                 }
                 $pos = 0;
-                $first = 1 === $k % 2 ? intdiv(Hcca::BLOCK_L, 2) : Hcca::BLOCK_L;
+                $first = 1 === $k % 2 ? intdiv(Hcca::blockL(), 2) : Hcca::blockL();
                 while ($pos < $widthTicks) {
-                    $len = min(0 === $pos ? $first : Hcca::BLOCK_L, $widthTicks - $pos);
+                    $len = min(0 === $pos ? $first : Hcca::blockL(), $widthTicks - $pos);
                     $pieces[] = $len;
                     $pos += $len;
                     if ($pos < $widthTicks) {

@@ -20,6 +20,11 @@ use PHPUnit\Framework\TestCase;
 
 final class CourseBuilderTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        Hcca::useSystem('lika');
+    }
+
     private function model(TemplateBuilder $b, int $level = 0): CourseModel
     {
         $analyzer = new ProjectAnalyzer();
@@ -159,7 +164,7 @@ final class CourseBuilderTest extends TestCase
         self::assertEquals($first->toArray(), $second->toArray(), 'El despiece es determinista');
         foreach ($first->pieces() as [, , $piece]) {
             self::assertGreaterThanOrEqual(Hcca::MIN_PIECE, $piece->length());
-            self::assertLessThanOrEqual(Hcca::BLOCK_L, $piece->length());
+            self::assertLessThanOrEqual(Hcca::blockL(), $piece->length());
         }
     }
 
@@ -247,6 +252,7 @@ final class CourseBuilderTest extends TestCase
     #[Test]
     public function thinWallsKeepTheBondEvenWhenTheOriginIsOffTheHalfCentimetreLattice(): void
     {
+        Hcca::useSystem('generico'); // números del módulo de 62,5 cm (y espesor de 7,5)
         // Muros de 7,5 cm: los extremos recortados caen en múltiplos de 3,75 cm y la reparación debe seguir hallando patrón.
         $model = $this->model(Fixtures::room(28, 10, 7.5)->opening(0, 'V100', 'x', 0, 7)->opening(0, 'V62', 'x', 0, 17));
 

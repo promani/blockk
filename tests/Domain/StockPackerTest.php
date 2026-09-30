@@ -5,11 +5,23 @@ declare(strict_types=1);
 namespace App\Tests\Domain;
 
 use App\Domain\Cutting\StockPacker;
+use App\Domain\Hcca;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 final class StockPackerTest extends TestCase
 {
+    /** Estos casos fijan números del módulo genérico de 62,5 cm; Lika tiene los suyos en LikaBlocksTest. */
+    protected function setUp(): void
+    {
+        Hcca::useSystem('generico');
+    }
+
+    protected function tearDown(): void
+    {
+        Hcca::useSystem('lika');
+    }
+
     #[Test]
     public function complementaryCutsShareOneBlockWithoutWaste(): void
     {

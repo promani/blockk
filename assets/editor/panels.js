@@ -237,14 +237,16 @@ export function mountPanels(app) {
     }
     app.deleteSelection = deleteSelection;
 
-    /** Botones para correr un muro 62,5 cm / 12,5 cm hacia cada lado (perpendicular a su eje). */
+    /** Botones para correr un muro un bloque hacia cada lado (perpendicular a su eje). */
     function moveButtons(w) {
         const horizontal = w.y1 === w.y2;
         const neg = horizontal ? '▲' : '◀';
         const pos = horizontal ? '▼' : '▶';
         const negName = horizontal ? 'norte' : 'oeste';
         const posName = horizontal ? 'sur' : 'este';
-        return [[-5, `${neg} 62,5 cm`, negName], [5, `${pos} 62,5 cm`, posName]].map(([d, text, name]) =>
+        const bu = cfg.blockUnits;
+        const bl = fmt(cfg.blockL, 1);
+        return [[-bu, `${neg} ${bl} cm`, negName], [bu, `${pos} ${bl} cm`, posName]].map(([d, text, name]) =>
             h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: `Mover ${fmt(Math.abs(d) * G, 1)} cm hacia el ${name}`, onclick: () => app.moveWallBy(w.id, d) }, text));
     }
 
@@ -315,7 +317,7 @@ export function mountPanels(app) {
             const beams = lv.ubeams.filter((u) => u.wall === w.id);
             add(el.props, 
                 h('div', { class: 'kv-title' }, bearing ? 'Muro portante' : 'Tabique no portante'),
-                h('dl', { class: 'dl' }, h('dt', {}, 'Longitud'), h('dd', {}, `${fmt(len / 100)} m`), h('dt', {}, 'Bloques a lo largo'), h('dd', {}, fmt(len / 62.5, 2)), h('dt', {}, 'Eje'), h('dd', {}, w.y1 === w.y2 ? 'horizontal' : 'vertical')),
+                h('dl', { class: 'dl' }, h('dt', {}, 'Longitud'), h('dd', {}, `${fmt(len / 100)} m`), h('dt', {}, 'Bloques a lo largo'), h('dd', {}, fmt(len / cfg.blockL, 2)), h('dt', {}, 'Eje'), h('dd', {}, w.y1 === w.y2 ? 'horizontal' : 'vertical')),
                 field('Espesor', sel(w.t, cfg.thicknesses.map((t) => [t, `${cm(t)} cm`]), (v) => modify('Cambiar espesor', (l) => { l.walls.find((x) => x.id === w.id).t = Number(v); }))),
                 (() => {
                     // Alto en hiladas de 25 cm: más bajo que el nivel (medianeras, parapetos) o, sin nada arriba, hasta 4,00 m.

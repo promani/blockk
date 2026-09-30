@@ -7,7 +7,7 @@ corralones que asesoran— no tiene una forma simple de pasar de «quiero 3 dorm
 bolsas de mortero, hierro y madera** comprar. Hoy se resuelve con planillas y reglas de mano (m² de muro × bloques por
 m² + un porcentaje de desperdicio), que ignoran los cortes, las trabas, los dinteles y la corona, y terminan en pedidos
 de más (material inmovilizado) o de menos (obra parada esperando un flete). El sistema constructivo es modular (bloques
-de 62,5 × 25 cm) y por eso se puede calcular con precisión: el problema es que nadie lo hace pieza por pieza.
+Lika de 50 × 25 cm, configurable) y por eso se puede calcular con precisión: el problema es que nadie lo hace pieza por pieza.
 
 ## 2. Costo de no hacer nada
 

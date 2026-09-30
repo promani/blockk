@@ -11,13 +11,13 @@ Reglas que aplica el sistema (en `src/Domain/Hcca.php` y el motor):
 
 | Regla | Valor | Dónde |
 | --- | --- | --- |
-| Módulo del bloque | 62,5 × 25 cm; retícula de 12,5 cm | `Hcca::BLOCK_L`, `GRID` |
+| Bloque | Lika 50 × 25 cm (por defecto) o genérico 62,5 × 25 cm, según `BLOCK_SYSTEM`; retícula de 12,5 cm | `Hcca::SYSTEMS`, `blockL()`, `GRID` |
 | Altura de nivel | 12 hiladas = 3,00 m (11 de bloque + 1 de bloque U de corona) | `COURSES`, `CourseBuilder` |
 | Niveles | Máximo 2 con muros (≤ 6,00 m); el techo apoya sobre el último | `MAX_LEVELS` |
-| Espesores | Portantes 15 / 20 cm; tabiques 10 / 7,5 cm | `THICKNESSES_CM` |
+| Espesores | Lika: portantes 15 / 20 cm, tabiques 10 cm. Genérico: además 7,5 cm | `thicknesses()` |
 | Traba | Juntas verticales de hiladas consecutivas separadas ≥ 12,5 cm; encuentros a 90° alternados hilada a hilada | `CourseBuilder`, `Topology` |
 | Piezas mínimas | Ningún corte menor a 12,5 cm | `MIN_PIECE` |
-| Vanos | Dintel en bloque U (hilada 9), apoyo ≥ 25 cm a cada lado; jambas ≥ 25 cm contra esquinas y muros transversales | `ProjectValidator` |
+| Vanos | Dintel en bloque U (hilada 9; en tabiques sin bloque U, dintel de hormigón in situ), apoyo ≥ 25 cm a cada lado; jambas ≥ 25 cm contra esquinas y muros transversales | `ProjectValidator` |
 | Vanos en muro portante | Suma ≤ 60 % del tramo (advertencia) | `ProjectValidator` |
 | Encuentros en T y cruz | Anclajes metálicos (planchuela) uno cada 2 hiladas | `ANCHORS_PER_TEE/CROSS` |
 | Nivel 2 | Muros portantes sobre muros portantes del Nivel 1; tabiques sobre losa o entrepiso | `ProjectValidator` |
@@ -25,15 +25,32 @@ Reglas que aplica el sistema (en `src/Domain/Hcca.php` y el motor):
 | Losa | Maciza, luz de referencia ≤ 4,00 m; sobre la superficie cerrada de abajo | `SlabPlanner` |
 | Techo | Cabios sobre muros portantes con corona; sección según la luz (3″×8″, 3″×10″, 3″×12″) y largo comercial ≤ 6 m | `RoofPlanner` |
 
-## Catálogo de piezas
+## Sistema de bloques
+
+`BLOCK_SYSTEM` elige el sistema (por defecto `lika`). Todo lo que depende del bloque (largo, espesores, pallets,
+adhesivo, bloques U y su canal) sale de `Hcca::SYSTEMS`; el editor lo recibe en `ClientConfig` (`blockL`, `blockUnits`,
+`thicknesses`) y el catálogo lo muestra.
+
+| | `lika` (por defecto) | `generico` |
+| --- | --- | --- |
+| Bloque | 50 × 25 cm (4 unidades de 12,5) | 62,5 × 25 cm (5 unidades) |
+| Espesores | 10, 15, 20 cm | 7,5, 10, 15, 20 cm |
+| Bloques U | 15U (canal 12 × 9) y 20U (canal 12 × 14) | todos los espesores |
+| Pallets | 120 u (10), 72 u (15), 60 u (20); U: 42 (15), 40 (20) | 128 / 96 / 72 / 56 u |
+| Adhesivo | 3,25 / 4,70 / 6,25 kg/m² | 1,5–2,5 kg/m² |
+
+Con Lika, un vano en un tabique de 10 cm lleva un **dintel de hormigón armado in situ** (no hay bloque U de 10): el
+cómputo lo cuenta como bloques equivalentes y hormigón.
+
+## Catálogo de piezas (Lika)
 
 | Código | Pieza | Medidas | Uso |
 | --- | --- | --- | --- |
-| B20 / B15 | Bloque portante | 62,5 × 25 × 20 (o 15) cm | Muros portantes de PB y PA. |
-| B10 / B7,5 | Bloque para tabique | 62,5 × 25 × 10 (o 7,5) cm | Divisorios interiores no portantes. |
-| U20 / U15 / U10 | Bloque canal «U» | 62,5 × 25 × espesor | Dinteles, encadenados y viga corona; se rellena con hormigón y armadura. |
+| B20 / B15 | Bloque portante | 50 × 25 × 20 (o 15) cm | Muros portantes de PB y PA. |
+| B10 | Bloque para tabique | 50 × 25 × 10 cm | Divisorios interiores no portantes. |
+| U15 / U20 | Bloque canal «U» | 50 × 25 × espesor | Dinteles, encadenados y viga corona; se rellena con hormigón y armadura. |
 | O | Pieza con cavidad vertical | según fabricante | Pilaretes en nudos y extremos (informativa: no se despieza sola). |
-| ½ · ¼ | Medio bloque y cortes | 31,25 · 25 · 12,5 cm y a medida | Trabas, jambas y remates. |
+| ½ · ¼ | Medio bloque y cortes | 25 · 12,5 cm y a medida | Trabas, jambas y remates. |
 | M 3″×8″ | Tirante de pino tratado | 7,5 × 20 cm | Entrepiso en seco y cabios. |
 
 Vanos predefinidos (`Hcca::openingPresets`): puertas P75, P87, P100, P150 (doble); ventanas V62, V100, V125, V150,
@@ -43,10 +60,7 @@ dintel queda en la hilada 9.
 La página `/catalogo` muestra las fichas (con fotos e imágenes del manual técnico de Lika, en `public/img/piezas/`), las
 reglas críticas, el módulo, una calculadora rápida de paño y mortero y preguntas frecuentes de obra seca.
 
-### Referencia de fabricante: Lika ([manual técnico](docs/Lika-Manual-tecnico.pdf))
-
-Lika fabrica bloques de **50 × 25 cm**, no de 62,5 × 25 como el módulo genérico del sistema: sus datos se muestran como
-referencia y **no** entran en el cómputo. Si se quisiera trabajar con ese fabricante habría que parametrizar el módulo.
+### Datos del fabricante: Lika ([manual técnico](docs/Lika-Manual-tecnico.pdf))
 
 | Bloque | Medidas (cm) | Uso | u/pallet | Peso pallet | Bloques/m² | Adhesivo |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -74,10 +88,10 @@ U con apoyo ≥ ½ bloque y luz ≤ 2,5 m; no usar los bloques antes de 28 días
 
 | Rubro | Cómo se calcula |
 | --- | --- |
-| Bloques y bloques U | Por espesor, con reserva por rotura configurable (3 %); **pallets** completos por espesor (referencia: 128 u de 7,5 cm, 96 u de 10 cm, 72 u de 15 cm, 56 u de 20 cm). |
-| Mortero adhesivo | 1,5–2,5 kg/m² de paño según espesor; bolsas de 25 kg. |
+| Bloques y bloques U | Por espesor, con reserva por rotura configurable (3 %); **pallets** completos por espesor, con las capacidades del sistema. |
+| Mortero adhesivo | Consumo por m² de paño según espesor y sistema; bolsas de 25 kg. |
 | Mortero de nivelación | Primera hilada, 2 cm de espesor, 1.900 kg/m³. |
-| Hormigón | Relleno del canal de los bloques U (ancho interior según espesor × 20 cm de alto). |
+| Hormigón | Relleno del canal de los bloques U (canal del sistema) y dinteles in situ. |
 | Hierro | Ø8 mm en dinteles y vigas U (0,395 kg/m); Ø10 mm en la corona (0,617 kg/m). |
 | Anclajes | Uno cada 2 hiladas en cada T (6) y cruz (12). |
 | Madera | Tirantes por largo comercial (3,00–6,00 m), cenefa, OSB 18 mm, banda elástica y placas de reparto. |

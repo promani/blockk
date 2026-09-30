@@ -8,8 +8,8 @@ use App\Domain\Model\ProjectFactory;
 use App\Domain\ProjectAnalyzer;
 
 /**
- * Catálogo de tipologías modulares listas para usar. Todas las dimensiones son múltiplos del módulo
- * de 62,5 cm (5 unidades) a ejes, y los vanos respetan las jambas mínimas. Las métricas (superficie,
+ * Catálogo de tipologías modulares listas para usar. Todas las dimensiones van en la retícula de 12,5 cm
+ * a ejes (pensadas en bloques de 62,5 cm; con Lika, 50 cm, el descarte sigue bajo el 4 %) y los vanos respetan las jambas mínimas. Las métricas (superficie,
  * bloques, descarte) se calculan con el mismo motor que el editor: no son datos cargados a mano.
  */
 final class TemplateCatalog

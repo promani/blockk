@@ -10,11 +10,17 @@ use App\Domain\ProjectAnalyzer;
 use App\Domain\Templates\TemplateBuilder;
 use App\Tests\Support\Fixtures;
 use PHPUnit\Framework\Attributes\DataProvider;
+use App\Domain\Hcca;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 final class ValidationTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        Hcca::useSystem('lika');
+    }
+
     /** @return list<string> */
     private function codes(TemplateBuilder|array $source): array
     {
@@ -98,6 +104,7 @@ final class ValidationTest extends TestCase
     #[Test]
     public function flagsThinExteriorWallsAndSlenderPartitions(): void
     {
+        Hcca::useSystem('generico'); // números del módulo de 62,5 cm (y espesor de 7,5)
         $thin = $this->codes(Fixtures::room(40, 30, 10.0));
         self::assertContains('wall.exterior-thin', $thin);
 

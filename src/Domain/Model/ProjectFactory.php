@@ -339,8 +339,8 @@ final class ProjectFactory
     private function thickness(mixed $v, string $path): int
     {
         $cm = is_numeric($v) ? (float) $v : 0.0;
-        if (!in_array($cm, Hcca::THICKNESSES_CM, true)) {
-            $this->errors[] = "$path: espesor no permitido (usar 7,5 / 10 / 15 / 20 cm)";
+        if (!in_array($cm, Hcca::thicknesses(), true)) {
+            $this->errors[] = "$path: espesor no permitido (usar ".implode(' / ', array_map(static fn (float $t): string => str_replace('.', ',', (string) $t), Hcca::thicknesses())).' cm)';
             $cm = 20.0;
         }
 
@@ -351,7 +351,7 @@ final class ProjectFactory
     {
         $cm = is_numeric($v) ? (float) $v : 20.0;
 
-        return in_array($cm, Hcca::THICKNESSES_CM, true) ? $cm : 20.0;
+        return in_array($cm, Hcca::thicknesses(), true) ? $cm : 20.0;
     }
 
     private function intInRange(mixed $v, int $min, int $max, string $path): int

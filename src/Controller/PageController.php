@@ -53,6 +53,6 @@ final class PageController extends AbstractController
     #[Route('/catalogo', name: 'catalog', methods: ['GET'])]
     public function catalog(): Response
     {
-        return $this->render('catalog/index.html.twig', ['nav' => 'catalog']);
+        return $this->render('catalog/index.html.twig', ['nav' => 'catalog', 'sys' => ClientConfig::catalog()]);
     }
 }

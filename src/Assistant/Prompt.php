@@ -143,7 +143,7 @@ final class Prompt
                     'desde' => ['type' => 'number', 'description' => 'agregar_vano: metros desde el inicio del muro (si falta, se centra).'],
                     'nivel' => ['type' => 'integer', 'enum' => [1, 2]],
                     'x1' => ['type' => 'number'], 'y1' => ['type' => 'number'], 'x2' => ['type' => 'number'], 'y2' => ['type' => 'number'],
-                    'espesorCm' => ['type' => 'number', 'enum' => Hcca::THICKNESSES_CM],
+                    'espesorCm' => ['type' => 'number', 'enum' => Hcca::thicknesses()],
                     'pendiente' => ['type' => 'integer', 'description' => 'cambiar_techo: pendiente en %.'],
                     'nombre' => ['type' => 'string', 'description' => 'renombrar'],
                 ], 'required' => ['accion']]],

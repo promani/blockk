@@ -6,7 +6,7 @@ namespace App\Domain\Cutting;
 
 use App\Domain\Hcca;
 
-/** Resultado del empaquetado: cada "bin" es un bloque de 62,5 cm cortado en varias piezas. */
+/** Resultado del empaquetado: cada "bin" es un bloque entero cortado en varias piezas. */
 final readonly class CutPlan
 {
     /** @param list<array{cuts: list<int>, rest: int}> $bins */
@@ -34,7 +34,7 @@ final readonly class CutPlan
 
     public function stockTicks(): int
     {
-        return $this->blocks() * Hcca::BLOCK_L;
+        return $this->blocks() * Hcca::blockL();
     }
 
     /**

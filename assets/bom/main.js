@@ -91,9 +91,9 @@ function render() {
         section('Cotización y comparativa de materiales', [prices(project), quote(bom), sendToDistributor()]),
         section('Criterios y alcance', [h('ul', { class: 'small muted' },
             h('li', {}, 'Cantidades obtenidas del despiece real pieza por pieza (hiladas, traba ≥ 12,5 cm, dinteles y corona en bloque U).'),
-            h('li', {}, 'Remanentes de corte reaprovechados sobre bloques enteros de 62,5 cm (sierra widia, sin pérdida por trazo).'),
-            h('li', {}, 'Mortero adhesivo: 1,5 a 2,5 kg/m² según espesor (capa de 2 a 3 mm). Primera hilada con mortero cementicio de nivelación.'),
-            h('li', {}, 'Pallets con capacidades referenciales (1,44 a 1,80 m³ según espesor); confirmar con el distribuidor HCCA.'),
+            h('li', {}, `Remanentes de corte reaprovechados sobre bloques enteros de ${fmt(config.blockL, 1)} cm (${config.blockSystem.label}; sierra widia, sin pérdida por trazo).`),
+            h('li', {}, 'Mortero adhesivo según espesor, con los consumos del fabricante (capa delgada). Primera hilada con mortero cementicio de nivelación.'),
+            h('li', {}, 'Pallets con las capacidades del fabricante por espesor; confirmar con el distribuidor.'),
             h('li', {}, 'Controles de predimensionado del editor: no reemplazan el cálculo estructural (CIRSOC 501 / Eurocódigo 6). Precios de ejemplo, no son una cotización.'))]),
     );
 }

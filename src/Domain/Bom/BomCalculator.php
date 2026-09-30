@@ -23,7 +23,6 @@ use App\Domain\Timber\TimberPlan;
  */
 final class BomCalculator
 {
-    private const float BLOCK_M3_FACTOR = 0.625 * 0.25; // m² de la cara de un bloque; × espesor (m) = m³
 
     /**
      * @param list<CourseModel> $models      despiece por nivel
@@ -97,7 +96,8 @@ final class BomCalculator
                     $levelingM3 += ($len / 2000) * ($run->t / 2000) * (Hcca::LEVELING_THICKNESS_CM / 100);
                 }
                 if (PieceKind::U === $piece->kind) {
-                    $concreteM3 += ($len / 2000) * (Hcca::uChannelWidthCm($run->t) / 100) * (Hcca::U_CHANNEL_DEPTH_CM / 100);
+                    [$uw, $uh] = Hcca::uChannel($run->t);
+                    $concreteM3 += ($len / 2000) * ($uw / 100) * ($uh / 100);
                     if ('crown' === $piece->role) {
                         $d10M += 2 * $len / 2000;
                     } else {
@@ -114,7 +114,7 @@ final class BomCalculator
                 ++$pieceCount;
                 $stats[$key]['lengthTicks'] += $len;
                 $areaByT[$g['t']] = ($areaByT[$g['t']] ?? 0) + $len * Hcca::BLOCK_H;
-                if ($len >= Hcca::BLOCK_L) {
+                if ($len >= Hcca::blockL()) {
                     ++$stats[$key]['full'];
                 } else {
                     $stats[$key]['cuts'][] = $len;
@@ -148,7 +148,7 @@ final class BomCalculator
             $m2 = $ticks2 / 4_000_000;
             $wallAreaM2 += $m2;
             $adhesiveKg += $m2 * Hcca::adhesiveRate($t);
-            $quickStock += (int) ceil($m2 / self::BLOCK_M3_FACTOR * 1.05);
+            $quickStock += (int) ceil($m2 / $this->faceM2() * 1.05);
         }
         $levelingKg = $levelingM3 * Hcca::LEVELING_DENSITY;
 
@@ -184,7 +184,7 @@ final class BomCalculator
             'stock' => $stock,
             'cutBlocks' => $cutBlocks,
             'cutBlocksPct' => $stock > 0 ? round(100 * $cutBlocks / $stock, 1) : 0.0,
-            'scrapPct' => $stock > 0 ? round(100 * $scrapTicks / ($stock * Hcca::BLOCK_L), 2) : 0.0,
+            'scrapPct' => $stock > 0 ? round(100 * $scrapTicks / ($stock * Hcca::blockL()), 2) : 0.0,
             'noReuseStock' => $noReuse,
             'quickStock' => $quickStock,
         ];
@@ -202,11 +202,15 @@ final class BomCalculator
         $stock = $s['full'] + $plan->blocks();
         $reserve = (int) ceil($stock * $reservePct / 100);
         $order = $stock + $reserve;
-        $unitM3 = self::BLOCK_M3_FACTOR * $tCm / 100;
+        $unitM3 = $this->faceM2() * $tCm / 100;
         $capacity = Hcca::palletCapacity($isU ? 'U' : 'B', $s['t']);
-        $label = $isU
-            ? sprintf('Bloque U HCCA 62,5 × 25 × %s cm (dinteles y encadenado)', $this->num($tCm))
-            : sprintf('%s HCCA 62,5 × 25 × %s cm', $tCm >= 15 ? 'Bloque portante' : 'Tabique', $this->num($tCm));
+        $sys = Hcca::system();
+        $size = sprintf('%s × 25 × %s cm', $this->dec(Hcca::blockLCm()), $this->dec($tCm));
+        $label = match (true) {
+            $isU && !Hcca::hasUBlock($s['t']) => sprintf('Dintel de hormigón armado in situ (tabique de %s cm: no hay bloque U de ese espesor), en bloques equivalentes de %s cm', $this->dec($tCm), $this->dec(Hcca::blockLCm())),
+            $isU => sprintf('Bloque U %s %s (dinteles y encadenado)', $sys['name'], $size),
+            default => sprintf('%s %s %s', $tCm >= 15 ? 'Bloque portante' : 'Tabique', $sys['name'], $size),
+        };
 
         return [
             'code' => ($isU ? 'U' : 'B').$this->num($tCm),
@@ -231,6 +235,12 @@ final class BomCalculator
             'scrapPct' => $plan->blocks() > 0 ? round(100 * $plan->scrapTicks() / $plan->stockTicks(), 2) : 0.0,
             'patterns' => array_slice($plan->patterns(), 0, 12),
         ];
+    }
+
+    /** m² de la cara de un bloque (largo × alto); × espesor = m³ por bloque. */
+    private function faceM2(): float
+    {
+        return Hcca::blockLCm() / 100 * Hcca::BLOCK_H / Hcca::TICKS_PER_CM / 100;
     }
 
     /**
@@ -346,6 +356,12 @@ final class BomCalculator
             'savedPct' => $total['noReuseStock'] > 0 ? round(100 * ($total['noReuseStock'] - $total['stock']) / $total['noReuseStock'], 1) : 0.0,
             'quickAreaStock' => $total['quickStock'],
         ];
+    }
+
+    /** Número para textos: coma decimal. */
+    private function dec(float $v): string
+    {
+        return str_replace('.', ',', $this->num($v));
     }
 
     private function num(float $v): string

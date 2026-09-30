@@ -77,6 +77,8 @@ sequenceDiagram
   espesores, presets y presupuestos de tamaño).
 - **Unidades**: coordenadas del proyecto en unidades de **12,5 cm** (enteros); geometría interna en **ticks de 0,5 mm**
   (12,5 cm = 250 ticks), así no hay errores de coma flotante en trabas y remanentes.
+- **Sistema de bloques**: `BLOCK_SYSTEM` (`lika` por defecto, o `generico`) elige largo, espesores, pallets, adhesivo y
+  bloques U en `Hcca::SYSTEMS`; el motor usa `Hcca::blockL()` y compañía, nunca un largo fijo.
 - **Asistente** (Redis, 60 días, claves con prefijo `blockk:`): `conv:{id}` (historia para el modelo, eventos para la
   interfaz, casa actual y su programa), `design:{id}` y el índice `designs:{cliente}`, contadores `rl:*`.
 

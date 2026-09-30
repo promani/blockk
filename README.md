@@ -43,6 +43,7 @@ Todas tienen valor por defecto en `.env`; las secretas van en `.env.local` (no s
 | Variable | Para qué |
 | --- | --- |
 | `APP_ENV`, `APP_SECRET` | Entorno de Symfony (`dev`/`prod`) y secreto (obligatorio en producción). |
+| `BLOCK_SYSTEM` | Sistema de bloques: `lika` (por defecto, 50 × 25 cm) o `generico` (62,5 × 25 cm). Ver [HCCA.md](HCCA.md). |
 | `KIMI_API_KEY`, `KIMI_BASE_URL` | Clave y endpoint de la API de Kimi (por defecto `https://api.moonshot.ai/v1`). Sin clave, el asistente no aparece. |
 | `KIMI_MODEL` | Modelo pesado: arma el JSON de la casa y las acciones directas. |
 | `KIMI_MODEL_LIGHT` | Modelo liviano (mismo endpoint y clave): conversa, pregunta y delega. Vacío: todo lo hace `KIMI_MODEL`. |

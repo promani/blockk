@@ -55,7 +55,7 @@ final class CutPlanner
             } else {
                 $id = count($cuts);
                 $cuts[$id] = [];
-                $rest = Hcca::BLOCK_L;
+                $rest = Hcca::blockL();
             }
             $cuts[$id][] = $len;
             $rests[$id] = $rest - $len;

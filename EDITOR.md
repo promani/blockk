@@ -22,7 +22,7 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
 | Herramienta | Tecla | Qué hace |
 | --- | --- | --- |
 | Elegir | `V` | Clic en un muro, vano, losa, escalera, techo o hastial para verlo y cambiarlo; doble clic en el piso elige la habitación. Manijas azules para estirar. |
-| Mover | `M` | Rectángulo para elegir varios elementos (muros con sus vanos, escaleras, pisos y techos de todos los niveles) o `Ctrl+A` para toda la casa; se arrastran o se corren con flechas de a 62,5 cm dentro del terreno. |
+| Mover | `M` | Rectángulo para elegir varios elementos (muros con sus vanos, escaleras, pisos y techos de todos los niveles) o `Ctrl+A` para toda la casa; se arrastran o se corren con flechas de a un bloque dentro del terreno. |
 | Habitación | `R` | Arrastrar en diagonal dibuja cuatro muros; empezando desde una pared existente, se comparte. |
 | Muro | `W` | Muro a muro; al volver al punto de partida la cadena se cierra sola (igual que Habitación). |
 | Puerta / Ventana | `P` / `N` | Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Tipos predefinidos (P75…P150, V62…V187, ventiluces, ventanal). |
@@ -33,7 +33,7 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
 
 ## Asistencias al dibujar
 
-- Paso de dibujo de 62,5 cm y puntos de ajuste junto al cursor.
+- Paso de dibujo de un bloque entero (50 cm con Lika) y puntos de ajuste junto al cursor.
 - **Imán** azul: pega el trazo al eje o extremo del muro más cercano (del nivel o del de abajo), hasta 40 cm.
 - **Guías de alineación** al arrastrar un muro, una esquina o un borde de techo: muros de abajo en naranja, paredes
   vecinas en azul; a menos de 25 cm se pega.
@@ -43,7 +43,7 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
 
 ## Propiedades por elemento
 
-- **Muro**: espesor (7,5 / 10 / 15 / 20 cm), **alto** (de 50 cm a 3,00 m; sin nada encima hasta 4,00 m) y **corona U**
+- **Muro**: espesor (los del sistema: 10 / 15 / 20 cm con Lika), **alto** (de 50 cm a 3,00 m; sin nada encima hasta 4,00 m) y **corona U**
   (se puede sacar en paredes que son sólo mampostería).
 - **Vano**: tipo, antepecho y posición.
 - **Techo**: tipo, sentido de la cumbrera o de la caída, pendiente, alero, sección y separación de cabios. Si dos techos

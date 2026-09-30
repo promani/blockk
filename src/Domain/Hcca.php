@@ -24,10 +24,91 @@ final class Hcca
     public const int GRID = 250;
     public const float GRID_CM = 12.5;
 
-    /** Bloque estándar: 62,5 × 25 cm (el espesor varía). */
-    public const int BLOCK_L = 1250;
+    /** Alto del bloque: 25 cm en los dos sistemas. */
     public const int BLOCK_H = 500;
-    public const int UNITS_PER_BLOCK = 5;
+
+    /**
+     * Sistemas de bloques (variable de entorno BLOCK_SYSTEM). Medidas en ticks; espesores en cm.
+     *  - lika (por defecto): bloques Lika de 50 × 25 cm, espesores 10 / 15 / 20 y bloques U de 15 y 20
+     *    (manual técnico en docs/);
+     *  - generico: módulo genérico de 62,5 × 25 cm, espesores 7,5 / 10 / 15 / 20 con U en todos.
+     * Pallets en unidades por espesor (ticks); adhesivo en kg/m² de muro; canal U [ancho, alto] en cm.
+     */
+    public const array SYSTEMS = [
+        'lika' => [
+            'id' => 'lika',
+            'name' => 'Lika',
+            'label' => 'Bloques Lika de 50 × 25 cm',
+            'blockL' => 1000,
+            'thicknesses' => [10.0, 15.0, 20.0],
+            'uThicknesses' => [15.0, 20.0],
+            'pallet' => [200 => 120, 300 => 72, 400 => 60],
+            'uPallet' => [300 => 42, 400 => 40],
+            'adhesive' => [200 => 3.25, 300 => 4.70, 400 => 6.25],
+            'uChannel' => [300 => [9.0, 12.0], 400 => [14.0, 12.0]],
+        ],
+        'generico' => [
+            'id' => 'generico',
+            'name' => 'HCCA',
+            'label' => 'Módulo genérico de 62,5 × 25 cm',
+            'blockL' => 1250,
+            'thicknesses' => [7.5, 10.0, 15.0, 20.0],
+            'uThicknesses' => [7.5, 10.0, 15.0, 20.0],
+            'pallet' => [150 => 128, 200 => 96, 300 => 72, 400 => 56],
+            'uPallet' => [150 => 96, 200 => 96, 300 => 64, 400 => 48],
+            'adhesive' => [150 => 1.5, 200 => 1.5, 300 => 2.0, 400 => 2.5],
+            'uChannel' => [150 => [2.5, 20.0], 200 => [4.0, 20.0], 300 => [5.0, 20.0], 400 => [10.0, 20.0]],
+        ],
+    ];
+
+    /** @var array<string, mixed>|null */
+    private static ?array $system = null;
+
+    /** @return array<string, mixed> el sistema de bloques activo */
+    public static function system(): array
+    {
+        if (null === self::$system) {
+            $name = strtolower(trim((string) ($_SERVER['BLOCK_SYSTEM'] ?? $_ENV['BLOCK_SYSTEM'] ?? (getenv('BLOCK_SYSTEM') ?: 'lika'))));
+            self::$system = self::SYSTEMS[$name] ?? self::SYSTEMS['lika'];
+        }
+
+        return self::$system;
+    }
+
+    /** Cambia el sistema activo (tests; en la app lo fija BLOCK_SYSTEM). */
+    public static function useSystem(string $name): void
+    {
+        self::$system = self::SYSTEMS[$name] ?? throw new \InvalidArgumentException("Sistema de bloques desconocido: {$name}");
+    }
+
+    /** Largo del bloque en ticks (Lika 50 cm = 1000; genérico 62,5 cm = 1250). */
+    public static function blockL(): int
+    {
+        return self::system()['blockL'];
+    }
+
+    public static function blockLCm(): float
+    {
+        return self::blockL() / self::TICKS_PER_CM;
+    }
+
+    /** Largo del bloque en unidades de la retícula de 12,5 cm (Lika 4, genérico 5). */
+    public static function blockUnits(): int
+    {
+        return intdiv(self::blockL(), self::GRID);
+    }
+
+    /** @return list<float> espesores disponibles en cm */
+    public static function thicknesses(): array
+    {
+        return self::system()['thicknesses'];
+    }
+
+    /** ¿Hay bloque U de este espesor (ticks)? Si no, el dintel se hace de hormigón armado in situ. */
+    public static function hasUBlock(int $tTicks): bool
+    {
+        return in_array(self::ticksToCm($tTicks), self::system()['uThicknesses'], true);
+    }
 
     /** Pieza mínima manejable en obra (12,5 cm) y traba mínima entre hiladas consecutivas. */
     public const int MIN_PIECE = 250;
@@ -49,8 +130,7 @@ final class Hcca
     public const int MAX_LEVELS = 2;
     public const int MAX_TOTAL_HEIGHT_CM = 600;
 
-    /** Espesores disponibles (cm). >= 15 cm son portantes; menores, tabiques no portantes. */
-    public const array THICKNESSES_CM = [7.5, 10.0, 15.0, 20.0];
+    /** >= 15 cm son portantes; menores, tabiques no portantes (espesores disponibles: thicknesses()). */
     public const int LOAD_BEARING_MIN_T = 300; // 15 cm en ticks
 
     /** Los vanos se resuelven con su cara superior en la hilada 9 (2,00 m). */
@@ -110,42 +190,46 @@ final class Hcca
     public const int JOIST_MAX_SPACING_CM = 60;
     public const float OSB_SHEET_M2 = 2.9768; // 1,22 × 2,44 m
 
-    /** Bloques por pallet (referencial, 1,44–1,80 m³ por pallet según espesor). */
+    /** Bloques por pallet según el sistema activo (Lika: 120 / 72 / 60 y U 42 / 40). */
     public static function palletCapacity(string $kind, int $tTicks): int
     {
-        $blocks = [150 => 128, 200 => 96, 300 => 72, 400 => 56];
-        $ublocks = [150 => 96, 200 => 96, 300 => 64, 400 => 48];
-        $table = 'U' === $kind ? $ublocks : $blocks;
+        $table = self::system()['U' === $kind ? 'uPallet' : 'pallet'];
 
-        return $table[$tTicks] ?? 72;
+        return $table[$tTicks] ?? ('U' === $kind ? 40 : 72);
     }
 
-    /** Consumo de mortero adhesivo de junta delgada por m² de paño (kg/m²), según espesor. */
+    /** Consumo de mortero adhesivo por m² de muro (kg/m²), según espesor y sistema. */
     public static function adhesiveRate(int $tTicks): float
     {
-        return match (true) {
-            $tTicks <= 200 => 1.5,
-            $tTicks <= 300 => 2.0,
-            default => 2.5,
-        };
+        $table = self::system()['adhesive'];
+        if (isset($table[$tTicks])) {
+            return $table[$tTicks];
+        }
+        // espesor intermedio: el del inmediato superior disponible
+        foreach ($table as $t => $rate) {
+            if ($t >= $tTicks) {
+                return $rate;
+            }
+        }
+
+        return end($table);
     }
 
     public const float BAG_KG = 25.0;
     public const float LEVELING_DENSITY = 1900.0; // kg/m³ mortero cementicio
     public const int LEVELING_THICKNESS_CM = 2;
 
-    /** Ancho interior del canal del bloque U (cm), para el volumen de hormigón a colar. */
-    public static function uChannelWidthCm(int $tTicks): float
+    /**
+     * Sección de hormigón a colar en un dintel o encadenado [ancho, alto] en cm: el canal del bloque U o, si el sistema
+     * no tiene U de ese espesor, un dintel macizo in situ (espesor − 2 cm × 20 cm).
+     *
+     * @return array{float, float}
+     */
+    public static function uChannel(int $tTicks): array
     {
-        return match (true) {
-            $tTicks <= 150 => 2.5,
-            $tTicks <= 200 => 4.0,
-            $tTicks <= 300 => 5.0,
-            default => 10.0,
-        };
+        return self::system()['uChannel'][$tTicks] ?? [max(4.0, self::ticksToCm($tTicks) - 2), 20.0];
     }
 
-    public const float U_CHANNEL_DEPTH_CM = 20.0;
     public const float REBAR8_KG_M = 0.395;
     public const float REBAR10_KG_M = 0.617;
 
