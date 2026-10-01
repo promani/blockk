@@ -91,14 +91,6 @@ final class AssistantController extends AbstractController
         return $this->json($this->view($conv) + ['nuevos' => max(0, count($conv['events']) - $before)]);
     }
 
-    #[Route('/designs', name: 'designs', methods: ['GET'])]
-    public function designs(Request $request): JsonResponse
-    {
-        $client = (string) $request->query->get('client', '');
-
-        return Conversations::validClient($client) ? $this->json(['designs' => $this->conversations->designs($client)]) : $this->json(['designs' => []]);
-    }
-
     #[Route('/designs/{id}', name: 'design', methods: ['GET'])]
     public function design(string $id, Request $request): JsonResponse
     {

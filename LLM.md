@@ -15,7 +15,6 @@ Revisión que una dibujada a mano.
   3. *Ajustes*: cada pedido es una vuelta al modelo.
 - **Galería → «✦ Modificar con IA»** en cada plantilla: arranca con la plantilla cargada, sin llamar al modelo.
 - Antes de empezar, si el editor tiene un proyecto con muros, se pide confirmación porque se va a reemplazar.
-- **«Tus diseños»**: las casas de cada conversación, para abrirlas o seguir conversando.
 - **Editor → botón flotante «✦ IA»**: diálogo lateral para pedir cambios sobre la casa abierta. Si el pedido es claro
   actúa directo; si es ambiguo, pregunta. Cada casa que devuelve se aplica al editor como un paso de deshacer («Cambio
   del asistente») y la tarjeta ofrece «Deshacer este cambio». Con cada mensaje viaja el proyecto del editor, así la IA ve

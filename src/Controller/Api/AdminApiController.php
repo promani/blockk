@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace App\Controller\Api;
 
-use App\Assistant\Conversations;
 use App\Domain\Design\HouseDescriber;
+use App\Domain\Design\HouseEditor;
 use App\Domain\Design\HouseGenerator;
 use App\Domain\Model\InvalidProjectException;
 use App\Domain\Model\ProjectFactory;
 use App\Domain\ProjectAnalyzer;
 use App\Domain\Templates\TemplateCatalog;
-use App\Domain\Templates\TemplateThumbnail;
 use App\Http\JsonBody;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -20,57 +19,135 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\String\Slugger\AsciiSlugger;
 
 /**
- * API de administración para crear casas en el servidor desde fuera del navegador (p. ej. Claude Code). Se autentica
- * con `Authorization: Bearer <ADMIN_API_TOKEN>`; sin token configurado no existe (404). Las casas se guardan como
- * diseños de un cliente propio derivado del token y se abren en el editor con `/abrir/{id}`.
+ * API de administración de la Galería (para Claude Code u otro cliente): crea, edita y borra modelos que quedan
+ * disponibles para todas las personas, que después deciden si usarlos. Se autentica con
+ * `Authorization: Bearer <ADMIN_API_TOKEN>`; sin token configurado no existe (404). Las plantillas del código no se
+ * tocan: se pueden clonar con `{plantilla: slug}` bajo otro nombre.
  */
+#[Route('/api/admin', name: 'api_admin_')]
 final class AdminApiController extends AbstractController
 {
     public function __construct(
         private readonly ProjectAnalyzer $analyzer,
         private readonly HouseGenerator $generator,
+        private readonly HouseEditor $editor,
         private readonly HouseDescriber $describer,
         private readonly TemplateCatalog $templates,
-        private readonly Conversations $conversations,
         #[Autowire(env: 'ADMIN_API_TOKEN')] private readonly string $token,
     ) {
     }
 
-    #[Route('/api/admin/ping', name: 'api_admin_ping', methods: ['GET'])]
+    #[Route('/ping', name: 'ping', methods: ['GET'])]
     public function ping(Request $request): JsonResponse
     {
         return $this->authorize($request) ?? $this->json(['ok' => true, 'plantillas' => $this->templates->slugs(), 'tiposDeAmbiente' => array_keys(HouseGenerator::TYPES)]);
     }
 
+    /** Modelos de la Galería: los del código (`propio: false`, no editables) y los creados por la API. */
+    #[Route('/galeria', name: 'list', methods: ['GET'])]
+    public function list(Request $request): JsonResponse
+    {
+        if (null !== ($denied = $this->authorize($request))) {
+            return $denied;
+        }
+        $customs = $this->templates->customs();
+        $items = array_map(fn (string $slug): array => [
+            'slug' => $slug,
+            'nombre' => $this->templates->name($slug),
+            'propio' => isset($customs[$slug]),
+        ], $this->templates->slugs());
+
+        return $this->json(['modelos' => $items, 'galeria' => $this->galleryUrl()]);
+    }
+
+    #[Route('/galeria/{slug}', name: 'show', methods: ['GET'], requirements: ['slug' => '[a-z0-9-]+'])]
+    public function show(string $slug, Request $request): JsonResponse
+    {
+        if (null !== ($denied = $this->authorize($request))) {
+            return $denied;
+        }
+        if (!$this->templates->has($slug)) {
+            return $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND);
+        }
+        $s = $this->templates->summary($slug);
+
+        return $this->json(['slug' => $slug, 'propio' => !$this->templates->isBuiltin($slug), 'nombre' => $s['name'], 'descripcion' => $s['description'], 'etiquetas' => $s['tags'], 'project' => $s['project']]);
+    }
+
     /**
-     * Crea una casa. Cuerpo: una de `programa` ({niveles, techo?, ambientes:[{tipo, nivel?, m2?}]}), `plantilla` (slug)
-     * o `project` (JSON completo del editor); `nombre` es opcional.
+     * Crea un modelo. Cuerpo: `nombre` (obligatorio), `slug?`, `descripcion?`, `etiquetas?` y una de `programa`
+     * ({niveles, techo?, ambientes:[{tipo, nivel?, m2?}]}), `plantilla` (slug a clonar) o `project` (JSON del editor).
      */
-    #[Route('/api/admin/casas', name: 'api_admin_create', methods: ['POST'])]
+    #[Route('/galeria', name: 'create', methods: ['POST'])]
     public function create(Request $request): JsonResponse
     {
         if (null !== ($denied = $this->authorize($request))) {
             return $denied;
         }
         $body = JsonBody::decode($request);
-        $names = [];
-        $program = null;
+        $name = trim((string) ($body['nombre'] ?? ''));
+        if ('' === $name) {
+            return $this->json(['error' => 'Falta `nombre`.'], Response::HTTP_BAD_REQUEST);
+        }
+        $slug = (string) ($body['slug'] ?? '') ?: strtolower((new AsciiSlugger())->slug($name)->toString());
+        if (1 !== preg_match('/^[a-z0-9]+(-[a-z0-9]+)*$/', $slug) || strlen($slug) > 60) {
+            return $this->json(['error' => 'El `slug` admite minúsculas, números y guiones (máx. 60).'], Response::HTTP_BAD_REQUEST);
+        }
+        if ($this->templates->has($slug)) {
+            return $this->json(['error' => "Ya existe un modelo «{$slug}». Usá PUT para editarlo u otro nombre."], Response::HTTP_CONFLICT);
+        }
+
+        return $this->save($slug, $body, null);
+    }
+
+    /** Edita un modelo propio. Todo es opcional: `nombre`, `descripcion`, `etiquetas`, y el dibujo (`programa`, `plantilla`, `project` u `operaciones` sobre el actual). */
+    #[Route('/galeria/{slug}', name: 'update', methods: ['PUT', 'PATCH'], requirements: ['slug' => '[a-z0-9-]+'])]
+    public function update(string $slug, Request $request): JsonResponse
+    {
+        if (null !== ($denied = $this->authorize($request))) {
+            return $denied;
+        }
+        $current = $this->templates->customs()[$slug] ?? null;
+        if (null === $current) {
+            return $this->templates->has($slug)
+                ? $this->json(['error' => 'Es una plantilla del código: clonala con POST {plantilla, nombre}.'], Response::HTTP_FORBIDDEN)
+                : $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND);
+        }
+
+        return $this->save($slug, JsonBody::decode($request), $current);
+    }
+
+    #[Route('/galeria/{slug}', name: 'delete', methods: ['DELETE'], requirements: ['slug' => '[a-z0-9-]+'])]
+    public function delete(string $slug, Request $request): JsonResponse
+    {
+        if (null !== ($denied = $this->authorize($request))) {
+            return $denied;
+        }
+        if ($this->templates->deleteCustom($slug)) {
+            return $this->json(['borrado' => $slug]);
+        }
+
+        return $this->templates->has($slug)
+            ? $this->json(['error' => 'Es una plantilla del código y no se puede borrar.'], Response::HTTP_FORBIDDEN)
+            : $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND);
+    }
+
+    /**
+     * @param array<string, mixed>      $body
+     * @param array<string, mixed>|null $current modelo existente (edición) o null (alta)
+     */
+    private function save(string $slug, array $body, ?array $current): JsonResponse
+    {
         try {
-            if (is_array($body['programa'] ?? null)) {
-                $house = $this->generator->generate($body['programa']);
-                [$project, $names, $program] = [$house['project'], $house['rooms'], $house['program']];
-            } elseif (is_string($body['plantilla'] ?? null)) {
-                $project = $this->templates->project($body['plantilla']);
-            } elseif (is_array($body['project'] ?? null)) {
-                $project = $body['project'];
-            } else {
+            $project = $this->project($body, $current['project'] ?? null);
+            if (null === $project) {
                 return $this->json(['error' => 'Mandá `programa`, `plantilla` o `project`.'], Response::HTTP_BAD_REQUEST);
             }
-            if (isset($body['nombre']) && '' !== trim((string) $body['nombre'])) {
-                $project['name'] = mb_substr(trim((string) $body['nombre']), 0, 80);
-            }
+            $name = trim((string) ($body['nombre'] ?? $current['name'] ?? ''));
+            $project['name'] = mb_substr($name, 0, 80);
             $result = $this->analyzer->analyze(ProjectFactory::fromArray($project));
         } catch (InvalidProjectException $e) {
             return $this->json(['error' => 'invalid_project', 'details' => $e->errors], Response::HTTP_UNPROCESSABLE_ENTITY);
@@ -78,79 +155,66 @@ final class AdminApiController extends AbstractController
             return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
 
-        $summary = $this->describer->summary($result, $names);
-        $id = Conversations::newId();
-        $this->conversations->saveDesign([
-            'id' => $id,
-            'client' => $this->client(),
-            'nombre' => $summary['nombre'],
-            'resumen' => $summary,
-            'svg' => TemplateThumbnail::svg($result['project']),
-            'project' => $result['project'],
-            'programa' => $program,
-        ]);
-
-        return $this->json(['id' => $id, 'url' => $this->openUrl($id), 'resumen' => $summary], Response::HTTP_CREATED);
-    }
-
-    #[Route('/api/admin/casas', name: 'api_admin_list', methods: ['GET'])]
-    public function list(Request $request): JsonResponse
-    {
-        if (null !== ($denied = $this->authorize($request))) {
-            return $denied;
+        $summary = $this->describer->summary($result);
+        $levels = $summary['niveles'];
+        try {
+            $this->templates->saveCustom([
+                'slug' => $slug,
+                'name' => mb_substr($name, 0, 120),
+                'description' => mb_substr(trim((string) ($body['descripcion'] ?? $current['description'] ?? sprintf('%d planta%s, %s m² útiles.', $levels, $levels > 1 ? 's' : '', number_format($summary['superficieUtilM2'], 1, ',', '.')))), 0, 600),
+                'tags' => $this->tags($body['etiquetas'] ?? $current['tags'] ?? [sprintf('%d planta%s', $levels, $levels > 1 ? 's' : '')]),
+                'project' => $result['project'],
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_CONFLICT);
         }
-        $casas = array_map(fn (array $d): array => [
-            'id' => $d['id'],
-            'nombre' => $d['nombre'],
-            'actualizada' => $d['updated'],
-            'url' => $this->openUrl($d['id']),
-        ], $this->conversations->designs($this->client()));
 
-        return $this->json(['casas' => $casas]);
+        return $this->json(['slug' => $slug, 'galeria' => $this->galleryUrl(), 'resumen' => $summary], null === $current ? Response::HTTP_CREATED : Response::HTTP_OK);
     }
 
-    #[Route('/api/admin/casas/{id}', name: 'api_admin_show', methods: ['GET'])]
-    public function show(string $id, Request $request): JsonResponse
+    /**
+     * El dibujo pedido, o el actual si sólo se editan datos; null si no hay de dónde sacarlo (alta sin dibujo).
+     *
+     * @param array<string, mixed>      $body
+     * @param array<string, mixed>|null $current
+     *
+     * @return array<string, mixed>|null
+     */
+    private function project(array $body, ?array $current): ?array
     {
-        if (null !== ($denied = $this->authorize($request))) {
-            return $denied;
+        if (is_array($body['programa'] ?? null)) {
+            return $this->generator->generate($body['programa'])['project'];
         }
-        $d = $this->conversations->design($id, $this->client());
+        if (is_string($body['plantilla'] ?? null)) {
+            return $this->templates->project($body['plantilla']);
+        }
+        if (is_array($body['project'] ?? null)) {
+            return $body['project'];
+        }
+        if (null === $current) {
+            return null;
+        }
+        if (is_array($body['operaciones'] ?? null)) {
+            $analysis = $this->analyzer->analyze(ProjectFactory::fromArray($current))['analysis'];
 
-        return null === $d ? $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND) : $this->json(['project' => $d['project'], 'resumen' => $d['resumen']]);
+            return $this->editor->apply($current, $body['operaciones'], $analysis);
+        }
+
+        return $current;
     }
 
-    /** Proyecto de una casa creada por la API, para quien tenga el link (el id es aleatorio e impredecible). */
-    #[Route('/api/casas/{id}', name: 'api_admin_public', methods: ['GET'])]
-    public function publicProject(string $id): JsonResponse
+    /** @return list<string> */
+    private function tags(mixed $tags): array
     {
-        $d = '' === $this->token ? null : $this->conversations->design($id, $this->client());
+        $list = array_values(array_filter(array_map(static fn (mixed $t): string => mb_substr(trim((string) $t), 0, 30), is_array($tags) ? $tags : []), static fn (string $t): bool => '' !== $t));
 
-        return null === $d ? $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND) : $this->json(['project' => $d['project']]);
-    }
-
-    /** Carga la casa en el editor del navegador (mismo mecanismo que «Abrir en el editor» del asistente). */
-    #[Route('/abrir/{id}', name: 'admin_open', methods: ['GET'], requirements: ['id' => '[a-f0-9]{24}'])]
-    public function open(string $id): Response
-    {
-        $html = <<<'HTML'
-            <!doctype html><html lang="es"><meta charset="utf-8"><title>Abriendo casa…</title>
-            <p style="font-family:sans-serif">Abriendo la casa en el editor…</p>
-            <script>
-            fetch('/api/casas/' + location.pathname.split('/').pop())
-              .then((r) => r.ok ? r.json() : Promise.reject(new Error('La casa no existe o venció.')))
-              .then(({ project }) => { localStorage.setItem('blockk.project.v1', JSON.stringify(project)); location.replace('/'); })
-              .catch((e) => { document.body.textContent = e.message; });
-            </script></html>
-            HTML;
-
-        return new Response($html);
+        return array_slice($list, 0, 6);
     }
 
     /** Link absoluto; detrás del proxy de producción Symfony ve http, así que se fuerza https salvo en local. */
-    private function openUrl(string $id): string
+    private function galleryUrl(): string
     {
-        $url = $this->generateUrl('admin_open', ['id' => $id], UrlGeneratorInterface::ABSOLUTE_URL);
+        $url = $this->generateUrl('gallery', [], UrlGeneratorInterface::ABSOLUTE_URL);
 
         return (string) preg_replace('#^http://(?!localhost|127\.0\.0\.1)#', 'https://', $url);
     }
@@ -163,11 +227,5 @@ final class AdminApiController extends AbstractController
         $given = (string) preg_replace('/^Bearer\s+/i', '', (string) $request->headers->get('Authorization', ''));
 
         return hash_equals($this->token, $given) ? null : $this->json(['error' => 'unauthorized'], Response::HTTP_UNAUTHORIZED, ['WWW-Authenticate' => 'Bearer']);
-    }
-
-    /** Cliente de las casas de la API: derivado del token, así que sólo lo conoce quien lo tenga. */
-    private function client(): string
-    {
-        return substr(hash_hmac('sha256', 'admin-api', $this->token), 0, 32);
     }
 }

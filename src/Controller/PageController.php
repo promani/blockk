@@ -40,7 +40,7 @@ final class PageController extends AbstractController
         // hash de cada plantilla (el mismo de las miniaturas): si cambia una casa, se vuelven a calcular.
         $projects = array_combine($this->templates->slugs(), array_map(fn (string $slug): array => $this->templates->project($slug), $this->templates->slugs()));
         $hashes = array_map(static fn (array $p): string => TemplateImages::hash($p), $projects);
-        $summaries = $this->cache->get('gallery.cards.v4.'.sha1(implode('|', $hashes)), function (ItemInterface $item): array {
+        $summaries = $this->cache->get('gallery.cards.v5.'.sha1(implode('|', $hashes).$this->templates->version()), function (ItemInterface $item): array {
             $item->expiresAfter(3600);
 
             return $this->templates->all();

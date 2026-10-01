@@ -45,10 +45,6 @@ final class AssistantApiTest extends WebTestCase
         self::assertSame('kimi-test', KimiMock::$requests[0]['model']);
         self::assertSame('system', KimiMock::$requests[0]['messages'][0]['role']);
 
-        $client->request('GET', "/api/assistant/designs?client={$browser}");
-        $designs = json_decode($client->getResponse()->getContent(), true)['designs'];
-        self::assertCount(1, $designs);
-        self::assertStringStartsWith('<svg', $designs[0]['svg']);
 
         $client->request('GET', "/api/assistant/designs/{$conv['id']}?client={$browser}");
         $design = json_decode($client->getResponse()->getContent(), true);

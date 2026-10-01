@@ -33,6 +33,16 @@ final class RedisStore implements KeyValueStore
         $this->redis->setex($key, $ttl, json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
     }
 
+    public function delete(string $key): void
+    {
+        $this->redis->del([$key]);
+    }
+
+    public function indexRemove(string $key, string $member): void
+    {
+        $this->redis->zrem($key, $member);
+    }
+
     public function indexAdd(string $key, string $member, float $score, int $keep, int $ttl): void
     {
         $this->redis->zadd($key, [$member => $score]);

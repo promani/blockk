@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Templates;
 
+use App\Assistant\Store\KeyValueStore;
 use App\Domain\Model\ProjectFactory;
 use App\Domain\ProjectAnalyzer;
 
@@ -11,11 +12,96 @@ use App\Domain\ProjectAnalyzer;
  * Catálogo de tipologías modulares listas para usar. Todas las dimensiones van en la retícula de 12,5 cm
  * a ejes (pensadas en bloques de 62,5 cm; con Lika, 50 cm, el descarte sigue bajo el 4 %) y los vanos respetan las jambas mínimas. Las métricas (superficie,
  * bloques, descarte) se calculan con el mismo motor que el editor: no son datos cargados a mano.
+ *
+ * Además de las del código, hay modelos que se crean, editan y borran por la API de administración: se guardan en el
+ * almacén clave-valor (Redis) y la Galería los muestra a todos junto a las demás.
  */
 final class TemplateCatalog
 {
-    public function __construct(private readonly ProjectAnalyzer $analyzer = new ProjectAnalyzer())
+    public const int MAX_CUSTOM = 100;
+    private const string INDEX = 'gallery:index';
+    private const int TTL = 10 * 365 * 86400;
+
+    /** @var array<string, array<string, mixed>>|null */
+    private ?array $custom = null;
+
+    public function __construct(private readonly ProjectAnalyzer $analyzer = new ProjectAnalyzer(), private readonly ?KeyValueStore $store = null)
     {
+    }
+
+    public function name(string $slug): string
+    {
+        return $this->definitions()[$slug]['name'] ?? throw new \InvalidArgumentException("Plantilla desconocida: $slug");
+    }
+
+    public function isBuiltin(string $slug): bool
+    {
+        return isset($this->builtins()[$slug]);
+    }
+
+    /**
+     * Modelos creados por la API: {slug, name, description, tags, project, updated}.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function customs(): array
+    {
+        if (null === $this->custom) {
+            $this->custom = [];
+            try {
+                foreach ($this->store?->indexGet(self::INDEX, self::MAX_CUSTOM) ?? [] as $slug) {
+                    $doc = $this->store->get("gallery:{$slug}");
+                    if (null !== $doc) {
+                        $this->custom[$slug] = $doc;
+                    }
+                }
+            } catch (\Throwable) {
+                // sin almacén disponible la Galería sigue mostrando las plantillas del código
+            }
+            ksort($this->custom);
+        }
+
+        return $this->custom;
+    }
+
+    /** Cambia cuando se crea, edita o borra un modelo: sirve para invalidar cachés de la Galería. */
+    public function version(): string
+    {
+        return sha1(json_encode(array_map(static fn (array $d): array => [$d['slug'], $d['updated'] ?? 0], $this->customs()), JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @param array{slug: string, name: string, description: string, tags: list<string>, project: array<string, mixed>} $doc
+     *
+     * @throws \InvalidArgumentException si el slug es de una plantilla del código o se pasa del máximo
+     */
+    public function saveCustom(array $doc): void
+    {
+        if (null === $this->store) {
+            throw new \LogicException('Sin almacén para guardar modelos.');
+        }
+        if ($this->isBuiltin($doc['slug'])) {
+            throw new \InvalidArgumentException('Ese nombre es de una plantilla del código.');
+        }
+        if (!isset($this->customs()[$doc['slug']]) && count($this->customs()) >= self::MAX_CUSTOM) {
+            throw new \InvalidArgumentException(sprintf('Se alcanzó el máximo de %d modelos.', self::MAX_CUSTOM));
+        }
+        $doc['updated'] = time();
+        $this->store->set("gallery:{$doc['slug']}", $doc, self::TTL);
+        $this->store->indexAdd(self::INDEX, $doc['slug'], (float) $doc['updated'], self::MAX_CUSTOM, self::TTL);
+        $this->custom = null;
+    }
+
+    public function deleteCustom(string $slug): bool
+    {
+        if (null === $this->store || !isset($this->customs()[$slug])) {
+            return false;
+        }
+        $this->store->delete("gallery:{$slug}");
+        $this->store->indexRemove(self::INDEX, $slug);
+        $this->custom = null;
+
+        return true;
     }
 
     /** @return list<array<string, mixed>> */
@@ -76,6 +162,17 @@ final class TemplateCatalog
 
     /** @return array<string, array{name: string, description: string, tags: list<string>, build: \Closure}> */
     private function definitions(): array
+    {
+        $defs = $this->builtins();
+        foreach ($this->customs() as $slug => $doc) {
+            $defs[$slug] = ['name' => $doc['name'], 'description' => $doc['description'], 'tags' => $doc['tags'], 'build' => static fn (): array => $doc['project']];
+        }
+
+        return $defs;
+    }
+
+    /** @return array<string, array{name: string, description: string, tags: list<string>, build: \Closure}> */
+    private function builtins(): array
     {
         return [
             'casa-en-l' => [

@@ -80,7 +80,7 @@ sequenceDiagram
 - **Sistema de bloques**: `BLOCK_SYSTEM` (`lika` por defecto, o `generico`) elige largo, espesores, pallets, adhesivo y
   bloques U en `Hcca::SYSTEMS`; el motor usa `Hcca::blockL()` y compañía, nunca un largo fijo.
 - **Asistente** (Redis, 60 días, claves con prefijo `blockk:`): `conv:{id}` (historia para el modelo, eventos para la
-  interfaz, casa actual y su programa), `design:{id}` y el índice `designs:{cliente}`, contadores `rl:*`.
+  interfaz, casa actual y su programa), `design:{id}`, contadores `rl:*`.
 
 ## API
 
@@ -95,8 +95,8 @@ sequenceDiagram
 | `GET /api/assistant/status` | ¿Está configurado el asistente? |
 | `POST /api/assistant/conversations` | Nueva conversación `{client, modo, inicio:{tipo: nueva\|plantilla\|proyecto, …}, texto?, respuestas?}`. |
 | `POST /api/assistant/conversations/{id}/messages` | Mensaje `{client, texto?, respuestas?, project?}`. |
-| `GET /api/assistant/conversations/{id}`, `GET /api/assistant/designs[/{id}]` | Retomar una conversación; diseños del navegador. |
-| `GET /api/admin/ping`, `GET/POST /api/admin/casas`, `GET /api/admin/casas/{id}` | **API de administración** (`Authorization: Bearer $ADMIN_API_TOKEN`; sin token configurado no existe). `POST` crea una casa desde `{programa}` (generador), `{plantilla}` o `{project}` (+ `nombre?`) y devuelve `{id, url, resumen}`; la `url` (`/abrir/{id}`) la carga en el editor del navegador. |
+| `GET /api/assistant/conversations/{id}`, `GET /api/assistant/designs/{id}` | Retomar una conversación; casa de una conversación. |
+| `GET /api/admin/ping`, `GET/POST /api/admin/galeria`, `GET/PUT/DELETE /api/admin/galeria/{slug}` | **API de administración de la Galería** (`Authorization: Bearer $ADMIN_API_TOKEN`; sin token configurado no existe). Crea, edita y borra modelos que ve todo el mundo en `/galeria` (guardados en Redis, clave `gallery:{slug}`, máx. 100). Cuerpo: `nombre`, `descripcion?`, `etiquetas?`, `slug?` y un dibujo: `programa` (generador), `plantilla` (clonar) o `project`; en `PUT` también `operaciones` sobre el actual. Las plantillas del código no se editan ni borran. |
 
 ## Decisiones y trade-offs
 

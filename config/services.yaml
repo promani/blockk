@@ -40,6 +40,10 @@ services:
         factory: ['App\Assistant\Store\StoreFactory', 'create']
         arguments: ['%env(REDIS_URL)%', '%env(REDIS_PREFIX)%', '%kernel.project_dir%/var/assistant']
 
+    App\Domain\Templates\TemplateCatalog:
+        arguments:
+            $store: '@App\Assistant\Store\KeyValueStore'
+
     App\Domain\Templates\TemplateImages:
         arguments: ['%kernel.project_dir%/public']
 

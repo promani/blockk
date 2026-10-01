@@ -94,10 +94,10 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 - **Cómputo** (`/computo`): KPIs, desglose por nivel, patrones de corte, madera, presupuesto con **precios editables**,
   envío a un distribuidor (correo/WhatsApp) y exportación **CSV** y **PDF** vectorial.
-- **Galería** (`/galeria`): asistente de IA, «Tus diseños», proyecto en blanco con retícula parametrizable y plantillas
+- **Galería** (`/galeria`): asistente de IA, proyecto en blanco con retícula parametrizable y plantillas
   con métricas del motor y un carrusel de planta e isométrica (dibujadas con el renderer del editor; pasa solo mientras
   el mouse está encima). Las de las plantillas se pregeneran con `composer miniaturas` (`public/img/plantillas`, con
-  hash del proyecto); las de «Tus diseños» se dibujan en el navegador y quedan en IndexedDB; cada una con «Usar» y «✦ Modificar con IA». Antes de reemplazar el proyecto del
+  hash del proyecto); los modelos creados por la API de administración no tienen imágenes pregeneradas y muestran la planta en SVG; cada una con «Usar» y «✦ Modificar con IA». Antes de reemplazar el proyecto del
   editor se pide confirmación.
 - **Estilos** (`/estilos`): paletas (Vivo, Clásico, Tierra, Contraste) y cada color de la interfaz y del dibujo, con
   vista previa; se guarda en el navegador (`assets/lib/theme.js`). Las miniaturas pregeneradas de la Galería usan la

@@ -65,4 +65,4 @@ $('#blank-form').addEventListener('submit', async (e) => {
 });
 
 /* Asistente de diseño por chat (sólo si el servidor lo tiene configurado). */
-if ($('#ai')) mountAssistant({ card: $('#ai'), dialog: $('#ai-dialog'), confirmReplace, config });
+if ($('#ai')) mountAssistant({ card: $('#ai'), dialog: $('#ai-dialog'), confirmReplace });

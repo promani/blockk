@@ -12,7 +12,6 @@ use App\Assistant\Store\KeyValueStore;
 final class Conversations
 {
     public const int TTL = 60 * 86400; // 60 días
-    public const int MAX_DESIGNS = 30;
 
     public function __construct(private readonly KeyValueStore $store)
     {
@@ -51,7 +50,6 @@ final class Conversations
     {
         $design['updated'] = time();
         $this->store->set("design:{$design['id']}", $design, self::TTL);
-        $this->store->indexAdd("designs:{$design['client']}", $design['id'], (float) $design['updated'], self::MAX_DESIGNS, self::TTL);
     }
 
     /** @return array<string, mixed>|null */
@@ -63,21 +61,6 @@ final class Conversations
         $d = $this->store->get("design:{$id}");
 
         return null !== $d && ($d['client'] ?? null) === $client ? $d : null;
-    }
-
-    /** @return list<array<string, mixed>> sin el proyecto (liviano, para la Galería) */
-    public function designs(string $client): array
-    {
-        $out = [];
-        foreach ($this->store->indexGet("designs:{$client}", self::MAX_DESIGNS) as $id) {
-            $d = $this->store->get("design:{$id}");
-            if (null !== $d) {
-                unset($d['project'], $d['client']);
-                $out[] = $d;
-            }
-        }
-
-        return $out;
     }
 
     /** Límite de uso: true si todavía hay cupo. */

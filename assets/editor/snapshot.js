@@ -4,7 +4,7 @@ import { buildScene } from './scene.js';
 
 /*
  * Miniaturas con el mismo dibujo del editor: la planta del Nivel 1 (vista Planta) y la casa terminada con techo
- * (vista isométrica). Las usan la Galería (para «Tus diseños») y el script que pregenera las de las plantillas.
+ * (vista isométrica). Las usa el script que pregenera las de las plantillas.
  */
 
 const G = 12.5;

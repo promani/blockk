@@ -14,6 +14,11 @@ interface KeyValueStore
     public function set(string $key, array $value, int $ttl): void;
 
     /** Agrega (o actualiza el puntaje de) `$member` en el índice `$key`, conservando los `$keep` de mayor puntaje. */
+    public function delete(string $key): void;
+
+    /** Quita `$member` del índice `$key`. */
+    public function indexRemove(string $key, string $member): void;
+
     public function indexAdd(string $key, string $member, float $score, int $keep, int $ttl): void;
 
     /** @return list<string> miembros del índice, de mayor a menor puntaje */

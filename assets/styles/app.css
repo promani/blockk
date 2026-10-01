@@ -219,7 +219,6 @@ label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-
 .car-dots button[aria-pressed="true"] { background: var(--graphite); }
 @media (hover: none) { .car-arrow { opacity: .9; } }
 @media (prefers-reduced-motion: reduce) { .car-track { transition: none; } }
-.ai-design .carousel { border-bottom: 1px solid var(--border); }
 .tcard-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .tcard-body .btn { margin-top: auto; align-self: flex-start; }
 .taglist { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
@@ -327,13 +326,6 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 .ai-card { padding: 18px 20px; margin-bottom: 18px; border-color: var(--green-600); background: linear-gradient(180deg, var(--green-100), var(--panel) 120px); }
 .ai-hero { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .ai-hero p { margin: 0; max-width: 64ch; }
-.ai-designs { margin-top: 16px; }
-.ai-designs[hidden] { display: none; }
-.ai-design-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.ai-design { overflow: hidden; display: flex; flex-direction: column; box-shadow: none; }
-.ai-design .ai-thumb { border-bottom: 1px solid var(--border); aspect-ratio: 16 / 10; object-fit: contain; }
-.ai-design-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; }
-.ai-design-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .tcard-actions { margin-top: auto; display: flex; flex-wrap: wrap; gap: 8px; }
 .tcard-body .tcard-actions .btn { margin-top: 0; }
 

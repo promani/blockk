@@ -241,7 +241,6 @@ final class AssistantTest extends TestCase
     public function designsBelongToTheirBrowser(): void
     {
         $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-en-l']);
-        self::assertCount(1, $this->conversations->designs(self::CLIENT));
         self::assertNotNull($this->conversations->design($conv['id'], self::CLIENT));
         self::assertNull($this->conversations->design($conv['id'], 'ffffffffffffffffffffffff'));
     }

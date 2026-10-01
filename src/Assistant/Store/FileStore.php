@@ -23,6 +23,20 @@ final class FileStore implements KeyValueStore
         $this->write($key, ['value' => $value, 'expires' => time() + $ttl]);
     }
 
+    public function delete(string $key): void
+    {
+        @unlink($this->file($key));
+    }
+
+    public function indexRemove(string $key, string $member): void
+    {
+        $entry = $this->read($key);
+        if (null !== $entry) {
+            unset($entry['value'][$member]);
+            $this->write($key, $entry);
+        }
+    }
+
     public function indexAdd(string $key, string $member, float $score, int $keep, int $ttl): void
     {
         $index = $this->read($key)['value'] ?? [];
