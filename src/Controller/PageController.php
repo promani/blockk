@@ -37,20 +37,23 @@ final class PageController extends AbstractController
     public function gallery(): Response
     {
         // Las métricas de las plantillas salen del motor real; se cachean porque son deterministas. La clave lleva el
-        // hash de cada plantilla (el mismo de las miniaturas): si cambia una casa, no quedan tarjetas con imágenes viejas.
-        $hashes = array_map(fn (string $slug): string => TemplateImages::hash($this->templates->project($slug)), $this->templates->slugs());
-        $cards = $this->cache->get('gallery.cards.v3.'.sha1(implode('|', $hashes)), function (ItemInterface $item): array {
+        // hash de cada plantilla (el mismo de las miniaturas): si cambia una casa, se vuelven a calcular.
+        $projects = array_combine($this->templates->slugs(), array_map(fn (string $slug): array => $this->templates->project($slug), $this->templates->slugs()));
+        $hashes = array_map(static fn (array $p): string => TemplateImages::hash($p), $projects);
+        $summaries = $this->cache->get('gallery.cards.v4.'.sha1(implode('|', $hashes)), function (ItemInterface $item): array {
             $item->expiresAfter(3600);
 
-            return array_map(function (array $s): array {
-                // Planta e isométrica pregeneradas con el dibujo del editor; si faltan, la planta en SVG.
-                $s['images'] = $this->images->find($s['slug'], $this->templates->project($s['slug']));
-                $s['svg'] = null === $s['images'] ? TemplateThumbnail::svg($s['project']) : null;
-                unset($s['project']);
-
-                return $s;
-            }, $this->templates->all());
+            return $this->templates->all();
         });
+        // Las miniaturas se buscan en cada pedido (sólo mira si existen los archivos): así no queda en caché una tarjeta sin
+        // imágenes generada antes de `composer miniaturas`. Si faltan, la planta en SVG.
+        $cards = array_map(function (array $s) use ($projects): array {
+            $s['images'] = $this->images->find($s['slug'], $projects[$s['slug']]);
+            $s['svg'] = null === $s['images'] ? TemplateThumbnail::svg($s['project']) : null;
+            unset($s['project']);
+
+            return $s;
+        }, $summaries);
 
         return $this->render('gallery/index.html.twig', ['cards' => $cards, 'nav' => 'gallery', 'assistant' => $this->assistant->enabled(), 'config' => ClientConfig::json()]);
     }

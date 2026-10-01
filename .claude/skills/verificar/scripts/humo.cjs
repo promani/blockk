@@ -119,6 +119,9 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     await page.click('.tool:has-text("Techo")');
     const lvl = await page.evaluate(() => window.blockk.store.ui.level);
     log(lvl === 2, `el botón Techo lleva a la pestaña Techo (nivel ${lvl})`);
+    await page.click('.level-tab:has-text("Nivel 1")');
+    const back = await page.evaluate(() => window.blockk.store.ui.tool);
+    log(back === 'select', `al volver al Nivel 1 queda Elegir (${back})`);
     await page.click('.level-tab:has-text("Techo")');
     await page.click('[data-view="plan"]');
     await page.evaluate(() => { window.blockk.cam.fit(0, 0, 1000, 800, 0, 40); window.blockk.render(); });

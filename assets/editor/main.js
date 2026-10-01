@@ -474,8 +474,9 @@ function setLevel(i) {
     store.setUi({ level: i, selection: null });
     app.hover = null;
     const set = TOOLSETS[i];
+    // Techo está en la barra de todos los niveles, pero sólo se usa en su pestaña: al volver a un nivel, Elegir.
     if (i === ROOF_LEVEL) store.setUi({ tool: 'roof' });
-    else if (![...set.main, ...set.more].includes(store.ui.tool) || toolDisabled(activeTool())) store.setUi({ tool: 'select' });
+    else if (store.ui.tool === 'roof' || ![...set.main, ...set.more].includes(store.ui.tool) || toolDisabled(activeTool())) store.setUi({ tool: 'select' });
     renderLevels();
     renderToolbar();
     refreshOptions();

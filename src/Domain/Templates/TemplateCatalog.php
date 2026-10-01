@@ -106,7 +106,9 @@ final class TemplateCatalog
                     ->opening(0, 'V125', 'x', 80, 70)
                     ->opening(0, 'V100', 'y', 60, 58)
                     ->roofPart(0, 0, 0, 90, 45, 'gable', 'x')
-                    ->roofPart(0, 60, 45, 30, 35, 'gable', 'y')
+                    // El techo del ala entra en el cuerpo principal hasta que su cumbrera toca el faldón grande (limahoya): sin
+                    // hastial de ese lado, que quedaría asomando sobre la cubierta.
+                    ->roofPart(0, 60, 30, 30, 50, 'gable', 'y', more: ['gableA' => false])
                     ->build(),
             ],
             'vivienda-evolutiva' => [
