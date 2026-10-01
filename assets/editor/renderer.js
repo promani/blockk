@@ -471,6 +471,10 @@ export class Renderer {
             this.drawRoofPart(this.frame, b.roof);
             return;
         }
+        // Junta de los bloques: se fija en cada caja (el piso y el techo dejan su propio color de trazo en el contexto).
+        ctx.strokeStyle = 'rgba(30,41,59,.30)';
+        ctx.lineWidth = 0.6;
+        ctx.lineJoin = 'round';
         if (b.plate) {
             this.drawPlate(ctx, cam, b, strokeOn);
             return;
