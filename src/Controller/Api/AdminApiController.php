@@ -90,7 +90,7 @@ final class AdminApiController extends AbstractController
             'programa' => $program,
         ]);
 
-        return $this->json(['id' => $id, 'url' => $this->generateUrl('admin_open', ['id' => $id], UrlGeneratorInterface::ABSOLUTE_URL), 'resumen' => $summary], Response::HTTP_CREATED);
+        return $this->json(['id' => $id, 'url' => $this->openUrl($id), 'resumen' => $summary], Response::HTTP_CREATED);
     }
 
     #[Route('/api/admin/casas', name: 'api_admin_list', methods: ['GET'])]
@@ -103,7 +103,7 @@ final class AdminApiController extends AbstractController
             'id' => $d['id'],
             'nombre' => $d['nombre'],
             'actualizada' => $d['updated'],
-            'url' => $this->generateUrl('admin_open', ['id' => $d['id']], UrlGeneratorInterface::ABSOLUTE_URL),
+            'url' => $this->openUrl($d['id']),
         ], $this->conversations->designs($this->client()));
 
         return $this->json(['casas' => $casas]);
@@ -145,6 +145,14 @@ final class AdminApiController extends AbstractController
             HTML;
 
         return new Response($html);
+    }
+
+    /** Link absoluto; detrás del proxy de producción Symfony ve http, así que se fuerza https salvo en local. */
+    private function openUrl(string $id): string
+    {
+        $url = $this->generateUrl('admin_open', ['id' => $id], UrlGeneratorInterface::ABSOLUTE_URL);
+
+        return (string) preg_replace('#^http://(?!localhost|127\.0\.0\.1)#', 'https://', $url);
     }
 
     private function authorize(Request $request): ?JsonResponse
