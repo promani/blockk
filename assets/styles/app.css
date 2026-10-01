@@ -120,7 +120,6 @@ label { display: flex; flex-direction: column; gap: 3px; font-weight: 600; font-
 .tooloptions { display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--border); height: 44px; flex: 0 0 44px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; font-size: .9rem; white-space: nowrap; }
 .tooloptions .row { display: flex; align-items: center; gap: 12px; }
 .tooloptions .title { font-weight: 700; flex-shrink: 0; }
-.tooloptions .hint { color: var(--muted); flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .stage { position: relative; flex: 1; min-height: 0; background: #e9eef6; overflow: hidden; }
 #canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
 #canvas.panning { cursor: grabbing; }

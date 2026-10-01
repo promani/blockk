@@ -211,6 +211,8 @@ export function mountPanels(app) {
     // El cambio se aplica después del evento: el panel se redibuja y el campo con foco no se borra en medio de su propio «change».
     const num = (value, min, max, onChange, step = 1) => h('input', { type: 'number', value, min, max, step, onchange: (e) => { const v = Number(e.target.value); if (Number.isFinite(v) && v !== Number(value)) setTimeout(() => onChange(Math.min(max, Math.max(min, v)))); } });
     const sel = (value, items, onChange) => h('select', { onchange: (e) => onChange(e.target.value) }, items.map(([v, text]) => h('option', { value: v, selected: String(v) === String(value) }, text)));
+    /** Nombre del techo para la interfaz: por su orden en el proyecto, no por su id interno. */
+    const roofName = (id) => `Techo ${(store.project.roofs ?? []).findIndex((x) => x.id === id) + 1}`;
     const modify = (label, fn) => store.commit(label, (d) => fn(d.levels[store.ui.level], d));
 
     function deleteSelection() {
@@ -493,7 +495,7 @@ export function mountPanels(app) {
             const upd = (fn) => store.commit('Editar techo', (d) => fn(d.roofs.find((x) => x.id === r.id)));
             const check = (label, key) => h('div', { class: 'proprow' }, h('label', {}, label, h('input', { type: 'checkbox', checked: r[key], onchange: (e) => upd((x) => { x[key] = e.target.checked; }) })));
             add(el.props,
-                h('div', { class: 'kv-title' }, `Techo ${r.id} · ${r.type === 'gable' ? 'a dos aguas' : 'a un agua'}`),
+                h('div', { class: 'kv-title' }, `${roofName(r.id)} · ${r.type === 'gable' ? 'a dos aguas' : 'a un agua'}`),
                 store.project.upper ? field('Apoya sobre', sel(r.level, [[0, 'Nivel 1'], [1, 'Nivel 2']], (v) => upd((x) => { x.level = Number(v); }))) : null,
                 field('Ancho (× 12,5 cm)', num(r.w, 2, 900, (v) => upd((x) => { x.w = v; }))),
                 field('Profundidad (× 12,5 cm)', num(r.h, 2, 900, (v) => upd((x) => { x.h = v; }))),
@@ -519,7 +521,7 @@ export function mountPanels(app) {
             if (!r || !gb) return void (store.ui.selection = null);
             const upd = (fn) => store.commit('Editar hastial', (d) => fn(d.roofs.find((x) => x.id === rid)));
             add(el.props,
-                h('div', { class: 'kv-title' }, side === 'H' ? 'Muro alto del techo' : `Hastial ${side} del techo ${rid}`),
+                h('div', { class: 'kv-title' }, side === 'H' ? 'Muro alto del techo' : `Hastial ${side} del ${roofName(rid).toLowerCase()}`),
                 field('Espesor', sel(r.gableT, [10, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.gableT = Number(v); }))),
                 h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2(gb.areaM2)), h('dt', {}, 'Hiladas'), h('dd', {}, int(gb.courses?.length ?? 0)), h('dt', {}, 'Piezas'), h('dd', {}, `${int(gb.fullBlocks)} enteras + ${int(gb.cutPieces)} cortadas`)),
                 h('div', { class: 'actions-row' },
@@ -612,8 +614,8 @@ export function mountPanels(app) {
         add(el.props,
             roofs.length
                 ? h('div', {}, h('div', { class: 'kv-title' }, 'Techos del proyecto'), roofs.map((r) => h('div', { class: 'roof-row' },
-                    h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'roof', id: r.id } }) }, `${r.id} · ${r.type === 'gable' ? '2 aguas' : '1 agua'} · ${fmt((r.w * G) / 100, 1)}×${fmt((r.h * G) / 100, 1)} m · Nivel ${r.level + 1}`),
-                    h('button', { class: 'btn btn-danger btn-sm', type: 'button', title: `Quitar el techo ${r.id}`, 'aria-label': `Quitar el techo ${r.id}`, onclick: () => store.commit('Quitar techo', (d) => { d.roofs = d.roofs.filter((x) => x.id !== r.id); }) }, '✕'))),
+                    h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'roof', id: r.id } }) }, `${roofName(r.id)} · ${r.type === 'gable' ? '2 aguas' : '1 agua'} · ${fmt((r.w * G) / 100, 1)}×${fmt((r.h * G) / 100, 1)} m · Nivel ${r.level + 1}`),
+                    h('button', { class: 'btn btn-danger btn-sm', type: 'button', title: `Quitar el ${roofName(r.id).toLowerCase()}`, 'aria-label': `Quitar el ${roofName(r.id).toLowerCase()}`, onclick: () => store.commit('Quitar techo', (d) => { d.roofs = d.roofs.filter((x) => x.id !== r.id); }) }, '✕'))),
                     roofs.length > 1 ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.commit('Quitar todos los techos', (d) => { d.roofs = []; }) }, 'Quitar todos') : null)
                 : h('p', { class: 'empty-note' }, 'Sin techos.'));
     }

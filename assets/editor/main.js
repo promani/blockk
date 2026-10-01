@@ -52,7 +52,7 @@ const app = {
     persistUi: () => persistUi(),
     toast,
     focusIssue,
-    setHint: () => {}, // la ayuda de la herramienta ya está en la barra de opciones
+    setHint: (text) => setHint(text),
 };
 window.blockk = app; // útil para depurar y para pruebas end-to-end
 app.renderer = renderer;
@@ -284,6 +284,7 @@ canvas.addEventListener('pointerup', (e) => {
 canvas.addEventListener('pointerleave', () => {
     app.pointer = null;
     app.hover = null;
+    idleStatus();
     app.render();
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -385,8 +386,21 @@ function refreshOptions() {
     const roofOpts = store.ui.level === ROOF_LEVEL && !(tool.id === 'select' && app.multiCount());
     const opts = roofOpts ? app.roofOptions() : tool.options?.();
     const title = roofOpts ? 'Techo' : tool.label;
-    add(clear($('#tooloptions')), h('span', { class: 'title' }, title), opts, h('span', { class: 'hint', title: tool.hint }, tool.hint));
-    app.setHint(tool.hint);
+    add(clear($('#tooloptions')), h('span', { class: 'title' }, title), opts);
+    setHint(tool.hint);
+    idleStatus();
+}
+
+/** La ayuda va en la barra de estado, a todo el ancho: en la de opciones competía con los controles y se cortaba. */
+function setHint(text) {
+    const el = $('#hint-info');
+    el.textContent = text ?? '';
+    el.title = text ?? '';
+}
+
+/** Sin el puntero sobre el lienzo, la barra de estado muestra el nivel y la vista en vez de coordenadas. */
+function idleStatus() {
+    if (!app.pointer) $('#cursor-info').textContent = `${levelLabel()} · ${store.ui.view === 'iso' ? 'Isométrica' : 'Planta'}`;
 }
 
 function toolButton(id) {
@@ -476,6 +490,7 @@ function setView(view) {
     store.setUi({ view });
     for (const b of $$('#view-toggle button')) b.setAttribute('aria-pressed', String(b.dataset.view === view));
     renderViewPick();
+    idleStatus();
     persistUi();
     app.render();
 }
