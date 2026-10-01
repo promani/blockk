@@ -96,6 +96,7 @@ sequenceDiagram
 | `POST /api/assistant/conversations` | Nueva conversación `{client, modo, inicio:{tipo: nueva\|plantilla\|proyecto, …}, texto?, respuestas?}`. |
 | `POST /api/assistant/conversations/{id}/messages` | Mensaje `{client, texto?, respuestas?, project?}`. |
 | `GET /api/assistant/conversations/{id}`, `GET /api/assistant/designs[/{id}]` | Retomar una conversación; diseños del navegador. |
+| `GET /api/admin/ping`, `GET/POST /api/admin/casas`, `GET /api/admin/casas/{id}` | **API de administración** (`Authorization: Bearer $ADMIN_API_TOKEN`; sin token configurado no existe). `POST` crea una casa desde `{programa}` (generador), `{plantilla}` o `{project}` (+ `nombre?`) y devuelve `{id, url, resumen}`; la `url` (`/abrir/{id}`) la carga en el editor del navegador. |
 
 ## Decisiones y trade-offs
 

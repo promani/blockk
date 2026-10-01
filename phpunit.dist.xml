@@ -21,6 +21,7 @@
         <server name="KIMI_MODEL" value="kimi-test" force="true" />
         <server name="KIMI_BASE_URL" value="https://kimi.test/v1" force="true" />
         <server name="KIMI_MODEL_LIGHT" value="" force="true" />
+        <server name="ADMIN_API_TOKEN" value="token-de-prueba" force="true" />
         <server name="REDIS_URL" value="" force="true" />
     </php>
 
