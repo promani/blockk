@@ -233,19 +233,32 @@ final class RoofPlanner
         // pared de la PA) no hay alero, y en ese extremo tampoco hay hastial (lo cierra el muro de arriba).
         $abuts = fn (float $line, bool $lineIsAlong, float $from, float $to): bool => [] !== $upper
             && $this->coverage($upper, $lineIsAlong === $alongX ? Axis::X : Axis::Y, (int) round($line / $G), $from, $to, false) >= 0.5 * ($to - $from);
+        // Medio espesor del muro de arriba sobre esa línea (cm): la cubierta termina en su cara, no adentro del muro.
+        $halfUpper = function (float $line, bool $lineIsAlong) use ($upper, $alongX, $G): float {
+            $axis = $lineIsAlong === $alongX ? Axis::X : Axis::Y;
+            $u = (int) round($line / $G);
+            $t = 0;
+            foreach ($upper as $w) {
+                if ($w->axis() === $axis && $w->lineU() === $u) {
+                    $t = max($t, $w->t);
+                }
+            }
+
+            return $t / Hcca::TICKS_PER_CM / 2;
+        };
         $endA0 = $abuts($a0, false, $c0, $c1);
         $endA1 = $abuts($a1, false, $c0, $c1);
         $sideC0 = $abuts($c0, true, $a0, $a1);
         $sideC1 = $abuts($c1, true, $a0, $a1);
         // El alero va sólo donde cae el agua: los dos aleros de un techo a dos aguas y el lado bajo de uno a un agua.
         // En los extremos (hastiales) y en el lado alto la cubierta llega justo a la cara exterior del muro, así tapa el
-        // hastial sin dejar intersticios. Contra un muro de arriba termina en su eje (queda dentro de ese muro).
+        // hastial sin dejar intersticios. Contra un muro de arriba termina en la cara de ese muro (alero negativo).
         $flush = $roof->gableT / 2;
-        $oa0 = $endA0 ? 0.0 : $flush;
-        $oa1 = $endA1 ? 0.0 : $flush;
+        $oa0 = $endA0 ? -$halfUpper($a0, false) : $flush;
+        $oa1 = $endA1 ? -$halfUpper($a1, false) : $flush;
         $lowC0 = $shed && in_array($roof->dir, ['N', 'W'], true);
-        $oc0 = $sideC0 ? 0.0 : ($shed && !$lowC0 ? $flush : $o);
-        $oc1 = $sideC1 ? 0.0 : ($shed && $lowC0 ? $flush : $o);
+        $oc0 = $sideC0 ? -$halfUpper($c0, true) : ($shed && !$lowC0 ? $flush : $o);
+        $oc1 = $sideC1 ? -$halfUpper($c1, true) : ($shed && $lowC0 ? $flush : $o);
         $lr = ($a1 - $a0) + $oa0 + $oa1; // largo de cada faldón a lo largo de la cumbrera
 
         $planes = [];

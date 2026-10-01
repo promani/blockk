@@ -366,7 +366,7 @@ final class RoofFloorTest extends TestCase
         $parts = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray($p))['analysis']['roof']['parts'];
         $low = array_values(array_filter($parts, static fn (array $r): bool => 0 === $r['level']))[0]['geometry'];
 
-        self::assertSame(400.0, (float) $low['outer']['x0'], 'contra la pared de la PA: sin alero');
+        self::assertSame(410.0, (float) $low['outer']['x0'], 'contra la pared de la PA: termina en su cara (eje + 10 cm), sin alero');
         self::assertSame(840.0, (float) $low['outer']['x1'], 'del lado libre: alero de 40 cm');
         self::assertSame(-10.0, (float) $low['outer']['y0'], 'en los extremos la cubierta llega a la cara del muro, sin alero');
         self::assertNotContains('H', array_column($low['gables'], 'side'), 'sin muro alto: lo cierra la pared de la PA');
