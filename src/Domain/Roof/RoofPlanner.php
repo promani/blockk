@@ -281,9 +281,12 @@ final class RoofPlanner
                 $planes[] = ['pts' => [$pt($a0 - $oa0, $edge, $zEdge), $pt($a1 + $oa1, $edge, $zEdge), $pt($a1 + $oa1, $mid, $zRidge), $pt($a0 - $oa0, $mid, $zRidge)], 'areaM2' => round($len * $lr / 10000, 2)];
             }
             $rafterLen = max($lens);
+            // Si un lado del techo choca contra un muro de arriba, el hastial arranca en la cara de ese muro (gana la pared real).
+            $g0 = $sideC0 ? $c0 + $halfUpper($c0, true) : $c0;
+            $g1 = $sideC1 ? $c1 - $halfUpper($c1, true) : $c1;
             foreach ([[$a0, 'A', $endA0], [$a1, 'B', $endA1]] as [$a, $name, $closed]) {
                 if (!$closed) {
-                    $gables[] = $this->gable($roof, $name, [$pt($a, $c0, $zBase), $pt($a, $c1, $zBase), $pt($a, $c1, $zTop), $pt($a, $mid, $zRidge), $pt($a, $c0, $zTop)], $span * ($rise / 2 + $lift));
+                    $gables[] = $this->gable($roof, $name, [$pt($a, $g0, $zBase), $pt($a, $g1, $zBase), $pt($a, $g1, $zTop + ($c1 - $g1) * $s), $pt($a, $mid, $zRidge), $pt($a, $g0, $zTop + ($g0 - $c0) * $s)], $span * ($rise / 2 + $lift));
                 }
             }
             $ridge = ['from' => $pt($a0 - $oa0, $mid, $zRidge), 'to' => $pt($a1 + $oa1, $mid, $zRidge)];
@@ -312,9 +315,12 @@ final class RoofPlanner
             $zLow = $zTop - $oLow * $s;
             $zHigh = $zTop + $rise + $oHigh * $s;
             $planes[] = ['pts' => [$pt($a0 - $oa0, $lowOuter, $zLow), $pt($a1 + $oa1, $lowOuter, $zLow), $pt($a1 + $oa1, $highOuter, $zHigh), $pt($a0 - $oa0, $highOuter, $zHigh)], 'areaM2' => round($rafterLen * $lr / 10000, 2)];
+            // Contra un muro de arriba, el hastial termina en la cara de ese muro (gana la pared real).
+            $inset = $highClosed ? $halfUpper($high, true) : 0.0;
+            $highG = $high + ($lowIsFirst ? -$inset : $inset);
             foreach ([[$a0, 'A', $endA0], [$a1, 'B', $endA1]] as [$a, $name, $closed]) {
                 if (!$closed) {
-                    $gables[] = $this->gable($roof, $name, [$pt($a, $low, $zBase), $pt($a, $high, $zBase), $pt($a, $high, $zTop + $rise), $pt($a, $low, $zTop)], $span * ($rise / 2 + $lift));
+                    $gables[] = $this->gable($roof, $name, [$pt($a, $low, $zBase), $pt($a, $highG, $zBase), $pt($a, $highG, $zTop + $rise - $inset * $s), $pt($a, $low, $zTop)], $span * ($rise / 2 + $lift));
                 }
             }
             // Muro alto: el muro del lado alto se levanta hasta la cumbre del faldón (parte fija del techo a un agua), salvo
