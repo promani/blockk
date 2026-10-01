@@ -370,5 +370,8 @@ final class RoofFloorTest extends TestCase
         self::assertSame(840.0, (float) $low['outer']['x1'], 'del lado libre: alero de 40 cm');
         self::assertSame(-10.0, (float) $low['outer']['y0'], 'en los extremos la cubierta llega a la cara del muro, sin alero');
         self::assertNotContains('H', array_column($low['gables'], 'side'), 'sin muro alto: lo cierra la pared de la PA');
+        // El alero de la planta alta vuela sobre el techo bajo sin recortarlo: el techo bajo llega entero a la pared.
+        $lowPart = array_values(array_filter($parts, static fn (array $r): bool => 0 === $r['level']))[0];
+        self::assertSame(100.0, (float) $lowPart['bom']['visiblePct']);
     }
 }

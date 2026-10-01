@@ -56,7 +56,9 @@ const EPS = 0.01;
 export function planeHoles(parts, idx, eq) {
     const holes = [];
     parts.forEach((other, j) => {
-        if (j === idx) return;
+        // Sólo se recortan techos del mismo nivel (que se cruzan): el alero de la planta alta vuela sobre el techo de la
+        // baja sin borrarle nada (si no, queda un aire contra la pared).
+        if (j === idx || other.level !== parts[idx].level) return;
         const o = info(other);
         let poly = [[o.x0, o.y0], [o.x1, o.y0], [o.x1, o.y1], [o.x0, o.y1]];
         // oculto donde este faldón queda por debajo de todos los faldones del otro techo (empate: gana el de índice menor)
@@ -78,7 +80,7 @@ export function planeHoles(parts, idx, eq) {
 export function gableHoles(parts, idx, axis, at) {
     const holes = [];
     parts.forEach((other, j) => {
-        if (j === idx) return;
+        if (j === idx || other.level !== parts[idx].level) return;
         const o = info(other);
         const [lo, hi, pLo, pHi] = axis === 'y' ? [o.y0, o.y1, o.x0, o.x1] : [o.x0, o.x1, o.y0, o.y1];
         if (at < pLo || at > pHi) return;

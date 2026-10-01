@@ -53,9 +53,12 @@ final class RoofPlanner
     private function resolveOverlaps(Project $project, array $parts): array
     {
         $surfaces = array_map(fn (array $p): \Closure => $this->surface($p['geometry']['planes']), $parts);
-        $above = static function (int $i, float $x, float $y, float $z) use ($surfaces): bool {
+        // Sólo se recortan techos del mismo nivel (los que se cruzan); el alero de un techo de arriba no le borra nada al
+        // de abajo.
+        $levelOf = array_column($parts, 'level');
+        $above = static function (int $i, float $x, float $y, float $z) use ($surfaces, $levelOf): bool {
             foreach ($surfaces as $j => $sf) {
-                if ($j === $i) {
+                if ($j === $i || $levelOf[$j] !== $levelOf[$i]) {
                     continue;
                 }
                 $h = $sf($x, $y);
