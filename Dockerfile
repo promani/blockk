@@ -28,6 +28,7 @@ RUN sed -i 's/^Listen 80$/Listen 8080/' /etc/apache2/ports.conf \
         echo '        AllowOverride None'; \
         echo '        Require all granted'; \
         echo '        FallbackResource /index.php'; \
+        echo '        CGIPassAuth On'; \
         echo '    </Directory>'; \
         echo '    <Directory /var/www/app/public/assets>'; \
         echo '        FallbackResource disabled'; \
