@@ -501,6 +501,18 @@ export class Renderer {
         const { ctx } = this;
         const { cam, analysis } = f;
         const stairHoles = li === 1 ? (analysis.floors?.stairs ?? []).flatMap((st) => [...st.steps, ...st.landings].map((q) => ({ x0: q.x0, y0: q.y0, x1: q.x1, y1: q.y1 }))) : [];
+        ctx.save();
+        // En el Nivel 2 el hueco de la escalera no lleva piso: se recorta una sola vez para todos los ambientes (si cada
+        // ambiente sumara el hueco a su contorno, uno que no lo contiene lo pintaría de su color).
+        if (stairHoles.length) {
+            ctx.beginPath();
+            ctx.rect(-1e5, -1e5, 2e5, 2e5);
+            for (const hl of stairHoles) {
+                [[hl.x0, hl.y0], [hl.x1, hl.y0], [hl.x1, hl.y1], [hl.x0, hl.y1]].map(([a, b]) => cam.project(a, b, z)).forEach(([sx, sy], i) => (i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)));
+                ctx.closePath();
+            }
+            ctx.clip('evenodd');
+        }
         for (const room of analysis.levels[li]?.rooms ?? []) {
             if (!room.fill?.length) continue;
             const color = roomColor(room);
@@ -513,14 +525,10 @@ export class Renderer {
                 pts.forEach(([sx, sy], i) => (i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)));
                 ctx.closePath();
             }
-            // En el Nivel 2 el hueco de la escalera no lleva piso.
-            for (const hl of li === 1 ? stairHoles : []) {
-                [[hl.x0, hl.y0], [hl.x1, hl.y0], [hl.x1, hl.y1], [hl.x0, hl.y1]].map(([a, b]) => cam.project(a, b, z)).forEach(([sx, sy], i) => (i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)));
-                ctx.closePath();
-            }
-            ctx.fill('evenodd');
+            ctx.fill();
             ctx.stroke();
         }
+        ctx.restore();
     }
 
     /** Un techo: hastiales de bloque, faldones (del más lejano al más cercano), cabios y cumbrera. */
@@ -634,29 +642,11 @@ export class Renderer {
         ctx.stroke();
     }
 
-    /** Losa o entrepiso de una pieza: caras laterales exteriores, bordes interiores del hueco de escalera y cara superior agujereada. */
+    /** Losa o entrepiso de una pieza: sólo la cara superior (sin espesor), agujereada por el hueco de la escalera. */
     drawPlate(ctx, cam, b, strokeOn) {
         const pal = PAL()[b.kind];
-        const { x0, x1, y0, y1, z0, z1 } = b;
+        const { x0, x1, y0, y1, z1 } = b;
         const P = (x, y, z) => cam.project(x, y, z);
-        const poly = (pts, color) => {
-            ctx.beginPath();
-            pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-            ctx.closePath();
-            ctx.fillStyle = color;
-            ctx.fill();
-            if (strokeOn) ctx.stroke();
-        };
-        const side = (spec, r, inner, color) => {
-            // afuera se ven las caras que miran a la cámara; dentro de un hueco, las opuestas
-            const max = inner ? !spec.max : spec.max;
-            const X = max ? r.x1 : r.x0;
-            const Y = max ? r.y1 : r.y0;
-            poly(spec.a === 'x' ? [P(X, r.y0, z0), P(X, r.y1, z0), P(X, r.y1, z1), P(X, r.y0, z1)] : [P(r.x0, Y, z0), P(r.x1, Y, z0), P(r.x1, Y, z1), P(r.x0, Y, z1)], color);
-        };
-        const { xp, yp } = visibleFaces(cam.rot);
-        side(yp, b, false, pal.yp);
-        side(xp, b, false, pal.xp);
         const holes = b.holes.map((hl) => ({ x0: Math.max(hl.x0, x0), y0: Math.max(hl.y0, y0), x1: Math.min(hl.x1, x1), y1: Math.min(hl.y1, y1) })).filter((hl) => hl.x1 > hl.x0 && hl.y1 > hl.y0);
         // Bordes del hueco: sólo el contorno de la unión (donde dos tramos de escalera se tocan no hay borde).
         const edges = []; // [axis, at, from, to, max] — axis 'x': cara en x = at, a lo largo de y
@@ -672,13 +662,6 @@ export class Renderer {
                 }
                 for (const [s0, s1] of segs) edges.push([axis, at, s0, s1, max]);
             }
-        }
-        // dentro del hueco se ven las caras opuestas a las visibles desde afuera
-        for (const [axis, at, s0, s1, max] of edges) {
-            const spec = axis === 'x' ? (xp.a === 'x' ? xp : yp) : (xp.a === 'y' ? xp : yp);
-            if (max === spec.max) continue;
-            const pts = axis === 'x' ? [P(at, s0, z0), P(at, s1, z0), P(at, s1, z1), P(at, s0, z1)] : [P(s0, at, z0), P(s1, at, z0), P(s1, at, z1), P(s0, at, z1)];
-            poly(pts, spec === xp ? pal.xp : pal.yp);
         }
         ctx.beginPath();
         for (const r of [{ x0, y0, x1, y1 }, ...holes]) {

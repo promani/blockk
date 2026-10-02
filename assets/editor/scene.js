@@ -346,11 +346,15 @@ function buildFloors(floors, config) {
     return boxes;
 }
 
-/** Placa horizontal (losa o entrepiso) de una pieza, retirada 10 cm hasta la cara interior de los muros, con huecos. */
+/**
+ * Placa horizontal (losa o entrepiso) de una pieza, con huecos. Se dibuja como el piso del nivel de arriba: una superficie
+ * sin espesor a la cota `z1` que llega hasta la cara exterior de los muros (tapa la corona de los de abajo). Se ordena
+ * medio centímetro por debajo, para pintarse después de los muros de abajo y antes de los de arriba.
+ */
 function plate(r, holes, z0, z1, kind, extra) {
-    const inset = 10;
+    const out = 10;
     return {
-        x0: r.x + inset, x1: r.x + r.w - inset, y0: r.y + inset, y1: r.y + r.h - inset, z0, z1, zs: z0,
+        x0: r.x - out, x1: r.x + r.w + out, y0: r.y - out, y1: r.y + r.h + out, z0: z1 - 0.5, z1, zs: z1 - 0.5,
         kind, axis: 'x', adjA: false, adjB: false, top: true, level: 1, plate: true, holes: holes ?? [], ...extra,
     };
 }
