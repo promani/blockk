@@ -24,24 +24,19 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 | # | Ítem | Valor | Costo | Por qué ahora |
 | --- | --- | :---: | :---: | --- |
 | 1 | Tipo de ambiente: lo que falta (más reglas por tipo) | 3 | S–M | El tipo y las primeras recomendaciones ya están; faltan las de circulación y el cómputo por ambiente. |
-| 2 | Guardar y compartir: lo que falta (sólo lectura, renombrar) | 2 | S | «Mis casas» y el enlace ya están; quedan detalles. |
-| 3 | Calcar un plano: lo que falta (fondo a escala, PDF, escalera) | 4 | M | El asistente ya calca la imagen de un plano; falta corregirlo a mano contra el original. |
-| 4 | Comparar dos casas guardadas | 4 | S–M | Responde «¿2 o 3 dormitorios?» con números lado a lado, sobre lo que ya está en «Mis casas». |
-| 5 | Muebles: lo que falta (revisión de paso, asistente) | 3 | S–M | Los gabaritos ya se colocan; falta que la Revisión avise cuando no hay paso o una puerta los pisa. |
-| 6 | Pedido por etapas y lista de compra | 4 | S–M | Nadie compra todo junto: cimientos, paredes, techo. |
-| 7 | Precios por distribuidor (listas importables) | 4 | M | Pasa de «referencia» a «presupuesto que se puede llevar al corralón». |
-| 8 | El asistente con todas las operaciones | 4 | M | La conversación pierde sentido si no puede hacer lo que hace el editor. |
-| 9 | Planos con cotas exportables | 4 | M | Sin cotas la planta no se puede mostrar a un albañil ni a un profesional. |
-| 10 | Techo a cuatro aguas y cubiertas libres | 3 | M | Es la forma de techo más pedida que hoy no existe. |
-| 11 | Vigas libres y estructura de pórticos | 3 | M | Completa los pilares: alfresco, galerías y portones anchos con respaldo. |
-| 12 | Estimación térmica de la envolvente | 4 | M | La razón de elegir HCCA es la aislación; hoy no se ve. |
-| 13 | Generador con más plantas (L, patio, en U) | 3 | M | El generador solo arma una «tira»; las casas en L se dibujan a mano. |
-| 14 | Terreno: retiros, desnivel e implantación | 3 | M–L | Define dónde cabe la casa y cuánto cuesta el movimiento de suelo. |
-| 15 | Otros sistemas constructivos y marcas | 4 | L | Ensancha el público; el motor ya aísla los datos del bloque. |
-| 16 | Instalaciones: cómputo grueso por ambiente | 3 | L | Completa «la casa» más allá de la mampostería. |
-| 17 | Edición básica desde el celular | 3 | M–L | Hoy en el celular solo se mira. |
-| 18 | Cálculo de mano de obra (sección propia, más abajo) | 5 | M | El presupuesto de hoy es sólo de materiales: falta la otra mitad del costo. |
-| 19 | Entrepisos y losas (sección propia, más abajo) | 4 | M–L | Hoy hay una losa maciza y un entrepiso de madera; la losa más usada (viguetas) no existe. |
+| 2 | Calcar un plano: lo que falta (fondo a escala, PDF, escalera) | 4 | M | El asistente ya calca la imagen de un plano; falta corregirlo a mano contra el original. |
+| 3 | Comparar dos casas guardadas | 4 | S–M | Responde «¿2 o 3 dormitorios?» con números lado a lado, sobre lo que ya está en «Mis casas». |
+| 4 | Muebles: lo que falta (revisión de paso, asistente) | 3 | S–M | Los gabaritos ya se colocan; falta que la Revisión avise cuando no hay paso o una puerta los pisa. |
+| 5 | Pedido por etapas y lista de compra | 4 | S–M | Nadie compra todo junto: cimientos, paredes, techo. |
+| 6 | Precios por distribuidor (listas importables) | 4 | M | Pasa de «referencia» a «presupuesto que se puede llevar al corralón». |
+| 7 | El asistente con todas las operaciones | 4 | M | La conversación pierde sentido si no puede hacer lo que hace el editor. |
+| 8 | Cotas internas y fachadas en los planos | 4 | M | Sin cotas internas la planta no se le puede dar a un albañil. |
+| 9 | Techo a cuatro aguas y cubiertas libres | 3 | M | Es la forma de techo más pedida que hoy no existe. |
+| 10 | Vigas libres y estructura de pórticos | 3 | M | Completa los pilares: alfresco, galerías y portones anchos con respaldo. |
+| 11 | Estimación térmica de la envolvente | 4 | M | La razón de elegir HCCA es la aislación; hoy no se ve. |
+| 12 | Generador con más plantas (L, patio, en U) | 3 | M | El generador solo arma una «tira»; las casas en L se dibujan a mano. |
+| 13 | Cálculo de mano de obra (sección propia, más abajo) | 5 | M | El presupuesto de hoy es sólo de materiales: falta la otra mitad del costo. |
+| 14 | Entrepisos y losas (sección propia, más abajo) | 4 | M–L | Hoy hay una losa maciza y un entrepiso de madera; la losa más usada (viguetas) no existe. |
 
 ## Detalle
 
@@ -55,16 +50,7 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
   el PDF, y que el asistente elija el tipo al generar y al calcar.
 - **Riesgo**: que las reglas parezcan normativa; se presentan como recomendaciones, igual que hoy.
 
-### 2. Guardar y compartir: lo que falta (valor 2 · S)
-- **Hecho**: «Guardar» deja la casa en «Mis casas» (Redis, hasta 30 por navegador, 1 año desde el último uso) y
-  «Compartir» da un enlace (`/c/{id}`). Sin cuentas: al navegador se lo reconoce por un id aleatorio y sólo él ve sus
-  casas en la Galería. Quien abre un enlace ajeno trabaja sobre una copia; la original no cambia.
-- **Qué falta**: un enlace que muestre una **versión fija** (hoy muestra siempre lo último que guardó el dueño),
-  renombrar una casa guardada sin abrirla, abrir el Cómputo directo desde el enlace y llevar «Mis casas» a otro
-  navegador (hoy, compartiéndose el enlace a uno mismo).
-- **Abierto**: si hacen falta cuentas. Mientras alcance con el navegador y el enlace, no.
-
-### 3. Calcar un plano: lo que falta (valor 4 · M)
+### 2. Calcar un plano: lo que falta (valor 4 · M)
 - **Hecho**: el asistente calca la **imagen de un plano adjunta** (clip del chat): lee los ambientes y sus cotas y arma
   la casa con `calcar_plano` (ver [LLM.md](LLM.md)). Un plano simple de una planta sale casi exacto; uno complejo o de
   dos plantas queda aproximado y hay que corregirlo.
@@ -76,7 +62,7 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
   - Sentido de las puertas, pilares y medidas de carpintería leídas del plano.
 - **Complejidad**: cámara, escala y opacidad en el renderer para el fondo; sin cambios en el motor.
 
-### 4. Comparar dos casas guardadas (valor 4 · S–M)
+### 3. Comparar dos casas guardadas (valor 4 · S–M)
 - **Qué**: en «Mis casas» se eligen **dos casas guardadas** y se ven lado a lado: superficie útil y cubierta, m² por
   tipo de ambiente, bloques por espesor, pallets, adhesivo, madera, costo de referencia y observaciones de la
   Revisión, con la diferencia de la segunda contra la primera.
@@ -87,8 +73,9 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
   se apoya en el guardado que ya existe.
 - **Complejidad**: una vista de comparación sobre el resumen y el cómputo de dos casas; el motor ya calcula cualquier
   proyecto y las casas guardadas ya tienen su resumen. Sin cambios en el editor ni en el almacenamiento.
+- **De paso, en «Mis casas»**: renombrar una casa guardada sin abrirla y llevarlas a otro navegador.
 
-### 5. Muebles: lo que falta (valor 3 · S–M)
+### 4. Muebles: lo que falta (valor 3 · S–M)
 - **Hecho**: herramienta «Mueble» con un catálogo corto de **gabaritos de tamaño real** (camas, mesa de luz, placard,
   mesas con sillas, sillones, mesadas, isla, heladera, cocina, lavarropas, artefactos de baño, escritorio), dibujados
   como rectángulos con su nombre en la planta y cajas bajas en la isométrica. Se colocan, se giran de a 90°, se
@@ -98,43 +85,43 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
   pueda pedir («poné una cama de dos plazas en el dormitorio 2»).
 - **Qué no hace**: sin materiales, marcas ni colores, y sin render. Es el mínimo detalle que mejora la decisión.
 
-### 6. Pedido por etapas y lista de compra (valor 4 · S–M)
+### 5. Pedido por etapas y lista de compra (valor 4 · S–M)
 - **Qué**: dividir el cómputo en etapas (cimientos y primera hilada, mampostería de Nivel 1, entrepiso, Nivel 2,
   techo) y una lista de compra por pallets completos con los sueltos aparte.
 - **Por qué**: se compra a medida que se avanza; la etapa define cuándo hace falta cada cosa y reduce el material
   inmovilizado, que es el dolor que dio origen a la herramienta.
 - **Complejidad**: agrupar lo que el cómputo ya sabe por nivel y rubro; el detalle de «cimientos» no existe hoy.
 
-### 7. Precios por distribuidor (valor 4 · M)
+### 6. Precios por distribuidor (valor 4 · M)
 - **Qué**: importar una lista de precios (CSV) o elegir un distribuidor cargado, con vigencia y unidad de venta.
 - **Por qué**: hoy los precios son un ejemplo editable a mano; con precios reales el cómputo se vuelve presupuesto.
 - **Complejidad**: formato de la lista, validación y a quién pertenece; sin integración en línea (sigue siendo un
   archivo), que es lo que mantiene la simpleza.
 
-### 8. El asistente con todas las operaciones (valor 4 · M)
+### 7. El asistente con todas las operaciones (valor 4 · M)
 - **Qué**: que `editar_casa` conozca pilares, nombres de ambiente y las aberturas nuevas (tipo, ancho, alto,
   apertura), y que pueda **nombrar** y **cambiar el sentido de las puertas** sin romper el resto.
-- **Hecho**: partir de la imagen de un plano (`calcar_plano`, ver el punto 3).
+- **Hecho**: partir de la imagen de un plano (`calcar_plano`, ver el punto 2).
 - **Complejidad**: más operaciones en `HouseEditor` y en el prompt; la validación sigue siendo la del motor.
 
-### 9. Planos con cotas exportables (valor 4 · M)
-- **Qué**: planta por nivel con **cotas externas e internas** y nombres, exportable a PDF a escala (A4/A3), más las cuatro
-  fachadas en línea.
+### 8. Cotas internas y fachadas en los planos (valor 4 · M)
+- **Qué**: los planos (`/planos`) ya salen en PDF con planta por nivel, planta de techos y un alzado por muro con el
+  despiece; faltan las **cotas internas** (ambientes, vanos a ejes) y las cuatro **fachadas** en línea, a escala A4/A3.
 - **Por qué**: es lo que se le muestra a quien construye. No pretende ser un plano municipal.
-- **Complejidad**: el PDF vectorial ya existe; falta el acotado automático y la leyenda.
+- **Complejidad**: el acotado automático sin que las cotas se pisen.
 
-### 10. Techo a cuatro aguas y cubiertas libres (valor 3 · M)
+### 9. Techo a cuatro aguas y cubiertas libres (valor 3 · M)
 - **Qué**: techo a cuatro aguas (con faldones y limatesas) y, más adelante, cubiertas planas con pendiente mínima.
 - **Por qué**: casi toda casa de dos plantas real los usa; hoy solo hay dos aguas y un agua.
 - **Complejidad**: geometría del `RoofPlanner` y de los hastiales; el cómputo de madera se calcula por faldón.
 
-### 11. Vigas libres y estructura de pórticos (valor 3 · M)
+### 10. Vigas libres y estructura de pórticos (valor 3 · M)
 - **Qué**: viga entre pilares o entre un pilar y un muro (hoy el encadenado U solo va sobre muros), con luz máxima y
   carga puntual sobre los pilares.
 - **Por qué**: completa los pilares; permite alfresco, galerías y vanos de más de 3 m con respaldo.
 - **Complejidad**: un elemento nuevo y sus reglas en la Revisión; el cómputo suma hormigón y hierro de la viga.
 
-### 12. Estimación térmica de la envolvente (valor 4 · M)
+### 11. Estimación térmica de la envolvente (valor 4 · M)
 - **Qué**: transmitancia de muros y techo según el espesor de bloque y un indicador simple (por ejemplo, pérdidas por
   m² de envolvente y por orientación) con una escala de colores.
 - **Por qué**: el HCCA se elige por su aislación; es la comparación más natural contra otros sistemas y nadie la
@@ -142,36 +129,10 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 - **Riesgo**: que se lea como un cálculo certificado. Debe presentarse como referencia, igual que las luces de madera.
 - **Complejidad**: valores por espesor en `Hcca` y un resumen; no cambia el despiece.
 
-### 13. Generador con más plantas (valor 3 · M)
+### 12. Generador con más plantas (valor 3 · M)
 - **Qué**: casas en L, en U y con patio; hoy el generador solo arma una «tira» (bloque social, pasillo y dos bandas).
 - **Por qué**: lo que se pide en el asistente y no sale hoy se termina dibujando a mano.
 - **Complejidad**: esqueletos nuevos, siempre deterministas y probados con programas al azar, como el actual.
-
-### 14. Terreno: retiros, desnivel e implantación (valor 3 · M–L)
-- **Qué**: retiros obligatorios dibujados sobre el lote, acceso vehicular, y un desnivel simple (una sola pendiente)
-  que se refleje en la altura del primer piso y en una estimación de movimiento de suelo.
-- **Por qué**: define dónde cabe la casa y es una de las primeras consultas de quien compra un lote.
-- **Complejidad**: el terreno hoy es un rectángulo plano; la pendiente toca el dibujo y los cimientos (hoy fuera del
-  cómputo).
-
-### 15. Otros sistemas constructivos y marcas (valor 4 · L)
-- **Qué**: ladrillo cerámico hueco, bloque de hormigón común y otras marcas de HCCA con sus datos reales (medidas,
-  pallets, consumo de adhesivo).
-- **Por qué**: ensancha el público y permite comparar costos entre sistemas con la misma casa.
-- **Complejidad**: el motor ya aísla el sistema de bloques (`Hcca::SYSTEMS`); el trabajo es de datos y de reglas por
-  sistema (trabas, dinteles, anclajes). Steel frame o madera son otro motor y quedan afuera.
-
-### 16. Instalaciones: cómputo grueso por ambiente (valor 3 · L)
-- **Qué**: estimar sin dibujar cañerías: puntos de agua, desagües y eléctricos por tipo de ambiente (ver punto 1), con
-  metros de caño y cables por superficie.
-- **Por qué**: completa «los materiales de la casa» sin entrar en proyectos de instalaciones.
-- **Riesgo**: precisión baja; solo tiene sentido como orden de magnitud y marcado como tal.
-
-### 17. Edición básica desde el celular (valor 3 · M–L)
-- **Qué**: en pantallas chicas, permitir mover y cambiar aberturas y nombres, y usar el asistente; el dibujo de muros
-  se mantiene en pantalla grande.
-- **Por qué**: mucha gente abre el enlace desde el teléfono y hoy solo puede mirar.
-- **Complejidad**: interacción táctil (mover con el dedo, zoom) en un editor pensado para mouse.
 
 ## Cálculo de mano de obra
 
@@ -190,8 +151,8 @@ la pregunta que sigue a «¿cuánto compro?»: «¿cuánto me sale levantarla y 
   ayudante, 2 + 1…), costo de mano de obra y el total materiales + mano de obra en el Cómputo, el CSV y el PDF.
 - **Por qué**: completa el presupuesto, permite comparar alternativas por costo total y es el argumento del sistema
   (el HCCA se levanta más rápido que el ladrillo: hoy ese ahorro no se ve en ningún número).
-- **Encadena con**: el pedido por etapas (6), que pasa a tener también su plazo; la comparación de alternativas (4)
-  y otros sistemas constructivos (15), para comparar jornales entre sistemas con la misma casa.
+- **Encadena con**: el pedido por etapas (5), que pasa a tener también su plazo; y la comparación entre dos casas
+  guardadas (3), que suma el costo y el plazo de mano de obra.
 - **Qué no hace**: no liquida sueldos ni cargas sociales, no arma un plan de obra con dependencias y no incluye
   rubros que el cómputo no tiene (cimientos, revoques, instalaciones) hasta que existan.
 - **Riesgo**: los rendimientos varían mucho con la cuadrilla, la zona y el clima. Se presentan como referencia
@@ -221,7 +182,7 @@ Hoy el piso del Nivel 2 es una **losa maciza de hormigón** (espesor, hormigón,
 - **Entrepiso de madera**: vigas principales cuando la luz no la cubre un tirante, arriostres, y elección de la
   sección por carga de uso (dormitorio, depósito) además de la luz.
 - **Cargas a los muros**: lo que cada losa descarga sobre los muros y pilares de abajo, para avisar cuando un tabique
-  o un dintel recibe más de lo razonable. Se apoya en las vigas libres (11).
+  o un dintel recibe más de lo razonable. Se apoya en las vigas libres (10).
 - **Mano de obra**: encofrado, armado, colado y desencofrado por m² (ver la sección anterior).
 - **Riesgo**: es el rubro más cercano al cálculo estructural. Se predimensiona con tablas de referencia y se avisa;
   no reemplaza el cálculo de un profesional.
@@ -245,9 +206,8 @@ Mejoras chicas que no justifican un ítem propio:
 
 ## Preguntas abiertas
 
-- **¿Cuentas opcionales?** El enlace compartible (2) cubre casi todo el uso sin login; tener cuentas solo se justifica
+- **¿Cuentas opcionales?** El enlace para compartir y «Mis casas» (por navegador) cubren casi todo el uso sin login; tener cuentas solo se justifica
   si aparecen proyectos que se editan durante semanas o necesitan permisos.
-- **¿Quién carga los datos de otros sistemas y marcas?** Sin datos reales de fabricantes, el punto 15 no es confiable.
 - **¿El cómputo debe incluir cimientos y terminaciones?** Sería la ampliación de alcance más grande; hoy el foco son
   mampostería, estructura de madera, losas y cubierta.
 - **¿Hasta dónde llega la «revisión»?** Mientras avise sin calcular, es una ayuda; si empieza a dar valores

@@ -1,23 +1,5 @@
-/* Blockk Studio — paleta «Vivo» por defecto (verde, grafito y superficies claras); se cambia en /estilos
-   (assets/lib/theme.js), que pisa estas variables. El texto sobre verde va siempre en grafito. */
+/* Blockk Studio — estilos. Los colores (interfaz y dibujo) están en tema.css. */
 :root {
-    --green: #78c23a;
-    --green-600: #609b2e;
-    --green-800: #36571a;
-    --green-100: #ebf6e1;
-    --graphite: #1b2a41;
-    --graphite-700: #3d4a5e;
-    --surface: #f4f8ff;
-    --panel: #ffffff;
-    --border: #cdd3dd;
-    --muted: #5e6a7c;
-    --danger: #b42318;
-    --danger-bg: #fdecea;
-    --warn: #93520a;
-    --warn-bg: #fdf3e2;
-    --info: #1e4fbf;
-    --info-bg: #e8effd;
-    --ok: #2f6b12;
     --radius: 10px;
     --shadow: 0 1px 2px rgba(30, 41, 59, .08), 0 4px 14px rgba(30, 41, 59, .06);
     --topbar-h: 52px;
@@ -446,28 +428,6 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
     .brand span { display: none; }
 }
 
-/* ---------------------------------------------------------------- estilos del sitio */
-.styles-grid { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 18px; align-items: start; }
-.styles-form { padding: 16px 18px; }
-.styles-form h2 { margin-top: 0; font-size: 1.1rem; }
-.styles-form h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 8px; }
-.preset-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.preset { font: inherit; font-weight: 650; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--graphite); cursor: pointer; }
-.preset[aria-pressed="true"] { border-color: var(--green-600); box-shadow: 0 0 0 2px var(--green-100); }
-.swatches { display: flex; gap: 3px; }
-.swatches i { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(0, 0, 0, .08); }
-.color-list { display: grid; gap: 6px; }
-.color-field { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; cursor: pointer; font-weight: 500; text-align: left; }
-.color-field input[type="color"] { flex: none; }
-.color-field input[type="color"] { width: 38px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
-.floor-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.styles-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.styles-preview h2 { margin-top: 0; font-size: 1.1rem; }
-.preview-canvas { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0; overflow: hidden; }
-.preview-canvas canvas { width: 100%; height: auto; display: block; }
-.preview-ui { margin-top: 14px; padding: 14px 16px; }
-@media (max-width: 760px) { .styles-grid { grid-template-columns: minmax(0, 1fr); } }
-
 /* brújula del norte (Configuraciones generales) */
 .north-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .north-dial { width: 104px; height: 104px; flex: none; cursor: grab; touch-action: none; }
@@ -481,11 +441,26 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 .nd-label { font: 700 12px system-ui, sans-serif; fill: #d92d20; }
 .north-info { display: flex; flex-direction: column; gap: 4px; }
 
-/* ---------- mis casas y compartir ---------- */
+/* ---------- mis casas ---------- */
 .my-houses { margin-bottom: 22px; }
 .my-houses h2 { margin-bottom: 2px; }
 .my-houses .cards { margin-top: 10px; }
 .my-houses h3 { margin: 0; font-size: 1.05rem; }
 .house-thumb { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: contain; }
-.share-row { display: flex; gap: 8px; margin: 10px 0 6px; }
-.share-link { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+
+/* compartir por enlace */
+.share-status { font-size: .8rem; color: #cbd5e1; white-space: nowrap; }
+.share-status[data-kind="ok"] { color: var(--green); }
+.share-status[data-kind="error"] { color: #fca5a5; }
+.share-row { display: flex; gap: 8px; margin: 10px 0; }
+.share-row input { flex: 1; min-width: 0; font: inherit; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; }
+#dlg-share { max-width: 560px; }
+
+/* Planos */
+.planos-group { margin-bottom: 14px; padding: 14px 18px; }
+.planos-group h2 { margin: 0 0 8px; font-size: 1.05rem; }
+.planos-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.planos-list li { display: grid; grid-template-columns: 70px minmax(110px, auto) 1fr; gap: 10px; align-items: baseline; padding: 4px 0; border-top: 1px solid var(--border); }
+.planos-list li:first-child { border-top: 0; }
+.planos-page { color: var(--muted); font-size: .85em; }
+@media (max-width: 640px) { .planos-list li { grid-template-columns: 60px 1fr; } .planos-list li > :last-child { grid-column: 2; } }

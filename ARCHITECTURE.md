@@ -16,7 +16,7 @@ con la respuesta. El asistente de IA es una capa aparte (`src/Assistant`) que us
 | API de cálculo | `POST /api/analyze` y afines; sin estado | `src/Controller/Api/ProjectApiController.php` |
 | Motor (dominio) | Normalización, topología, ambientes, hiladas, cortes, madera, losas, escaleras, techos, cómputo, validación, sol | `src/Domain/` |
 | Generador y editor de casas | Programa de ambientes → casa válida; operaciones puntuales sobre un proyecto; calcado de un plano desde sus ambientes | `src/Domain/Design/` |
-| Mis casas | Casas guardadas por navegador y enlace para compartir | `src/Houses/`, `src/Controller/Api/HousesController.php`, `assets/lib/houses.js`, `assets/editor/share.js`, `assets/gallery/houses.js` |
+| Mis casas | Casas guardadas por navegador, privadas (el enlace para compartir es aparte: `src/Share/`) | `src/Houses/`, `src/Controller/Api/HousesController.php`, `assets/lib/houses.js`, `assets/editor/houses.js`, `assets/gallery/houses.js` |
 | Asistente de IA | Conversación, herramientas, dos modelos (liviano/pesado), persistencia, límites | `src/Assistant/`, `src/Controller/Api/AssistantController.php`, `assets/lib/ai-chat.js` |
 | Kimi (externo) | LLM por API compatible con OpenAI | `KIMI_*` |
 | Redis (lab) | Conversaciones, diseños por navegador y contadores de uso | `REDIS_URL` |
@@ -82,9 +82,11 @@ sequenceDiagram
   bloques U en `Hcca::SYSTEMS`; el motor usa `Hcca::blockL()` y compañía, nunca un largo fijo.
 - **Asistente** (Redis, 60 días, claves con prefijo `blockk:`): `conv:{id}` (historia para el modelo, eventos para la
   interfaz, casa actual y su programa), `design:{id}`, contadores `rl:*`.
+- **Proyectos compartidos** (Redis, 180 días desde el último cambio): `share:{id}` con `{project, version, updated}`;
+  el id (32 hexadecimales al azar) es la credencial de lectura y escritura (`src/Share/SharedProjects.php`).
 - **Mis casas** (Redis, 1 año desde el último uso): `house:{id}` `{id, client, name, project, summary, svg, created,
   updated}` e índice `houses:{client}` (hasta 30 por navegador); contadores `rl:houses:*`. Sin usuarios: `client` es el
-  id aleatorio del navegador y nunca sale en una respuesta.
+  id aleatorio del navegador, nunca sale en una respuesta y sólo él puede leer, cambiar o borrar sus casas.
 
 ## API
 
@@ -100,9 +102,10 @@ sequenceDiagram
 | `POST /api/assistant/conversations` | Nueva conversación `{client, modo, inicio:{tipo: nueva\|plantilla\|proyecto, …}, texto?, respuestas?, adjunto?}`. |
 | `POST /api/assistant/conversations/{id}/messages` | Mensaje `{client, texto?, respuestas?, project?, adjunto?}`; `adjunto: {tipo, datos}` es la imagen de un plano en base64 para calcarlo. |
 | `GET /api/assistant/conversations/{id}`, `GET /api/assistant/designs/{id}` | Retomar una conversación; casa de una conversación. |
-| `GET /api/houses?client=` | Casas guardadas por ese navegador (id, name, summary, svg, created, updated). Nunca lista las de otros. |
-| `POST /api/houses` | `{client, project, id?}`: crea (201) o actualiza la propia (200); `422` si el proyecto es inválido, `409` al pasar de 30. Con el id de una casa ajena crea una copia. |
-| `GET /api/houses/{id}` | Pública por id (el enlace compartido): `{id, name, project, summary, updated, own}`. `DELETE` con `?client=`: sólo el dueño. `GET /c/{id}` redirige a `/?casa={id}`. |
+| `POST /api/compartidos`, `GET/PUT /api/compartidos/{id}` | Enlaces para compartir editables: crear (`{project}` → `{id, version, url}`, 60 por hora por IP), leer y guardar (gana el último). |
+| `GET /api/houses?client=` | «Mis casas»: las guardadas por ese navegador (id, name, summary, svg, created, updated). Nunca lista las de otros. |
+| `POST /api/houses` | `{client, project, id?}`: crea (201) o actualiza la propia (200); `422` si el proyecto es inválido, `409` al pasar de 30. |
+| `GET /api/houses/{id}?client=`, `DELETE /api/houses/{id}?client=` | Abrir o borrar una casa guardada: sólo el navegador que la guardó (para los demás, `404`). |
 | `GET /api/admin/ping`, `GET/POST /api/admin/galeria`, `GET/PUT/DELETE /api/admin/galeria/{slug}` | **API de administración de la Galería** (`Authorization: Bearer $ADMIN_API_TOKEN`; sin token configurado no existe). Crea, edita y borra modelos que ve todo el mundo en `/galeria` (guardados en Redis, clave `gallery:{slug}`, máx. 100). Cuerpo: `nombre`, `descripcion?`, `etiquetas?`, `slug?` y un dibujo: `programa` (generador), `plantilla` (clonar) o `project`; en `PUT` también `operaciones` sobre el actual. Las plantillas del código no se editan ni borran. |
 
 ## Decisiones y trade-offs
@@ -110,9 +113,10 @@ sequenceDiagram
 - **Reglas sólo en el servidor.** El cliente no duplica reglas: para validar en vivo (p. ej. dónde entra una puerta) el
   servidor devuelve los tramos libres de cada muro. Costo: una ida y vuelta por edición (~50 ms por análisis de una
   casa de 2 plantas).
-- **Sin base de datos ni cuentas para el editor.** El proyecto vive en el navegador; guardarlo en «Mis casas» es
-  optativo y va a Redis, atado al id aleatorio del navegador (cero datos personales). Se comparte por un enlace con
-  un id impredecible. A cambio, «Mis casas» no pasa sola de un navegador a otro.
+- **Sin base de datos ni cuentas para el editor.** El proyecto vive en el navegador: cero cuentas y cero datos
+  personales. A Redis va sólo lo que la persona pide: «Compartir» guarda la casa sin dueño (el enlace es la
+  credencial, y quien lo tiene la edita) y «Guardar» la deja en «Mis casas», atada al id aleatorio del navegador y
+  visible sólo para él. A cambio, «Mis casas» no pasa sola de un navegador a otro.
 - **La IA no dibuja.** El modelo elige un programa o una operación y el código construye y valida; así toda casa que
   muestra la IA pasa la misma Revisión que una dibujada a mano. Costo: el generador sólo produce plantas en «tira».
 - **Dos modelos.** Uno liviano (barato) coordina y pregunta; uno pesado arma el JSON y las acciones. El formulario

@@ -49,15 +49,18 @@ final class HousesApiTest extends WebTestCase
         // otro navegador no la ve en su lista…
         self::assertSame([], $this->call($client, 'GET', "/api/houses?client={$other}")['casas']);
 
-        // …pero con el enlace (el id) la abre, sin enterarse de quién es
-        $open = $this->call($client, 'GET', "/api/houses/{$saved['id']}?client={$other}");
+        // …ni la abre aunque conozca el id: para ese navegador no existe
+        $this->call($client, 'GET', "/api/houses/{$saved['id']}?client={$other}");
+        self::assertResponseStatusCodeSame(404);
+        $this->call($client, 'GET', "/api/houses/{$saved['id']}");
+        self::assertResponseStatusCodeSame(404);
+
+        // el dueño la abre con su proyecto, sin que la respuesta lleve su id de navegador
+        $open = $this->call($client, 'GET', "/api/houses/{$saved['id']}?client={$me}");
         self::assertResponseIsSuccessful();
-        self::assertFalse($open['own']);
         self::assertSame('Casa de prueba', $open['project']['name']);
         self::assertNotEmpty($open['project']['levels'][0]['walls']);
         self::assertStringNotContainsString($me, (string) $client->getResponse()->getContent());
-        self::assertTrue($this->call($client, 'GET', "/api/houses/{$saved['id']}?client={$me}")['own']);
-        self::assertFalse($this->call($client, 'GET', "/api/houses/{$saved['id']}")['own']);
 
         // el dueño la actualiza con el mismo id
         $updated = $this->call($client, 'POST', '/api/houses', ['client' => $me, 'id' => $saved['id'], 'project' => $this->house('Casa renombrada')]);
@@ -69,17 +72,17 @@ final class HousesApiTest extends WebTestCase
         $copy = $this->call($client, 'POST', '/api/houses', ['client' => $other, 'id' => $saved['id'], 'project' => $this->house('Copia ajena')]);
         self::assertResponseStatusCodeSame(201);
         self::assertNotSame($saved['id'], $copy['id']);
-        self::assertSame('Casa renombrada', $this->call($client, 'GET', "/api/houses/{$saved['id']}")['name']);
+        self::assertSame('Casa renombrada', $this->call($client, 'GET', "/api/houses/{$saved['id']}?client={$me}")['name']);
         self::assertSame([$copy['id']], array_column($this->call($client, 'GET', "/api/houses?client={$other}")['casas'], 'id'));
 
         // borrar: sólo el dueño
         $this->call($client, 'DELETE', "/api/houses/{$saved['id']}?client={$other}");
         self::assertResponseStatusCodeSame(404);
-        $this->call($client, 'GET', "/api/houses/{$saved['id']}");
+        $this->call($client, 'GET', "/api/houses/{$saved['id']}?client={$me}");
         self::assertResponseIsSuccessful();
         $this->call($client, 'DELETE', "/api/houses/{$saved['id']}?client={$me}");
         self::assertResponseIsSuccessful();
-        $this->call($client, 'GET', "/api/houses/{$saved['id']}");
+        $this->call($client, 'GET', "/api/houses/{$saved['id']}?client={$me}");
         self::assertResponseStatusCodeSame(404);
         self::assertSame([], $this->call($client, 'GET', "/api/houses?client={$me}")['casas']);
     }
@@ -131,13 +134,5 @@ final class HousesApiTest extends WebTestCase
         $this->call($client, 'POST', '/api/houses', ['client' => $me, 'project' => $project]);
         self::assertResponseStatusCodeSame(201);
         self::assertCount(SavedHouses::MAX_PER_CLIENT, $this->call($client, 'GET', "/api/houses?client={$me}")['casas']);
-    }
-
-    public function testTheShortLinkOpensTheEditorWithTheHouse(): void
-    {
-        $client = static::createClient();
-        $id = str_repeat('ab', 12);
-        $client->request('GET', "/c/{$id}");
-        self::assertResponseRedirects("/?casa={$id}");
     }
 }

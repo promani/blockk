@@ -67,7 +67,7 @@ final class HousesController extends AbstractController
         return $this->json($card, $card['id'] === $id ? Response::HTTP_OK : Response::HTTP_CREATED);
     }
 
-    /** El enlace compartido: cualquiera que tenga el id abre la casa. `own` dice si es de este navegador. */
+    /** Una casa guardada: sólo la abre el navegador que la guardó (para otros está «Compartir», /api/compartidos). */
     #[Route('/{id}', name: 'show', methods: ['GET'], requirements: ['id' => '[a-f0-9]{24}'])]
     public function show(string $id, Request $request): JsonResponse
     {
@@ -75,12 +75,13 @@ final class HousesController extends AbstractController
             return $denied;
         }
         $house = $this->houses->find($id);
-        if (null === $house) {
+        $client = (string) $request->query->get('client', '');
+        // una casa ajena responde igual que una que no existe
+        if (null === $house || !Conversations::validClient($client) || $house['client'] !== $client) {
             return $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND);
         }
-        $client = (string) $request->query->get('client', '');
 
-        return $this->json(['id' => $house['id'], 'name' => $house['name'], 'project' => $house['project'], 'summary' => $house['summary'], 'updated' => $house['updated'], 'own' => Conversations::validClient($client) && $house['client'] === $client]);
+        return $this->json(['id' => $house['id'], 'name' => $house['name'], 'project' => $house['project'], 'summary' => $house['summary'], 'updated' => $house['updated']]);
     }
 
     #[Route('/{id}', name: 'delete', methods: ['DELETE'], requirements: ['id' => '[a-f0-9]{24}'])]

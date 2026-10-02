@@ -4,6 +4,8 @@
  * Coordenadas en puntos (1 pt = 1/72"), con origen arriba a la izquierda como en pantalla.
  */
 const A4 = [595.28, 841.89];
+/** A4 apaisado (planos). */
+export const A4_LANDSCAPE = [841.89, 595.28];
 
 /* Anchos de Helvetica (por 1000 em) para alinear a la derecha; aproximados para el resto de los glifos. */
 const W = { ' ': 278, '.': 278, ',': 278, ':': 278, ';': 278, '-': 333, '(': 333, ')': 333, '/': 278, '%': 889, '×': 584, m: 833, w: 722, i: 222, l: 222, j: 222, t: 278, f: 278, r: 333, I: 278 };
@@ -42,6 +44,7 @@ export class Pdf {
     constructor() {
         this.pages = [];
         this.current = null;
+        this.images = [];
     }
 
     addPage(size = A4) {
@@ -87,6 +90,29 @@ export class Pdf {
         return this;
     }
 
+    /** Polígono cerrado: pts = [[x, y], …] en coordenadas de página (y hacia abajo). */
+    polygon(pts, { fill = null, stroke = null, lineWidth = 0.5 } = {}) {
+        if (pts.length < 3) return this;
+        const ph = this.current.h;
+        const parts = ['q'];
+        if (fill) parts.push(`${rgb(fill)} rg`);
+        if (stroke) parts.push(`${rgb(stroke)} RG ${num(lineWidth)} w`);
+        parts.push(pts.map(([x, y], i) => `${num(x)} ${num(ph - y)} ${i ? 'l' : 'm'}`).join(' '));
+        parts.push(fill && stroke ? 'b' : fill ? 'f' : 's');
+        parts.push('Q');
+        this.current.ops.push(parts.join(' '));
+        return this;
+    }
+
+    /** Imagen JPEG (data URL de canvas.toDataURL('image/jpeg')) en el rectángulo x, y, w, h. */
+    image(x, y, w, h, jpegDataUrl, pxW, pxH) {
+        const bin = window.atob(jpegDataUrl.slice(jpegDataUrl.indexOf(',') + 1));
+        const name = `Im${this.images.length}`;
+        this.images.push({ name, bin, pxW, pxH });
+        this.current.ops.push(`q ${num(w)} 0 0 ${num(h)} ${num(x)} ${num(this.current.h - y - h)} cm /${name} Do Q`);
+        return this;
+    }
+
     textWidth(str, size = 10, bold = false) {
         return width(String(str), size, bold);
     }
@@ -99,11 +125,17 @@ export class Pdf {
         objs[1] = '<< /Type /Catalog /Pages 2 0 R >>';
         objs[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
         objs[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+        // Imágenes (JPEG tal cual, DCTDecode) después de las páginas; todas las páginas las pueden usar.
+        const imgBase = 5 + this.pages.length * 2;
+        this.images.forEach((im, i) => {
+            objs[imgBase + i] = `<< /Type /XObject /Subtype /Image /Width ${im.pxW} /Height ${im.pxH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bin.length} >>\nstream\n${im.bin}\nendstream`;
+        });
+        const xobjects = this.images.length ? ` /XObject << ${this.images.map((im, i) => `/${im.name} ${imgBase + i} 0 R`).join(' ')} >>` : '';
         this.pages.forEach((p, i) => {
             const pageId = 5 + i * 2;
             const contentId = pageId + 1;
             const stream = p.ops.join('\n');
-            objs[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(p.w)} ${num(p.h)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`;
+            objs[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(p.w)} ${num(p.h)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>${xobjects} >> /Contents ${contentId} 0 R >>`;
             objs[contentId] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
             kids.push(`${pageId} 0 R`);
         });

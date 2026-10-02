@@ -1,0 +1,14 @@
+{% extends 'base.html.twig' %}
+{% set entry = 'planos' %}
+{% block title %}Planos{% endblock %}
+{% block topbar %}
+    <div class="topbar-actions">
+        <button type="button" class="btn btn-primary" id="btn-planos" disabled>Generar planos</button>
+    </div>
+{% endblock %}
+{% block body %}
+<script type="application/json" id="blockk-config">{{ config|raw }}</script>
+<main class="page" id="planos-root" aria-live="polite">
+    <p class="muted">Calculando los planos…</p>
+</main>
+{% endblock %}

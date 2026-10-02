@@ -16,6 +16,7 @@ import { mountGuide } from './guide.js';
 import { wallRect, G } from './pick.js';
 import { mountAssistant } from './ai.js';
 import { mountShare } from './share.js';
+import { mountHouses } from './houses.js';
 import { linkHouse } from '../lib/houses.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
@@ -68,7 +69,6 @@ app.tools = createTools(app);
 const panels = mountPanels(app);
 app.setTool = (id) => setTool(id);
 mountAssistant(app);
-const share = mountShare(app);
 const guide = mountGuide(app, {
     go: (level, tool) => {
         if (level === 1 && !store.project.upper) return;
@@ -831,6 +831,7 @@ $('#file-open').addEventListener('change', async (e) => {
     try {
         const data = JSON.parse(await file.text());
         if (!Array.isArray(data.levels)) throw new Error('el archivo no es un proyecto de Blockk');
+        share.unlink();
         await store.load(data);
         linkHouse(null); // es otro proyecto: al guardarlo queda como una casa nueva
         fitView();
@@ -851,11 +852,15 @@ $('#form-new').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     dlg.close();
+    share.unlink();
     await store.load(blankProject({ name: String(f.name).trim() || 'Proyecto sin título', lotW: Number(f.lotW), lotD: Number(f.lotD), t: Number(f.t), lat: Number(f.lat) }));
     linkHouse(null);
     fitView();
     store.ensureSolar();
 });
+
+const share = mountShare({ store, toast, fitView });
+const houses = mountHouses(app, { unlinkShare: () => share.unlink() });
 
 /* ------------------------------------------------------------------ arranque */
 (async function boot() {
@@ -876,10 +881,13 @@ $('#form-new').addEventListener('submit', async (e) => {
     refreshOptions();
     resize();
 
-    const saved = loadProject() ?? blankProject();
-    await store.load(saved);
-    // Enlace compartido o «Abrir» de Mis casas: /?casa={id}
-    await share.openFromUrl();
+    // Un enlace compartido (/?compartido=…) manda sobre lo guardado en este navegador.
+    if (await share.boot()) linkHouse(null); // es el proyecto del enlace, no una de «Mis casas»
+    else {
+        await store.load(loadProject() ?? blankProject());
+        // «Abrir» de Mis casas: /?casa={id}
+        await houses.openFromUrl();
+    }
     // En sólo lectura se muestra la casa completa, con techo.
     if (readOnly() && store.project.levels.some((l) => l.walls.length)) setLevel(ROOF_LEVEL);
     fitView();

@@ -1,5 +1,5 @@
 /**
- * «Mis casas»: casas guardadas en el servidor por este navegador y su enlace para compartir. El editor recuerda cuál
+ * «Mis casas»: casas guardadas en el servidor por este navegador, que sólo él ve. El editor recuerda cuál
  * de ellas es el proyecto abierto (para actualizarla en vez de crear otra); al cargar otro proyecto se olvida.
  */
 import { clientId } from './client.js';
@@ -23,13 +23,10 @@ export const listHouses = async () => (await call('GET', `/api/houses?client=${c
 /** Guarda el proyecto; con `id` de una casa propia la actualiza. Devuelve su tarjeta. */
 export const saveHouse = (project, id = null) => call('POST', '/api/houses', { client: clientId(), project, ...(id ? { id } : {}) });
 
-/** Una casa por su id (propia o de un enlace): {id, name, project, summary, own}. */
+/** Una casa de este navegador por su id: {id, name, project, summary}. */
 export const getHouse = (id) => call('GET', `/api/houses/${encodeURIComponent(id)}?client=${clientId()}`);
 
 export const deleteHouse = (id) => call('DELETE', `/api/houses/${encodeURIComponent(id)}?client=${clientId()}`);
-
-/** Enlace para compartir una casa. */
-export const shareUrl = (id) => `${location.origin}/c/${id}`;
 
 /** Id de la casa guardada que corresponde al proyecto abierto en el editor, o null. */
 export function linkedHouse() {
@@ -47,14 +44,4 @@ export function linkHouse(id) {
         if (id) localStorage.setItem(LINK_KEY, id);
         else localStorage.removeItem(LINK_KEY);
     } catch { /* sin persistencia */ }
-}
-
-/** Copia un texto al portapapeles; false si el navegador no deja. */
-export async function copyText(text) {
-    try {
-        await navigator.clipboard.writeText(text);
-        return true;
-    } catch {
-        return false;
-    }
 }
