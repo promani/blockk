@@ -9,7 +9,8 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
 - **Barra de herramientas** (izquierda): cambia según la pestaña. Lo avanzado queda bajo «Más».
 - **Vista**: *Isométrica* o *Planta* (`Tab`). Abajo a la izquierda, el **selector de vistas**: un cuadrado en cuatro
   cuartos con una flecha diagonal en cada uno (las cuatro vistas isométricas) y un ojo al centro; también `[` `]`.
-- **Ver adentro**: un deslizador baja la altura visible de los muros del nivel (no cambia el proyecto).
+- **Ver adentro**: un deslizador baja la altura visible de los muros del nivel (no cambia el proyecto). Lo que queda a la vista
+  detrás de la parte recortada de un muro se elige con un clic, como se ve.
 - **Terreno y pasto**: fuera del lote el suelo sigue del mismo color que el terreno, con matas de pasto; adentro queda
   liso con la retícula. Con «Mostrar terreno» apagado, el fondo es liso.
 - **Muebles y árboles se pueden apagar**: en *Configuraciones generales*, las casillas «Muebles» y «Árboles». Apagadas,
@@ -50,7 +51,7 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 | Medir | `M` | Bajo «Más» (y en la pestaña Techo): clic en un punto y clic en otro muestra la distancia (y Δx / Δy si es diagonal). Los puntos se ajustan a la retícula de 12,5 cm y, cerca de un muro, a su **cara**: así se mide la luz libre entre paredes. No cambia el proyecto; `Esc` borra la medida. |
 | Zona | `Z` | Bajo «Más»: arrastrar un rectángulo sobre el terreno y elegir su tipo: pileta, patio o deck, jardín o camino. Marca cómo se usa el espacio; **no es parte de la casa ni entra al cómputo**. Se arrastra para moverla; el panel cambia tipo, nombre y medidas. |
 | Árbol | `O` | Bajo «Más»: clic para plantar un árbol chico, mediano o grande, con tronco, copa y sombra (con el sol activado, la sombra sigue su posición). Se arrastra para moverlo. No entra al cómputo. |
-| Mueble | `G` | Bajo «Más»: elegir un mueble del catálogo (camas, mesa de luz, placard, mesas con sillas, sillones, mesada, isla, heladera, cocina, lavarropas, inodoro, bidet, lavatorio, ducha, bañera, escritorio) y hacer clic para colocarlo; `X` lo gira de a 90°. Son **gabaritos de tamaño real** para ver si el ambiente alcanza: un rectángulo con su nombre en la planta y una caja lisa en la isométrica. Se arrastra para moverlo (de a 12,5 cm). **No entra al cómputo ni a la Revisión.** |
+| Mueble | `G` | Bajo «Más»: al entrar se abre el **menú de muebles** y no se coloca nada hasta elegir uno (después, «cambiar» lo reabre). Catálogo (camas, mesa de luz, placard, mesas con sillas, sillones, mesada, isla, heladera, cocina, lavarropas, inodoro, bidet, lavatorio, ducha, bañera, escritorio) y hacer clic para colocarlo; `X` lo gira de a 90°. Son **gabaritos de tamaño real** para ver si el ambiente alcanza: un rectángulo con su nombre en la planta y una caja lisa en la isométrica. Se arrastra para moverlo (de a 12,5 cm). **No entra al cómputo ni a la Revisión.** |
 | Pilar | `C` | Clic en un punto de la retícula: pilar de hormigón armado (20, 25, 30 o 40 cm) de piso a techo. Se arrastra para moverlo; sostiene techos o losas donde no hay muro (alfresco, galería). |
 | Nombre | `A` | Elegir un **tipo** de ambiente o escribir un nombre libre (o las dos cosas) y hacer clic dentro de un ambiente: se ve en la planta. El tipo da las recomendaciones de la Revisión y agrupa los m² del Resumen; sin tipo elegido se deduce del nombre. En un espacio abierto se pueden poner varios; se arrastran. También desde el campo «Nombre» al elegir una habitación. |
 | Escalera | `S` | Clic dentro de una habitación del Nivel 1: recta, en L o en U. Sigue al cursor, se acomoda dentro de la habitación y, si no entra, se gira sola. `X` gira. |

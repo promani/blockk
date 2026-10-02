@@ -441,6 +441,13 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 .nd-label { font: 700 12px system-ui, sans-serif; fill: #d92d20; }
 .north-info { display: flex; flex-direction: column; gap: 4px; }
 
+/* menú de muebles: se abre sobre el lienzo al elegir la herramienta */
+.furniture-menu { position: absolute; top: 12px; left: 12px; z-index: 6; width: min(560px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; padding: 12px 14px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 32px rgba(15, 23, 42, .22); }
+.fm-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.fm-group { margin-top: 8px; }
+.fm-items { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.fm-items .chip { padding: 5px 11px; font-weight: 500; font-size: .88rem; }
+
 /* ---------- mis casas ---------- */
 .my-houses { margin-bottom: 22px; }
 .my-houses h2 { margin-bottom: 2px; }
