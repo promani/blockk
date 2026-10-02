@@ -15,6 +15,10 @@ import { backEdge, furnitureOn, treesOn } from './furniture.js';
 
 const G = 12.5;
 
+/** Opacidad del repaso de un árbol sobre lo que tapa: las ramas se insinúan y las hojas casi no tapan (se enciman muchas). */
+const BRANCH_OVER = 0.45;
+const LEAF_OVER = 0.12;
+
 /** Colores de piso por ambiente (del tema): el mismo ambiente conserva su color al editar. */
 export const roomColor = (room) => {
     const floors = drawTheme().floors;
@@ -171,7 +175,7 @@ export class Renderer {
      * Árbol en la isométrica: tronco, ramas y racimos de hojas (ver tree-model.js), de atrás hacia adelante para que las
      * ramas se vean entre los huecos de la copa. La sombra va aparte (drawTreeShadows), con el sol.
      */
-    drawTree(ctx, cam, b) {
+    drawTree(ctx, cam, b, leafAlpha = 1) {
         const t = { id: b.tree, size: b.treeSize };
         const m = treeModel(t);
         const ox = (b.x0 + b.x1) / 2;
@@ -203,7 +207,9 @@ export class Renderer {
             const [sx, sy] = P([lf.x, lf.y, lf.z]);
             const rpx = Math.max(1.5, lf.r * unit);
             const light = Math.max(0, Math.min(1, 0.55 + lf.nz * 0.35 + (it.d - depth([0, 0])) / (m.size.r * unit * 6)));
+            if (leafAlpha < 1) ctx.globalAlpha = leafAlpha;
             leafCluster(ctx, sx, sy, rpx, light, picked);
+            if (leafAlpha < 1) ctx.globalAlpha = BRANCH_OVER;
         }
         ctx.restore();
     }
@@ -223,13 +229,13 @@ export class Renderer {
             // En pantalla la x sale de x' − y' (marco girado): sólo importa lo que cae en la franja de la copa.
             const reach = (t.x1 - t.x0) * 0.9;
             const front = [];
-            let back = false;
+            const back = [];
             for (const it of drawn) {
                 if (it.x1 - it.y0 < cx - cy - reach || it.x0 - it.y1 > cx - cy + reach) continue;
                 if ((cx <= it.x0 + 0.01 && cy < it.y1) || (cy <= it.y0 + 0.01 && cx < it.x1)) front.push(it);
-                else if (it.b.z1 > 1) back = true;
+                else if (it.b.zs > 0.5) back.push(it.b); // lo de la capa del suelo se pinta antes que el árbol: no lo tapa
             }
-            if (!back) continue;
+            if (!back.length) continue;
             const [sx, sy] = cam.project(ox, oy, d.h - d.r);
             const [bx, by] = cam.project(ox, oy, 0);
             const lw = Math.max(2, d.trunk * 2 * cam.zoom) + 2;
@@ -238,9 +244,18 @@ export class Renderer {
             ctx.arc(sx, sy, d.r * cam.zoom * 1.25, 0, Math.PI * 2);
             ctx.rect(bx - lw / 2, sy, lw, by - sy + 2);
             ctx.clip();
-            ctx.globalAlpha = 0.6;
-            this.drawTree(ctx, cam, t.b);
-            ctx.globalAlpha = 1;
+            // El repaso va sólo sobre lo que tapó al árbol: fuera de ahí el árbol ya está pintado, opaco.
+            ctx.save();
+            ctx.beginPath();
+            for (const b of back) {
+                const hull = convexHull([b.z0, b.z1].flatMap((z) => [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]].map(([x, y]) => cam.project(x, y, z))));
+                hull.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+                ctx.closePath();
+            }
+            ctx.clip();
+            ctx.globalAlpha = BRANCH_OVER;
+            this.drawTree(ctx, cam, t.b, LEAF_OVER);
+            ctx.restore();
             for (const it of front) this.drawBox(ctx, cam, it, strokeOn);
             ctx.restore();
         }
