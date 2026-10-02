@@ -129,7 +129,8 @@ sequenceDiagram
 - **Sin paso de build en el front** (AssetMapper + import maps nativos): menos herramientas; a cambio, sin TypeScript
   ni bundling. La única dependencia de front es pdf.js (`pdfjs-dist`, para adjuntar un PDF o usarlo de fondo): está en
   `importmap.php`, se baja a `assets/vendor/` con `php bin/console importmap:install` (lo corre `composer install`) y
-  el navegador la carga sólo cuando llega un PDF. Sin CDN en tiempo de ejecución.
+  el navegador la carga sólo cuando llega un PDF. Sin CDN en tiempo de ejecución. Fijada en la 5.4: la 6.x usa
+  `Map.getOrInsertComputed`, que muchos navegadores todavía no tienen (falla en Chromium 141).
 - **Render propio en Canvas 2D** (algoritmo del pintor por capas con orden topológico) en lugar de WebGL: liviano y
   exacto para cajas alineadas; sostiene 60 FPS en casas de 2 plantas.
 

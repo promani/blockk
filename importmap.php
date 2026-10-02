@@ -41,9 +41,9 @@ return [
         'entrypoint' => true,
     ],
     'pdfjs-dist' => [
-        'version' => '6.3.289',
+        'version' => '5.4.296',
     ],
     'pdfjs-dist/build/pdf.worker.min.mjs' => [
-        'version' => '6.3.289',
+        'version' => '5.4.296',
     ],
 ];
