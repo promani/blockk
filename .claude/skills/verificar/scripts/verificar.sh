@@ -28,7 +28,7 @@ echo "ok"
 
 step "ESLint (assets/)"
 if command -v eslint > /dev/null; then
-    eslint -c "$HERE/../eslint.config.mjs" assets && echo "ok" || fail=1
+    eslint -c "$HERE/../eslint.config.mjs" assets --ignore-pattern 'assets/vendor/**' && echo "ok" || fail=1
 else
     echo "eslint no está instalado (npm i -g eslint): se omite"
 fi
@@ -44,6 +44,9 @@ if [ "${1:-}" != "--rapido" ]; then
     step "Navegador: chat de diseño (Kimi falso)"
     "$HERE/servidor-ia.sh" || fail=1
     node "$HERE/asistente.cjs" || fail=1
+
+    step "Navegador: plano de fondo y PDF adjunto"
+    node "$HERE/fondo.cjs" || fail=1
 fi
 
 printf '\n'

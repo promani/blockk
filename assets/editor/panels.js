@@ -202,7 +202,9 @@ export function mountPanels(app) {
                 t.slabM2 > 0 || t.stairs > 0 ? h('dl', { class: 'dl' }, t.slabM2 > 0 ? [h('dt', {}, 'Losa de piso'), h('dd', {}, m2(t.slabM2))] : null, t.stairs > 0 ? [h('dt', {}, 'Escaleras'), h('dd', {}, int(t.stairs))] : null) : null,
                 t.byType?.some((x) => x.type) ? [
                     h('div', { class: 'kv-title' }, 'Superficie útil por tipo de ambiente'),
-                    h('dl', { class: 'dl' }, t.byType.map((x) => [h('dt', {}, `${x.label}${x.rooms > 1 ? ` (${x.rooms})` : ''}`), h('dd', {}, m2(x.m2))])),
+                    h('dl', { class: 'dl' },
+                        t.byType.map((x) => [h('dt', {}, `${x.label}${x.rooms > 1 ? ` (${x.rooms})` : ''}`), h('dd', {}, m2(x.m2))]),
+                        t.habitableM2 < tot.netM2 ? [h('dt', { title: 'Sin garajes ni galerías' }, 'Superficie habitable'), h('dd', {}, m2(t.habitableM2))] : null),
                 ] : null,
                 h('div', { class: 'kv-title' }, 'Obra completa'),
                 h('div', { class: `meter${full ? ' full' : ''}`, title: 'Altura autoportante' }, h('i', { style: `width:${Math.min(100, (tot.heightM / tot.maxHeightM) * 100)}%` })),
@@ -744,6 +746,7 @@ export function mountPanels(app) {
             h('div', { class: 'check-row' },
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', id: 'opt-furniture', checked: store.ui.showFurniture !== false, onchange: (e) => store.setUi({ showFurniture: e.target.checked }) }), 'Muebles'),
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', id: 'opt-trees', checked: store.ui.showTrees !== false, onchange: (e) => store.setUi({ showTrees: e.target.checked }) }), 'Árboles')),
+            app.backdrop?.panel(),
             h('div', { class: 'kv-title' }, 'Norte'),
             northDial(),
             h('div', { class: 'kv-title' }, 'Sol y orientación'),

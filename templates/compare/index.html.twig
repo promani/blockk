@@ -1,0 +1,14 @@
+{% extends 'base.html.twig' %}
+{% set entry = 'compare' %}
+{% block title %}Comparar dos casas{% endblock %}
+{% block topbar %}
+    <div class="topbar-actions">
+        <button type="button" class="btn btn-ghost" id="compare-swap" hidden>⇄ Invertir</button>
+        <a class="btn btn-ghost" href="{{ path('gallery') }}">Volver a la Galería</a>
+    </div>
+{% endblock %}
+{% block body %}
+<main class="page" id="compare-root" aria-live="polite">
+    <p class="muted">Calculando las dos casas…</p>
+</main>
+{% endblock %}

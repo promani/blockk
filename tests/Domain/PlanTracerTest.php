@@ -102,7 +102,7 @@ final class PlanTracerTest extends TestCase
     }
 
     #[Test]
-    public function aRectangularPlanGetsARoofAndAnLShapedOneDoesNot(): void
+    public function aRectangularPlanGetsOneRoofAndAnLShapedOneGetsTwoThatCross(): void
     {
         $r = $this->trace(self::PLAN);
         self::assertSame(['gable'], array_column($r['project']['roofs'], 'type'));
@@ -111,8 +111,9 @@ final class PlanTracerTest extends TestCase
             ['nombre' => 'Estar', 'x' => 0, 'y' => 0, 'ancho' => 8, 'fondo' => 4],
             ['nombre' => 'Dormitorio', 'x' => 0, 'y' => 4, 'ancho' => 3, 'fondo' => 4],
         ]]);
-        self::assertSame([], $l['project']['roofs']);
-        self::assertStringContainsString('pestaña Techo', implode(' ', $l['notes']));
+        // el cuerpo de 8 × 4 m y el ala de 3 × 8 m: se cruzan en la esquina, como en la casa en L de la Galería
+        self::assertSame([[64, 32], [24, 64]], array_map(static fn (array $r): array => [$r['w'], $r['h']], $l['project']['roofs']));
+        self::assertSame([], $l['notes']);
 
         self::assertSame([], $this->trace(self::PLAN + ['techo' => 'ninguno'])['project']['roofs']);
     }
@@ -132,10 +133,68 @@ final class PlanTracerTest extends TestCase
         self::assertTrue($r['project']['upper']);
         self::assertSame(2, $r['analysis']['telemetry']['total']['levelsUsed']);
         self::assertCount(2, $r['project']['levels'][1]['slabs'], 'losa sobre estar y cocina; el garaje no tiene nada arriba');
-        self::assertSame(1, $r['project']['roofs'][0]['level']);
-        self::assertStringContainsString('escalera', mb_strtolower(implode(' ', $r['notes'])));
+        self::assertSame([[1, 'gable'], [0, 'shed']], array_map(static fn (array $x): array => [$x['level'], $x['type']], $r['project']['roofs']), 'el garaje, sin nada encima, lleva su techo bajo a un agua');
+        self::assertSame('E', $r['project']['roofs'][1]['dir'], 'cae hacia afuera de la planta alta');
+        self::assertStringContainsString('no trae la escalera', implode(' ', $r['notes']));
         // el muro entre el estar y el garaje sostiene el muro exterior del Nivel 2: mismo espesor
         self::assertSame([], array_values(array_filter($r['analysis']['issues'], static fn (array $i): bool => 'support.thickness' === $i['code'])));
+    }
+
+    #[Test]
+    public function theStairIsFittedInItsRectangle(): void
+    {
+        $plan = ['ambientes' => [
+            ['nombre' => 'Estar', 'x' => 0, 'y' => 0, 'ancho' => 6, 'fondo' => 5],
+            ['nombre' => 'Dormitorio', 'nivel' => 2, 'x' => 0, 'y' => 0, 'ancho' => 6, 'fondo' => 5],
+        ]];
+        $r = $this->trace($plan + ['escaleras' => [['x' => 0.5, 'y' => 0.5, 'ancho' => 3.2, 'fondo' => 2.0]]]);
+
+        $stair = $r['project']['levels'][0]['stairs'][0];
+        self::assertSame(['U', 'E'], [$stair['shape'], $stair['dir']], 'en 3,20 × 2,00 m entra una escalera en U a lo largo');
+        self::assertSame([28, 28], [$stair['x'], $stair['y']]);
+        self::assertSame([], array_values(array_filter($r['analysis']['issues'], static fn (array $i): bool => str_starts_with($i['code'], 'stair.o'))));
+        self::assertSame([], $r['notes']);
+
+        // una escalera que no entra en ningún ambiente se avisa, no se inventa
+        $bad = $this->trace($plan + ['escaleras' => [['x' => 20, 'y' => 20, 'ancho' => 3.2, 'fondo' => 2.0]]]);
+        self::assertSame([], $bad['project']['levels'][0]['stairs']);
+        self::assertStringContainsString('escalera del plano no entra', implode(' ', $bad['notes']));
+    }
+
+    #[Test]
+    public function typesColumnsDoorSwingsAndWindowHeightsComeFromThePlan(): void
+    {
+        $r = $this->trace([
+            'ambientes' => [
+                ['nombre' => 'Pieza de Juli', 'tipo' => 'dormitorio', 'x' => 0, 'y' => 0, 'ancho' => 4, 'fondo' => 4],
+                ['nombre' => 'Galería', 'x' => 4, 'y' => 0, 'ancho' => 3, 'fondo' => 4, 'abierto' => ['derecha', 'abajo']],
+            ],
+            'aberturas' => [
+                ['tipo' => 'puerta', 'x' => 2, 'y' => 4, 'bisagra' => 'derecha', 'abre' => 'arriba'],
+                ['tipo' => 'puerta', 'x' => 0, 'y' => 2, 'bisagra' => 'arriba', 'abre' => 'derecha'],
+                ['tipo' => 'ventana', 'x' => 2, 'y' => 0, 'ancho' => 1.2, 'alto' => 1.5],
+            ],
+            'pilares' => [['x' => 7, 'y' => 4, 'lado' => 0.25], ['x' => 7, 'y' => 0]],
+        ]);
+        $level = $r['project']['levels'][0];
+
+        self::assertSame(['Pieza de Juli', 'dormitorio'], [$level['labels'][0]['name'], $level['labels'][0]['type']]);
+        self::assertSame([[true, true], [false, false]], array_map(static fn (array $o): array => [$o['hingeEnd'], $o['flip']], array_slice($level['openings'], 0, 2)));
+        self::assertSame([10, 2, 6], [$level['openings'][2]['w'], $level['openings'][2]['sill'], $level['openings'][2]['h']], '1,20 × 1,50 m: vano de 125 × 150 con antepecho de 50 cm');
+        self::assertSame([[80, 56, 25], [80, 24, 20]], array_map(static fn (array $c): array => [$c['x'], $c['y'], $c['size']], $level['columns']));
+    }
+
+    #[Test]
+    public function whatThePlanPutsUpstairsMovesWithTheUpperFloor(): void
+    {
+        // la planta alta viene dibujada al lado de la baja (x desde 10 m): su ventana tiene que caer en su muro
+        $r = $this->trace(['ambientes' => [
+            ['nombre' => 'Estar', 'x' => 0, 'y' => 0, 'ancho' => 6, 'fondo' => 4],
+            ['nombre' => 'Dormitorio', 'nivel' => 2, 'x' => 10, 'y' => 0, 'ancho' => 6, 'fondo' => 4],
+        ], 'aberturas' => [['tipo' => 'ventana', 'nivel' => 2, 'x' => 13, 'y' => 0]]]);
+
+        self::assertCount(1, $r['project']['levels'][1]['openings']);
+        self::assertStringContainsString('Puse la planta alta sobre la baja', implode(' ', $r['notes']));
     }
 
     #[Test]

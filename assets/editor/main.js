@@ -17,6 +17,7 @@ import { wallRect, G } from './pick.js';
 import { mountAssistant } from './ai.js';
 import { mountShare } from './share.js';
 import { mountHouses } from './houses.js';
+import { mountBackdrop } from './backdrop.js';
 import { linkHouse } from '../lib/houses.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
@@ -68,6 +69,7 @@ app.draw = () => draw(); // dibujo síncrono (mediciones de rendimiento)
 app.tools = createTools(app);
 const panels = mountPanels(app);
 app.setTool = (id) => setTool(id);
+app.backdrop = mountBackdrop(app);
 mountAssistant(app);
 const guide = mountGuide(app, {
     go: (level, tool) => {
@@ -406,6 +408,7 @@ function setTool(id) {
 /** Motivo por el que una herramienta no está disponible ahora (null si lo está). */
 function toolDisabled(tool) {
     if (tool.id === 'roof' || tool.id === 'measure') return null;
+    if (tool.free) return tool.disabled?.() ?? null; // las del plano de fondo valen en cualquier pestaña
     if (store.ui.level === ROOF_LEVEL && tool.id !== 'select') return 'En la pestaña Techo solo se dibujan y editan techos: volvé a un nivel para dibujar muros, losas o escaleras.';
     return tool.disabled?.() ?? null;
 }
@@ -414,7 +417,7 @@ function refreshOptions() {
     const tool = activeTool();
     // En la pestaña Techo, tanto Elegir como Techo muestran las opciones del techo (elegido o de los nuevos), salvo que
     // haya un grupo elegido con un rectángulo: ahí van las de Elegir.
-    const roofOpts = store.ui.level === ROOF_LEVEL && tool.id !== 'measure' && !(tool.id === 'select' && app.multiCount());
+    const roofOpts = store.ui.level === ROOF_LEVEL && tool.id !== 'measure' && !tool.free && !(tool.id === 'select' && app.multiCount());
     const opts = roofOpts ? app.roofOptions() : tool.options?.();
     const title = roofOpts ? 'Techo' : tool.label;
     add(clear($('#tooloptions')), h('span', { class: 'title' }, title), opts);
@@ -720,7 +723,7 @@ function sceneKey() {
     const { level, cut, snap, solar } = store.ui;
     const s = store.ui.solar.show ? store.sun() : null;
     const p = store.project;
-    return [sceneVersion, level, cut, snap, solar.show, store.ui.showLot, store.ui.showGrid, store.ui.showFurniture, store.ui.showTrees, s ? `${s.alt.toFixed(2)}:${s.az.toFixed(2)}` : '-', p.north, p.lot.w, p.lot.d].join(',');
+    return [sceneVersion, level, cut, snap, solar.show, store.ui.showLot, store.ui.showGrid, store.ui.showFurniture, store.ui.showTrees, store.ui.backdrop?.rev ?? 0, s ? `${s.alt.toFixed(2)}:${s.az.toFixed(2)}` : '-', p.north, p.lot.w, p.lot.d].join(',');
 }
 
 function draw() {
@@ -832,6 +835,7 @@ $('#file-open').addEventListener('change', async (e) => {
         const data = JSON.parse(await file.text());
         if (!Array.isArray(data.levels)) throw new Error('el archivo no es un proyecto de Blockk');
         share.unlink();
+        app.backdrop.remove(); // el plano de fondo era del proyecto anterior
         await store.load(data);
         linkHouse(null); // es otro proyecto: al guardarlo queda como una casa nueva
         fitView();
@@ -853,6 +857,7 @@ $('#form-new').addEventListener('submit', async (e) => {
     const f = Object.fromEntries(new FormData(e.target));
     dlg.close();
     share.unlink();
+    app.backdrop.remove();
     await store.load(blankProject({ name: String(f.name).trim() || 'Proyecto sin título', lotW: Number(f.lotW), lotD: Number(f.lotD), t: Number(f.t), lat: Number(f.lat) }));
     linkHouse(null);
     fitView();
@@ -888,6 +893,7 @@ const houses = mountHouses(app, { unlinkShare: () => share.unlink() });
         // «Abrir» de Mis casas: /?casa={id}
         await houses.openFromUrl();
     }
+    await app.backdrop.restore();
     // En sólo lectura se muestra la casa completa, con techo.
     if (readOnly() && store.project.levels.some((l) => l.walls.length)) setLevel(ROOF_LEVEL);
     fitView();

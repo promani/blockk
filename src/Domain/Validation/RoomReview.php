@@ -9,7 +9,8 @@ use App\Domain\LevelAnalysis;
 use App\Domain\Model\OpeningKind;
 
 /**
- * Tipo de cada ambiente y recomendaciones de uso según el tipo (ventana, ventilación, superficie de referencia). El
+ * Tipo de cada ambiente y recomendaciones de uso según el tipo (ventana, ventilación, superficie de referencia y
+ * circulación: dormitorios de paso, baño que abre a la cocina o al comedor, escalera que llega a un dormitorio). El
  * tipo sale del nombre que se puso en el ambiente: el elegido o, si no se eligió, el que se deduce del texto.
  * Son recomendaciones, no normativa: avisan, no impiden.
  */
@@ -31,8 +32,12 @@ final class RoomReview
         return $types;
     }
 
-    /** @return list<Issue> */
-    public function review(int $index, LevelAnalysis $l): array
+    /**
+     * @param list<array{int, int}> $arrivals celdas del nivel donde llega una escalera desde abajo
+     *
+     * @return list<Issue>
+     */
+    public function review(int $index, LevelAnalysis $l, array $arrivals = []): array
     {
         $types = $this->types($l);
         if ([] === $types) {
@@ -40,16 +45,45 @@ final class RoomReview
         }
         $catalog = Hcca::roomTypes();
         $windows = $this->roomsWithWindow($l);
-        $issues = [];
+        $doors = $this->doors($l);
+        $arriving = array_map(static fn (array $c): int => $l->regions->roomAtCell($c[0], $c[1]), $arrivals);
+        // nombre y punto de cada ambiente con tipo: la observación apunta al nombre, que está siempre adentro
+        $named = [];
         foreach ($l->regions->rooms as $room) {
             $spec = $catalog[$types[$room->id] ?? ''] ?? null;
-            if (null === $spec) {
+            $label = array_find($l->level->labels, static fn ($lb): bool => $l->regions->roomAtCell($lb->x, $lb->y) === $room->id);
+            if (null !== $spec && null !== $label) {
+                $named[$room->id] = ['' !== $label->name ? $label->name : $spec['label'], $label->x, $label->y];
+            }
+        }
+        $issues = [];
+        foreach ($l->regions->rooms as $room) {
+            $type = $types[$room->id] ?? '';
+            $spec = $catalog[$type] ?? null;
+            if (null === $spec || !isset($named[$room->id])) {
                 continue;
             }
-            // la observación apunta al nombre del ambiente: está siempre adentro, aunque la planta sea en L
-            $label = array_find($l->level->labels, static fn ($lb): bool => $l->regions->roomAtCell($lb->x, $lb->y) === $room->id);
-            $name = '' !== ($label?->name ?? '') ? $label->name : $spec['label'];
-            $at = [$label->x, $label->y];
+            [$name, $x, $y] = $named[$room->id];
+            $at = [$x, $y];
+            $next = array_keys($doors[$room->id] ?? []);
+            if (in_array($type, ['bano', 'toilette'], true)) {
+                foreach ($next as $other) {
+                    if (in_array($types[$other] ?? '', ['cocina', 'comedor'], true)) {
+                        $issues[] = new Issue(Issue::INFO, 'room.bath-door', sprintf('«%s» abre directo a «%s»: conviene que dé a un paso o a un pasillo.', $name, $named[$other][0]), $index, null, $at[0], $at[1]);
+                    }
+                }
+            }
+            // Dormitorio de paso: otro ambiente (que no es de servicio) al que sólo se llega atravesando dormitorios.
+            if ([] !== $next && !in_array($type, Hcca::SERVICE_ROOMS, true) && !array_any($next, static fn (int $o): bool => 'dormitorio' !== ($types[$o] ?? ''))) {
+                foreach ($next as $bedroom) {
+                    if (isset($named[$bedroom])) {
+                        $issues[] = new Issue(Issue::WARN, 'room.pass-through', sprintf('«%s» es de paso: a «%s» sólo se llega atravesándolo.', $named[$bedroom][0], $name), $index, null, $named[$bedroom][1], $named[$bedroom][2]);
+                    }
+                }
+            }
+            if ('dormitorio' === $type && in_array($room->id, $arriving, true)) {
+                $issues[] = new Issue(Issue::INFO, 'room.stair', sprintf('La escalera llega a «%s»: conviene que llegue a un hall o a un pasillo.', $name), $index, null, $at[0], $at[1]);
+            }
             if (null !== $spec['window'] && !isset($windows[$room->id])) {
                 $issues[] = 'luz' === $spec['window']
                     ? new Issue(Issue::WARN, 'room.window', sprintf('«%s» no tiene ventana: conviene que tenga luz y ventilación natural.', $name), $index, null, $at[0], $at[1])
@@ -68,7 +102,7 @@ final class RoomReview
      *
      * @param list<LevelAnalysis> $levels
      *
-     * @return list<array{type: ?string, label: string, m2: float, rooms: int}>
+     * @return list<array{type: ?string, label: string, m2: float, rooms: int, habitable: bool}>
      */
     public function areas(array $levels): array
     {
@@ -78,7 +112,7 @@ final class RoomReview
             $types = $this->types($l);
             foreach ($l->regions->rooms as $room) {
                 $type = $types[$room->id] ?? '';
-                $sum[$type] ??= ['type' => '' === $type ? null : $type, 'label' => $catalog[$type]['label'] ?? 'Sin tipo', 'm2' => 0.0, 'rooms' => 0];
+                $sum[$type] ??= ['type' => '' === $type ? null : $type, 'label' => $catalog[$type]['label'] ?? 'Sin tipo', 'm2' => 0.0, 'rooms' => 0, 'habitable' => !in_array($type, Hcca::NON_HABITABLE_ROOMS, true)];
                 $sum[$type]['m2'] += $room->netM2;
                 ++$sum[$type]['rooms'];
             }
@@ -87,6 +121,32 @@ final class RoomReview
         usort($out, static fn (array $a, array $b): int => [null === $a['type'], $b['m2']] <=> [null === $b['type'], $a['m2']]);
 
         return $out;
+    }
+
+    /**
+     * Qué ambientes comunica cada puerta: ambiente => [vecino => true], con 0 para el exterior (o un espacio abierto).
+     *
+     * @return array<int, array<int, true>>
+     */
+    private function doors(LevelAnalysis $l): array
+    {
+        $links = [];
+        foreach ($l->level->openings as $o) {
+            $wall = OpeningKind::Door === $o->kind ? $l->level->wall($o->wallId) : null;
+            if (null === $wall) {
+                continue;
+            }
+            $horizontal = $wall->y1 === $wall->y2;
+            $mid = ($horizontal ? min($wall->x1, $wall->x2) : min($wall->y1, $wall->y2)) + $o->pos + intdiv($o->w, 2);
+            $a = $horizontal ? $l->regions->roomAtCell($mid, $wall->y1 - 1) : $l->regions->roomAtCell($wall->x1 - 1, $mid);
+            $b = $horizontal ? $l->regions->roomAtCell($mid, $wall->y1) : $l->regions->roomAtCell($wall->x1, $mid);
+            if ($a !== $b) {
+                $links[$a][$b] = true;
+                $links[$b][$a] = true;
+            }
+        }
+
+        return $links;
     }
 
     /** @return array<int, true> ambientes que tienen al menos una ventana en alguno de sus muros */

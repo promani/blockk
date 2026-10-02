@@ -181,7 +181,10 @@ final class HouseGenerator
         }
 
         foreach ($rooms as $r) {
-            $b->label($r['nivel'] - 1, $r['rect'][0] + intdiv($r['rect'][2], 2), $r['rect'][1] + intdiv($r['rect'][3], 2), $r['nombre']);
+            // el tipo de ambiente sale del tipo del programa o, en el bloque del estar, de su nombre
+            $type = ['dormitorio_principal' => 'dormitorio', 'deposito' => 'guardado', 'pasillo' => 'circulacion', 'hall' => 'circulacion', 'libre' => ''][$r['tipo']]
+                ?? (isset(\App\Domain\Hcca::roomTypes()[$r['tipo']]) && 'estar' !== $r['tipo'] ? $r['tipo'] : (\App\Domain\Hcca::roomTypeOf($r['nombre']) ?? ''));
+            $b->label($r['nivel'] - 1, $r['rect'][0] + intdiv($r['rect'][2], 2), $r['rect'][1] + intdiv($r['rect'][3], 2), $r['nombre'], $type);
         }
 
         $project = $b->build();

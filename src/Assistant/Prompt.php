@@ -61,8 +61,10 @@ final class Prompt
               después se ajusta en el editor. Un ambiente en L son dos rectángulos con el mismo nombre y el lado que
               comparten en `abierto`; lo mismo los ambientes integrados (cocina abierta al estar) y los lados sin pared
               de una galería. Con dos plantas, cada una se mide desde su propia esquina de arriba a la izquierda (el
-              sistema pone la alta sobre la baja). Cada abertura va con un punto sobre su muro. Para corregir un
-              calcado, volvé a llamar `calcar_plano` con todos los ambientes.
+              sistema pone la alta sobre la baja). Cada abertura va con un punto sobre su muro y, si el plano los
+              muestra, su ancho, el alto de la ventana y el sentido de la puerta (`bisagra` y `abre`). Sumá la escalera
+              (su rectángulo en la planta baja) y los pilares si los hay, y el `tipo` de cada ambiente. Para corregir
+              un calcado, volvé a llamar `calcar_plano` con todos los ambientes.
             - Si el coordinador te delegó instrucciones (herramienta `delegar`), ejecutalas: no vuelvas a preguntar lo que
               ya está respondido. No uses `delegar`.
             - Podés llamar varias herramientas en la misma respuesta. Si asumiste algo, decilo en una frase en ese mismo
@@ -166,6 +168,7 @@ final class Prompt
                 'nombre' => ['type' => 'string', 'description' => 'Nombre corto (opcional).'],
                 'ambientes' => ['type' => 'array', 'minItems' => 1, 'items' => ['type' => 'object', 'properties' => [
                     'nombre' => ['type' => 'string', 'description' => 'Como figura en el plano, en español.'],
+                    'tipo' => ['type' => 'string', 'enum' => array_keys(Hcca::roomTypes()), 'description' => 'Uso del ambiente (circulacion = pasillo o hall; guardado = vestidor, placard o depósito).'],
                     'nivel' => ['type' => 'integer', 'enum' => [1, 2], 'description' => 'Planta (1 = baja). Por defecto 1.'],
                     'x' => ['type' => 'number', 'description' => 'Borde izquierdo (m).'],
                     'y' => ['type' => 'number', 'description' => 'Borde de arriba (m).'],
@@ -179,7 +182,23 @@ final class Prompt
                     'x' => ['type' => 'number', 'description' => 'Centro de la abertura, sobre su muro (m).'],
                     'y' => ['type' => 'number'],
                     'ancho' => ['type' => 'number', 'description' => 'Ancho en metros (opcional).'],
+                    'alto' => ['type' => 'number', 'description' => 'Ventanas: alto en metros (opcional).'],
+                    'bisagra' => ['type' => 'string', 'enum' => PlanTracer::SIDES, 'description' => 'Puertas: extremo del vano donde está la bisagra, según el plano (opcional).'],
+                    'abre' => ['type' => 'string', 'enum' => PlanTracer::SIDES, 'description' => 'Puertas: hacia qué lado del muro abre la hoja (opcional).'],
                 ], 'required' => ['tipo', 'x', 'y']]],
+                'escaleras' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
+                    'x' => ['type' => 'number', 'description' => 'Rectángulo que ocupa en la planta baja (m), con el origen de esa planta.'],
+                    'y' => ['type' => 'number'],
+                    'ancho' => ['type' => 'number'],
+                    'fondo' => ['type' => 'number'],
+                    'sube' => ['type' => 'string', 'enum' => PlanTracer::SIDES, 'description' => 'Hacia dónde sube el primer tramo (opcional).'],
+                ], 'required' => ['x', 'y', 'ancho', 'fondo']]],
+                'pilares' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
+                    'nivel' => ['type' => 'integer', 'enum' => [1, 2]],
+                    'x' => ['type' => 'number', 'description' => 'Centro del pilar (m).'],
+                    'y' => ['type' => 'number'],
+                    'lado' => ['type' => 'number', 'description' => 'Lado en cm (20, 25, 30 o 40).'],
+                ], 'required' => ['x', 'y']]],
                 'techo' => ['type' => 'string', 'enum' => PlanTracer::ROOFS, 'description' => 'Por defecto dos_aguas.'],
             ], ['ambientes']),
             self::fn('cargar_plantilla', 'Reemplaza la casa actual por una plantilla de la Galería.', [

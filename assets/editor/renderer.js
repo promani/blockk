@@ -113,6 +113,7 @@ export class Renderer {
         ctx.fillRect(0, 0, cam.w, cam.h);
         if (showLot) this.drawGrass(f);
         this.drawGround(f);
+        this.drawBackdrop(f);
         if (f.project) {
             this.drawZones(f);
             if (cam.view === 'plan') this.drawPlan(f);
@@ -264,6 +265,27 @@ export class Renderer {
         corners.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
         ctx.closePath();
         ctx.stroke();
+    }
+
+    /**
+     * Plano de fondo (`ui.backdrop`, sólo en el editor): la imagen apoyada en el suelo, sobre el terreno y debajo del
+     * dibujo. En las dos vistas el suelo se proyecta con una transformación afín, así que alcanza con tres esquinas.
+     */
+    drawBackdrop(f) {
+        const b = f.ui?.backdrop;
+        if (!b?.img || b.visible === false) return;
+        const { ctx, dpr } = this;
+        const { cam } = f;
+        const w = b.img.naturalWidth;
+        const h = b.img.naturalHeight;
+        const o = cam.project(b.x, b.y, 0);
+        const px = cam.project(b.x + w * b.cmPerPx, b.y, 0);
+        const py = cam.project(b.x, b.y + h * b.cmPerPx, 0);
+        ctx.save();
+        ctx.globalAlpha = b.opacity;
+        ctx.setTransform((dpr * (px[0] - o[0])) / w, (dpr * (px[1] - o[1])) / w, (dpr * (py[0] - o[0])) / h, (dpr * (py[1] - o[1])) / h, dpr * o[0], dpr * o[1]);
+        ctx.drawImage(b.img, 0, 0);
+        ctx.restore();
     }
 
     /**

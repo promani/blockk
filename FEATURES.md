@@ -66,6 +66,9 @@ trabajo en equipo).
   baño…): rectángulos con su nombre en la planta y cajas bajas en la isométrica. Sirven para ver si un ambiente
   alcanza; no entran al cómputo. Los muebles y los árboles se **apagan** con un interruptor: dejan de verse y sus
   herramientas salen de la barra.
+- **Plano de fondo**: una imagen o la primera página de un PDF apoyada sobre el terreno, debajo del dibujo, para
+  calcar encima. Se pone a escala marcando dos puntos de una medida conocida; se mueve, se atenúa y se quita. No entra
+  al proyecto ni al cómputo: queda en el navegador.
 - **Dos niveles + techo**: Nivel 1, Nivel 2 (con piso: losa de hormigón o entrepiso de madera) y pestaña Techo.
 - **Escaleras**: recta, en L y en U, con ancho, huella y giro; abren el hueco en el piso de arriba.
 - **Techos** rectangulares a dos aguas o a un agua, que se apoyan solos en los muros, se cruzan y se cortan entre sí
@@ -87,10 +90,12 @@ trabajo en equipo).
 - **Revisión constructiva** en vivo, con errores, advertencias e información, cada una vinculada al elemento que la
   causa: jambas de 25 cm, 60 % de vanos en muros portantes, luces de dintel, esbeltez, apoyos del Nivel 2 y de
   pilares, luces de losa y de madera. Los techos se dibujan para ver la casa completa y computar la madera: no generan observaciones.
-- **Recomendaciones por tipo de ambiente**: estar, comedor, dormitorio o escritorio sin ventana (advertencia); baño,
-  cocina o lavadero sin ventilación y superficie por debajo de la referencia (nota). Son recomendaciones, no normativa.
+- **Recomendaciones por tipo de ambiente**: estar, comedor, dormitorio o escritorio sin ventana y **dormitorio de
+  paso** (advertencia); baño, cocina o lavadero sin ventilación, baño que abre a la cocina o al comedor, escalera que
+  llega a un dormitorio y superficie por debajo de la referencia (nota). Son recomendaciones, no normativa.
 - **Resumen y panel contextual**: lo que se muestra cambia según la herramienta o el elemento elegido; incluye los
-  **m² útiles por tipo de ambiente**.
+  **m² útiles por tipo de ambiente** y la **superficie habitable** (sin garajes ni galerías), que también están en el
+  Cómputo y en su PDF.
 
 ### 3.3 Calcular (cómputo)
 
@@ -112,9 +117,11 @@ trabajo en equipo).
 - **Generador determinista**: mismo programa, misma casa; siempre sin errores o rechazado con un motivo claro.
 - **Ve lo que se cambió a mano**: con cada mensaje viaja el proyecto del editor. Se puede partir de una plantilla
   («✦ Modificar con IA»).
-- **Calca un plano**: se adjunta la imagen de un plano con el clip del chat (JPG, PNG o WebP) y arma esa casa con sus
-  ambientes, medidas y aberturas. Es un punto de partida: un plano simple sale casi exacto; uno complejo o de dos
-  plantas queda aproximado. No calca la escalera ni el techo de plantas que no son un rectángulo.
+- **Calca un plano**: se adjunta la imagen de un plano o un PDF (se usa su primera página) con el clip del chat y arma
+  esa casa: ambientes con su tipo, medidas, aberturas (ancho, alto de las ventanas y sentido de las puertas), pilares,
+  escalera y techo (también en plantas en L y la parte baja de una casa de dos plantas). Es un punto de partida: un
+  plano simple sale casi exacto; uno complejo o de dos plantas queda aproximado. Después se puede dejar ese mismo
+  plano de fondo en el editor para corregir el calcado.
 - **Límites de uso** por IP y por día; sin la clave del modelo, el asistente directamente no aparece.
 
 ### 3.5 Guardar y compartir
@@ -123,6 +130,10 @@ trabajo en equipo).
 - **Mis casas**: «Guardar» en el editor deja la casa en el servidor (hasta 30 por navegador, 1 año desde el último
   uso), sin cuenta: se reconoce al navegador por un id aleatorio y sólo él las ve (en la Galería), las abre y las
   borra. Es un guardado privado; para mostrarle la casa a otra persona está «Compartir».
+- **Comparar dos casas guardadas**: en «Mis casas» se marcan dos y se ven lado a lado (superficie, m² por tipo de
+  ambiente, bloques, materiales, costo por rubro y Revisión) con la diferencia de la segunda contra la primera.
+  **Renombrar** una casa desde su tarjeta. **Llevar a otro navegador**: un enlace de un solo uso (15 minutos) copia
+  las casas al otro navegador, sin cuentas.
 - **Galería** con 3 plantillas calculadas por el mismo motor (casa en L, vivienda evolutiva, dos plantas con garaje y
   alfresco) más los modelos que se agreguen por la API, con miniaturas de planta e isométrica.
 - **API de administración** con token para que otra herramienta (por ejemplo Claude Code) cree, edite y borre modelos
@@ -155,14 +166,11 @@ trabajo en equipo).
 
 ### 4.2 Todavía no (ver [BACKLOG.md](BACKLOG.md))
 
-- Reglas de circulación por tipo de ambiente (dormitorio de paso, baño que abre a la cocina).
 - Que la Revisión use los muebles (paso libre, puertas que los pisan) y que el asistente los coloque.
 - Vigas libres, techo a cuatro aguas o de forma libre, balcones y voladizos.
-- Cotas internas y fachadas en los planos; el plano como fondo en la planta para corregir el calcado a mano; adjuntar
-  un PDF al asistente.
+- Cotas internas y fachadas en los planos.
 - **Mano de obra**: jornales, plazo y costo por rubro (hoy el presupuesto es sólo de materiales).
 - **Losas y entrepisos**: viguetas, paneles, voladizos, doble altura y cubierta plana (hoy, losa maciza o madera).
-- Comparar dos casas guardadas lado a lado.
 - El asistente con todas las operaciones del editor (pilares, nombres, aberturas).
 
 ## 5. Cuándo conviene y cuándo no

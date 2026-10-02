@@ -16,15 +16,16 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * «Mis casas»: guardar la casa del editor y compartirla por enlace. Sin login: el navegador manda su id aleatorio
- * (`client`, el mismo del asistente) y sólo lista, cambia y borra lo suyo. Leer una casa por su id es público: el id es
- * el enlace que la persona comparte.
+ * «Mis casas»: guardar la casa del editor. Sin login: el navegador manda su id aleatorio (`client`, el mismo del
+ * asistente) y sólo lista, abre, renombra y borra lo suyo. Para pasarlas a otro navegador se pide un código de un solo
+ * uso (`/transfer`) que el otro canjea por una copia de cada casa.
  */
 #[Route('/api/houses', name: 'api_houses_')]
 final class HousesController extends AbstractController
 {
     private const int WRITES_PER_HOUR = 120;
     private const int READS_PER_HOUR = 1200;
+    private const int TRANSFERS_PER_HOUR = 30;
 
     public function __construct(private readonly SavedHouses $houses)
     {
@@ -81,7 +82,64 @@ final class HousesController extends AbstractController
             return $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND);
         }
 
-        return $this->json(['id' => $house['id'], 'name' => $house['name'], 'project' => $house['project'], 'summary' => $house['summary'], 'updated' => $house['updated']]);
+        return $this->json(['id' => $house['id'], 'name' => $house['name'], 'project' => $house['project'], 'summary' => $house['summary'], 'svg' => $house['svg'], 'updated' => $house['updated']]);
+    }
+
+    #[Route('/{id}', name: 'rename', methods: ['PATCH'], requirements: ['id' => '[a-f0-9]{24}'])]
+    public function rename(string $id, Request $request): JsonResponse
+    {
+        $body = JsonBody::decode($request);
+        $client = (string) ($body['client'] ?? '');
+        $name = is_string($body['name'] ?? null) ? trim($body['name']) : '';
+        if (!Conversations::validClient($client)) {
+            return $this->json(['error' => 'Falta el identificador del navegador.'], Response::HTTP_BAD_REQUEST);
+        }
+        if ('' === $name) {
+            return $this->json(['error' => 'Escribí un nombre para la casa.'], Response::HTTP_BAD_REQUEST);
+        }
+        if (null !== ($denied = $this->limited($request, 'w', self::WRITES_PER_HOUR))) {
+            return $denied;
+        }
+        $card = $this->houses->rename($id, $client, $name);
+
+        return null === $card ? $this->json(['error' => 'not_found'], Response::HTTP_NOT_FOUND) : $this->json($card);
+    }
+
+    /** Código de un solo uso (15 minutos) para llevar las casas de este navegador a otro. */
+    #[Route('/transfer', name: 'transfer', methods: ['POST'])]
+    public function transfer(Request $request): JsonResponse
+    {
+        $client = (string) (JsonBody::decode($request)['client'] ?? '');
+        if (!Conversations::validClient($client)) {
+            return $this->json(['error' => 'Falta el identificador del navegador.'], Response::HTTP_BAD_REQUEST);
+        }
+        if (null !== ($denied = $this->limited($request, 't', self::TRANSFERS_PER_HOUR))) {
+            return $denied;
+        }
+        $transfer = $this->houses->transfer($client);
+
+        return null === $transfer
+            ? $this->json(['error' => 'No hay casas guardadas para llevar.'], Response::HTTP_BAD_REQUEST)
+            : $this->json(['codigo' => $transfer['code'], 'casas' => $transfer['houses'], 'venceEn' => SavedHouses::TRANSFER_TTL], Response::HTTP_CREATED);
+    }
+
+    /** Canjea el código: las casas se copian a «Mis casas» de este navegador. */
+    #[Route('/transfer/{code}', name: 'claim', methods: ['POST'], requirements: ['code' => '[a-f0-9]{32}'])]
+    public function claim(string $code, Request $request): JsonResponse
+    {
+        $client = (string) (JsonBody::decode($request)['client'] ?? '');
+        if (!Conversations::validClient($client)) {
+            return $this->json(['error' => 'Falta el identificador del navegador.'], Response::HTTP_BAD_REQUEST);
+        }
+        // pocos intentos por hora: el código no se puede adivinar probando
+        if (null !== ($denied = $this->limited($request, 't', self::TRANSFERS_PER_HOUR))) {
+            return $denied;
+        }
+        $result = $this->houses->claim($code, $client);
+
+        return null === $result
+            ? $this->json(['error' => 'El código no existe, venció o ya se usó.'], Response::HTTP_NOT_FOUND)
+            : $this->json(['copiadas' => $result['copied'], 'omitidas' => $result['skipped']]);
     }
 
     #[Route('/{id}', name: 'delete', methods: ['DELETE'], requirements: ['id' => '[a-f0-9]{24}'])]

@@ -46,7 +46,7 @@ hace `KIMI_MODEL`. Los tests fuerzan modelos falsos (`phpunit.dist.xml`) para no
 | `delegar` | Sólo el coordinador: pasa instrucciones al constructor. |
 | `generar_casa` | Programa (`niveles`, `techo`, `ambientes[{tipo, nivel, cantidad, m2}]`) → casa completa con `HouseGenerator`. |
 | `editar_casa` | Operaciones con `HouseEditor`: `agregar_ventana` (por ambiente `N1-A2` y orientación), `agregar_vano`, `quitar_vano`, `cambiar_vano`, `agregar_muro`, `quitar_muro`, `cambiar_techo`, `renombrar`. |
-| `calcar_plano` | Ambientes de un plano como rectángulos en metros (`ambientes[{nombre, nivel, x, y, ancho, fondo, abierto}]`, `aberturas[{tipo, x, y, ancho}]`, `techo`) → casa con `PlanTracer`. |
+| `calcar_plano` | Lo leído de un plano, en metros: `ambientes[{nombre, tipo, nivel, x, y, ancho, fondo, abierto}]`, `aberturas[{tipo, x, y, ancho, alto, bisagra, abre}]`, `escaleras[{x, y, ancho, fondo, sube}]`, `pilares[{x, y, lado}]`, `techo` → casa con `PlanTracer`. |
 | `cargar_plantilla` | Reemplaza la casa por una plantilla de la Galería. |
 | `ver_casa` | Muros y vanos con ids y medidas en metros (sólo si hacen falta ids). |
 
@@ -68,7 +68,8 @@ sin errores ni advertencias, o se rechaza con un motivo («quedaría de 23 m de 
 El chat tiene un **clip** (Galería y editor) para adjuntar la imagen de un plano; también se puede pegar una imagen en
 el campo de texto. El navegador la reduce (lado mayor de 1600 px, JPEG) y viaja en el mensaje como
 `adjunto: {tipo, datos}` (base64, hasta 1 000 000 de caracteres). `Attachment` comprueba que sea una imagen JPG, PNG o
-WebP de verdad. No se aceptan PDF.
+WebP de verdad. El clip acepta también **PDF**: el navegador convierte la primera página a imagen con pdf.js
+(`assets/lib/picture.js`, cargado sólo en ese momento) y sigue el mismo camino; con varias páginas avisa «página 1 de N».
 
 - El turno con adjunto **saltea al coordinador** y va directo al constructor, que lee la imagen y llama a
   `calcar_plano`. Si hay `KIMI_MODEL_VISION`, ese turno lo atiende ese modelo; si no, `KIMI_MODEL`, que tiene que
@@ -84,8 +85,15 @@ WebP de verdad. No se aceptan PDF.
   losa bajo la planta alta y un techo si la planta es un rectángulo. Si la planta alta viene dibujada al lado de la
   baja, la superpone por la esquina donde más muros coinciden. Lo que no pudo hacer vuelve como **avisos**, que se
   muestran a la persona.
-- **Límites**: la escalera y el techo de plantas irregulares no se calcan; hasta 40 ambientes y 80 aberturas. La
-  calidad depende del plano: con cotas legibles y una planta, sale casi exacto; sin cotas o con dos plantas, aproximado.
+- También calca: el **tipo** de cada ambiente; el alto de las ventanas (fija el antepecho) y el **sentido de las
+  puertas** (`bisagra` y `abre`, dichos por el plano); los **pilares**; la **escalera** (se prueba la forma, el ancho y
+  la huella que mejor llenan su rectángulo y entran en el ambiente; si ninguna entra, se avisa); y el **techo** de
+  plantas que no son un rectángulo: un techo por cada rectángulo grande de la planta (una L lleva dos que se cruzan)
+  y, en dos plantas, uno a un agua sobre la parte baja que queda sin nada encima.
+- En el editor, la tarjeta de la casa calcada ofrece «Usar el plano como fondo»: deja la misma imagen debajo del
+  dibujo para corregir el calcado (ver [EDITOR.md](EDITOR.md)).
+- **Límites**: hasta 40 ambientes y 80 aberturas. La calidad depende del plano: con cotas legibles y una planta, sale
+  casi exacto; sin cotas o con dos plantas, aproximado.
 
 ## Flujo de un turno
 

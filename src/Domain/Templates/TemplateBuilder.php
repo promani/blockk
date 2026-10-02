@@ -131,9 +131,9 @@ final class TemplateBuilder
     }
 
     /** Nombre de un ambiente: se dibuja en la planta sobre la celda que empieza en (x, y). */
-    public function label(int $level, int $x, int $y, string $name): self
+    public function label(int $level, int $x, int $y, string $name, string $type = ''): self
     {
-        $this->levels[$level]['labels'][] = ['id' => 'n'.(++$this->seq), 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'name' => $name];
+        $this->levels[$level]['labels'][] = ['id' => 'n'.(++$this->seq), 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'name' => $name] + ('' === $type ? [] : ['type' => $type]);
 
         return $this;
     }

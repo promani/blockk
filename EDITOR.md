@@ -15,6 +15,13 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
 - **Muebles y árboles se pueden apagar**: en *Configuraciones generales*, las casillas «Muebles» y «Árboles». Apagadas,
   no se dibujan ni se pueden elegir, y su herramienta sale de la barra (el atajo no hace nada). Es una preferencia del
   navegador, como «Mostrar terreno»: el proyecto no cambia y los muebles y árboles siguen guardados.
+- **Plano de fondo** (en «Configuraciones generales»): «Cargar plano…» pone una imagen (JPG, PNG, WebP) o la primera
+  página de un PDF sobre el terreno, debajo del dibujo, en planta y en isométrica, para calcar encima con las
+  herramientas de siempre. «Poner a escala»: se marcan dos puntos de una medida conocida y se escribe la distancia
+  real en metros. «Mover» lo arrastra; además, opacidad, mostrar u ocultar, cambiar y quitar. No entra al proyecto, al
+  `.json` ni al cómputo y no viaja al servidor: queda en este navegador (IndexedDB), atado al nombre del proyecto;
+  «Nuevo» y «Abrir» lo quitan. Después de que el asistente calca un plano adjunto, su tarjeta ofrece «Usar el plano
+  como fondo» para corregir el resultado contra el original (`assets/editor/backdrop.js`).
 - **Brújula con el sol** (arriba a la derecha) y sombras según época, latitud y hora.
 - **Panel derecho**: *Selección* o *Configuraciones generales* (terreno —con «Mostrar terreno» y «Mostrar cuadrícula»—,
   **norte** con una brújula que se arrastra (de a 5°, Mayús de a 1°, o escribiendo el ángulo), sol y ajustes del
@@ -127,8 +134,10 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 *Nuevo*, *Guardar* (en «Mis casas»: en el servidor y sólo para este navegador), *Descargar* (el `.json`), *Abrir* (un
 `.json`) y *Compartir* (enlace editable; ver más abajo). El proyecto en curso se guarda solo en el navegador
-(`localStorage`). Las casas guardadas se ven en la Galería, en «Mis casas», con Abrir y Eliminar; nadie más las ve ni
-las puede abrir. El cómputo está en la pestaña
+(`localStorage`). Las casas guardadas se ven en la Galería, en «Mis casas», con Abrir, Comparar (de a dos), Renombrar
+y Eliminar, más «Llevar a otro navegador» (un enlace de un solo uso que las copia); nadie más las ve ni las puede
+abrir. **Comparar** (`/comparar`) muestra dos casas guardadas lado a lado, con la diferencia de la segunda contra la
+primera. El cómputo está en la pestaña
 «Cómputo» de la barra superior.
 
 ## Otras pantallas

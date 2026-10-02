@@ -307,6 +307,11 @@ final class Hcca
         ];
     }
 
+    /** Tipos que no cuentan como superficie habitable (se informan aparte en el Resumen y el Cómputo). */
+    public const array NON_HABITABLE_ROOMS = ['garaje', 'galeria'];
+    /** Tipos de servicio: llegar a ellos pasando por un dormitorio es normal (baño en suite, vestidor). */
+    public const array SERVICE_ROOMS = ['bano', 'toilette', 'guardado', 'lavadero', 'galeria'];
+
     /** Tipo que corresponde a un nombre libre («Dormitorio principal» → dormitorio), o null si no se reconoce. */
     public static function roomTypeOf(string $name): ?string
     {

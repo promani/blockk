@@ -96,4 +96,71 @@ final class RoomTypesTest extends TestCase
         self::assertSame(2, $byType['dormitorio']['rooms']);
         self::assertEqualsWithDelta($r['analysis']['telemetry']['total']['netM2'], array_sum(array_column($byType, 'm2')), 0.05);
     }
+
+    #[Test]
+    public function aBedroomYouHaveToCrossIsFlagged(): void
+    {
+        // tres ambientes en fila: al dormitorio 2 sólo se entra por el dormitorio 1
+        $b = Fixtures::room(24, 30)->room(0, 24, 0, 24, 30)->room(0, 48, 0, 24, 30)
+            ->opening(0, 'P87', 'y', 0, 10)->opening(0, 'P87', 'y', 24, 10)->opening(0, 'P87', 'y', 48, 10)
+            ->opening(0, 'V100', 'x', 0, 6)->opening(0, 'V100', 'x', 0, 30)->opening(0, 'V100', 'x', 0, 54);
+        $bedrooms = [['id' => 'n1', 'x' => 10, 'y' => 20, 'name' => 'Pasillo'], ['id' => 'n2', 'x' => 34, 'y' => 20, 'name' => 'Dormitorio 1'], ['id' => 'n3', 'x' => 58, 'y' => 20, 'name' => 'Dormitorio 2']];
+        $r = $this->analyze($b, $bedrooms);
+
+        self::assertSame(['warn room.pass-through'], $this->codes($r));
+        $issue = array_values(array_filter($r['analysis']['issues'], static fn (array $i): bool => 'room.pass-through' === $i['code']))[0];
+        self::assertStringContainsString('«Dormitorio 1» es de paso: a «Dormitorio 2»', $issue['message']);
+        self::assertSame([34, 20], [$issue['x'], $issue['y']], 'apunta al dormitorio de paso');
+
+        // un baño o un vestidor detrás de un dormitorio es lo normal: sin aviso de paso
+        $bedrooms[2] = ['id' => 'n3', 'x' => 58, 'y' => 20, 'name' => 'Vestidor'];
+        self::assertSame([], $this->codes($this->analyze($b, $bedrooms)));
+    }
+
+    #[Test]
+    public function aBathroomOpeningOntoTheKitchenGetsANote(): void
+    {
+        $b = Fixtures::room(24, 30)->room(0, 24, 0, 24, 30)
+            ->opening(0, 'P87', 'y', 24, 10)->opening(0, 'V100', 'x', 0, 6)->opening(0, 'VT62', 'x', 0, 30);
+        $r = $this->analyze($b, [['id' => 'n1', 'x' => 10, 'y' => 20, 'name' => 'Cocina'], ['id' => 'n2', 'x' => 34, 'y' => 20, 'name' => 'Baño']]);
+
+        self::assertSame(['info room.bath-door'], $this->codes($r));
+    }
+
+    #[Test]
+    public function aStairLandingInABedroomGetsANote(): void
+    {
+        $b = Fixtures::room(48, 40)->stair(0, 4, 4, 'E', 'U')->upper()->room(1, 0, 0, 48, 40)->slab(1, 0, 0, 48, 40)
+            ->opening(1, 'V125', 'x', 0, 10);
+        $project = $b->build();
+        $project['levels'][1]['labels'] = [['id' => 'n1', 'x' => 30, 'y' => 30, 'name' => 'Dormitorio']];
+        $r = (new ProjectAnalyzer())->analyze(ProjectFactory::fromArray($project));
+
+        self::assertContains('info room.stair', $this->codes($r));
+    }
+
+    #[Test]
+    public function garagesAndGalleriesDoNotCountAsLivingArea(): void
+    {
+        $r = $this->analyze(Fixtures::room()->room(0, 40, 0, 24, 30), [['id' => 'n1', 'x' => 10, 'y' => 10, 'name' => 'Estar'], ['id' => 'n2', 'x' => 50, 'y' => 10, 'name' => 'Garaje']]);
+        $byType = array_column($r['analysis']['telemetry']['byType'], null, 'type');
+
+        self::assertTrue($byType['estar']['habitable']);
+        self::assertFalse($byType['garaje']['habitable']);
+        self::assertSame($byType['estar']['m2'], $r['analysis']['telemetry']['habitableM2']);
+        self::assertGreaterThan($r['analysis']['telemetry']['habitableM2'], $r['analysis']['telemetry']['total']['netM2']);
+    }
+
+    #[Test]
+    public function generatedHousesCarryTheTypeOfEachRoom(): void
+    {
+        $house = (new \App\Domain\Design\HouseGenerator())->generate(['niveles' => 1, 'ambientes' => [['tipo' => 'dormitorio_principal'], ['tipo' => 'bano'], ['tipo' => 'deposito']]]);
+        $types = array_column($house['project']['levels'][0]['labels'], 'type', 'name');
+
+        self::assertSame('dormitorio', $types['Dormitorio principal']);
+        self::assertSame('bano', $types['Baño']);
+        self::assertSame('guardado', $types['Depósito']);
+        self::assertSame('circulacion', $types['Pasillo']);
+        self::assertSame('estar_comedor', $types['Estar-comedor-cocina']);
+    }
 }

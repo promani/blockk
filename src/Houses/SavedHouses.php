@@ -13,15 +13,17 @@ use App\Domain\Templates\TemplateThumbnail;
 
 /**
  * «Mis casas»: las casas que una persona guarda desde el editor. Sin cuentas: cada navegador tiene un id aleatorio
- * (el mismo del asistente) y sólo ve y cambia las suyas. El id de la casa es largo e impredecible y funciona como
- * credencial del enlace para compartir: quien lo tiene puede abrirla (y guardarse una copia), no modificarla.
+ * (el mismo del asistente) y sólo él ve, abre, renombra y borra las suyas. Para llevarlas a otro navegador se pide un
+ * código de un solo uso que vence enseguida: quien lo canjea recibe una copia de cada casa.
  *
- * Claves: `house:{id}` (la casa) y `houses:{client}` (índice de ids del navegador, de la más reciente a la más vieja).
+ * Claves: `house:{id}` (la casa), `houses:{client}` (índice de ids del navegador, de la más reciente a la más vieja) y
+ * `transfer:{código}` (las casas a copiar).
  */
 final class SavedHouses
 {
     public const int MAX_PER_CLIENT = 30;
     public const int TTL = 365 * 86400; // un año desde la última vez que se guardó o abrió
+    public const int TRANSFER_TTL = 900; // el código para llevarlas a otro navegador dura 15 minutos
 
     public function __construct(
         private readonly KeyValueStore $store,
@@ -108,6 +110,75 @@ final class SavedHouses
         $this->write($house);
 
         return $house;
+    }
+
+    /**
+     * Cambia el nombre de una casa de este navegador (el de la tarjeta y el del proyecto guardado).
+     *
+     * @return array<string, mixed>|null la tarjeta, o null si la casa no existe o es de otro
+     */
+    public function rename(string $id, string $client, string $name): ?array
+    {
+        $house = self::validId($id) ? $this->store->get("house:{$id}") : null;
+        $name = mb_substr(trim($name), 0, 120);
+        if (null === $house || ($house['client'] ?? null) !== $client || '' === $name) {
+            return null;
+        }
+        $house['name'] = $name;
+        $house['project']['name'] = $name;
+        $house['summary']['nombre'] = $name;
+        $house['updated'] = time();
+        $this->write($house);
+
+        return $this->card($house);
+    }
+
+    /**
+     * Código de un solo uso para llevar las casas de este navegador a otro. No guarda de quién son: sólo cuáles.
+     *
+     * @return array{code: string, houses: int}|null null si no hay casas para llevar
+     */
+    public function transfer(string $client): ?array
+    {
+        $ids = array_column($this->list($client), 'id');
+        if ([] === $ids) {
+            return null;
+        }
+        $code = bin2hex(random_bytes(16));
+        $this->store->set("transfer:{$code}", ['ids' => $ids], self::TRANSFER_TTL);
+
+        return ['code' => $code, 'houses' => count($ids)];
+    }
+
+    /**
+     * Canjea un código: copia sus casas a «Mis casas» de este navegador (hasta el máximo) y lo invalida.
+     *
+     * @return array{copied: int, skipped: int}|null null si el código no existe, venció o ya se usó
+     */
+    public function claim(string $code, string $client): ?array
+    {
+        $doc = 1 === preg_match('/^[a-f0-9]{32}$/', $code) ? $this->store->get("transfer:{$code}") : null;
+        if (null === $doc) {
+            return null;
+        }
+        $this->store->delete("transfer:{$code}");
+        $room = self::MAX_PER_CLIENT - count($this->list($client));
+        $copied = 0;
+        $skipped = 0;
+        // de la más vieja a la más nueva, para que queden en el mismo orden
+        foreach (array_reverse((array) ($doc['ids'] ?? [])) as $id) {
+            $house = is_string($id) && self::validId($id) ? $this->store->get("house:{$id}") : null;
+            // las que ya son de este navegador no se duplican
+            if (null === $house || ($house['client'] ?? null) === $client || $copied >= $room) {
+                ++$skipped;
+                continue;
+            }
+            $now = time() + $copied; // un segundo de diferencia conserva el orden en el índice
+            $this->write(['id' => bin2hex(random_bytes(12)), 'client' => $client, 'created' => $now, 'updated' => $now] + $house);
+            ++$copied;
+        }
+
+        return ['copied' => $copied, 'skipped' => $skipped];
     }
 
     /** Borra la casa si es de este navegador. */

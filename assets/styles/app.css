@@ -464,3 +464,28 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 .planos-list li:first-child { border-top: 0; }
 .planos-page { color: var(--muted); font-size: .85em; }
 @media (max-width: 640px) { .planos-list li { grid-template-columns: 60px 1fr; } .planos-list li > :last-child { grid-column: 2; } }
+
+/* ---------- mis casas: comparar, renombrar y llevar a otro navegador ---------- */
+.my-houses-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+.my-houses-bar .my-houses-move { margin-left: auto; }
+.my-houses-notice { margin: 8px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--info-bg); color: var(--info); }
+.my-houses-notice[data-kind="ok"] { background: var(--green-100); color: var(--green-800); }
+.my-houses-notice[data-kind="error"] { background: var(--danger-bg); color: var(--danger); }
+.my-houses .tcard.picked { border-color: var(--green-600); box-shadow: 0 0 0 2px var(--green); }
+.my-houses .btn[aria-pressed="true"] { background: var(--green-100); border-color: var(--green-600); color: var(--green-800); }
+.cmp-heads { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.cmp-house { display: grid; grid-template-columns: 180px 1fr; align-items: center; overflow: hidden; }
+.cmp-house .house-thumb { background: var(--surface); border-right: 1px solid var(--border); }
+.cmp-house-body { padding: 10px 14px; }
+.cmp-house-body h2 { margin: 4px 0 2px; font-size: 1.15rem; }
+.cmp-house-body p { margin: 0; }
+.cmp-table th:nth-child(n+2), .cmp-table td:nth-child(n+2) { width: 22%; }
+.cmp-table thead th { white-space: normal; }
+.cmp-table .cmp-strong td { font-weight: 750; background: var(--surface); }
+.cmp-table .cmp-none { color: var(--muted); }
+.cmp-table .cmp-same { color: var(--muted); }
+.cmp-table .cmp-up { color: var(--warn); font-weight: 650; }
+.cmp-table .cmp-down { color: var(--ok); font-weight: 650; }
+.cmp-table .cmp-rel { font-weight: 400; opacity: .85; }
+@media (max-width: 700px) { .cmp-heads { grid-template-columns: 1fr; } .cmp-house { grid-template-columns: 110px 1fr; } }
+.table-wrap { overflow-x: auto; }

@@ -87,6 +87,8 @@ sequenceDiagram
 - **Mis casas** (Redis, 1 año desde el último uso): `house:{id}` `{id, client, name, project, summary, svg, created,
   updated}` e índice `houses:{client}` (hasta 30 por navegador); contadores `rl:houses:*`. Sin usuarios: `client` es el
   id aleatorio del navegador, nunca sale en una respuesta y sólo él puede leer, cambiar o borrar sus casas.
+- **Traspaso de Mis casas** (Redis, 15 minutos, un solo uso): `transfer:{código}` con los ids a copiar; no guarda el
+  navegador de origen.
 
 ## API
 
@@ -106,6 +108,9 @@ sequenceDiagram
 | `GET /api/houses?client=` | «Mis casas»: las guardadas por ese navegador (id, name, summary, svg, created, updated). Nunca lista las de otros. |
 | `POST /api/houses` | `{client, project, id?}`: crea (201) o actualiza la propia (200); `422` si el proyecto es inválido, `409` al pasar de 30. |
 | `GET /api/houses/{id}?client=`, `DELETE /api/houses/{id}?client=` | Abrir o borrar una casa guardada: sólo el navegador que la guardó (para los demás, `404`). |
+| `PATCH /api/houses/{id}` | `{client, name}`: renombra la propia; `404` si es ajena. |
+| `POST /api/houses/transfer`, `POST /api/houses/transfer/{código}` | Llevar «Mis casas» a otro navegador: crea un código de un solo uso (`{client}` → `{codigo, casas, venceEn}`) y lo canjea (`{client}` → `{copiadas, omitidas}`; `404` si no existe, venció o ya se usó). |
+| `GET /comparar?a=&b=` | Página que compara dos casas guardadas de ese navegador (las calcula con `/api/analyze`). |
 | `GET /api/admin/ping`, `GET/POST /api/admin/galeria`, `GET/PUT/DELETE /api/admin/galeria/{slug}` | **API de administración de la Galería** (`Authorization: Bearer $ADMIN_API_TOKEN`; sin token configurado no existe). Crea, edita y borra modelos que ve todo el mundo en `/galeria` (guardados en Redis, clave `gallery:{slug}`, máx. 100). Cuerpo: `nombre`, `descripcion?`, `etiquetas?`, `slug?` y un dibujo: `programa` (generador), `plantilla` (clonar) o `project`; en `PUT` también `operaciones` sobre el actual. Las plantillas del código no se editan ni borran. |
 
 ## Decisiones y trade-offs
@@ -122,7 +127,9 @@ sequenceDiagram
 - **Dos modelos.** Uno liviano (barato) coordina y pregunta; uno pesado arma el JSON y las acciones. El formulario
   inicial no usa ningún modelo (la primera casa sale en < 1 s).
 - **Sin paso de build en el front** (AssetMapper + import maps nativos): menos herramientas; a cambio, sin TypeScript
-  ni bundling.
+  ni bundling. La única dependencia de front es pdf.js (`pdfjs-dist`, para adjuntar un PDF o usarlo de fondo): está en
+  `importmap.php`, se baja a `assets/vendor/` con `php bin/console importmap:install` (lo corre `composer install`) y
+  el navegador la carga sólo cuando llega un PDF. Sin CDN en tiempo de ejecución.
 - **Render propio en Canvas 2D** (algoritmo del pintor por capas con orden topológico) en lugar de WebGL: liviano y
   exacto para cajas alineadas; sostiene 60 FPS en casas de 2 plantas.
 

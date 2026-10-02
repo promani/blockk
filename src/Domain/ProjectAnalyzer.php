@@ -113,8 +113,10 @@ final class ProjectAnalyzer
             $extras,
         );
         $issues = $this->validator->validate($normalized, $levels, $timber);
+        // dónde llega cada escalera en el Nivel 2: el centro de su huella
+        $arrivals = array_map(static fn (array $s): array => [(int) floor(($s['bbox']['x'] + $s['bbox']['w'] / 2) / Hcca::GRID_CM), (int) floor(($s['bbox']['y'] + $s['bbox']['h'] / 2) / Hcca::GRID_CM)], $stairPlan->stairs);
         foreach ($levels as $i => $l) {
-            array_push($issues, ...$this->roomReview->review($i, $l));
+            array_push($issues, ...$this->roomReview->review($i, $l, 1 === $i ? $arrivals : []));
         }
         foreach ([...$stairPlan->issues, ...$slabPlan->issues, ...$roofPlan->issues] as $i) {
             $issues[] = Issue::fromArray($i);
@@ -130,7 +132,7 @@ final class ProjectAnalyzer
                 'roof' => $roofPlan->toArray(),
                 'bom' => $bom,
                 'issues' => array_map(static fn (Issue $i): array => $i->toArray(), $issues),
-                'telemetry' => $this->telemetry($normalized, $levels, $bom) + ['byType' => $this->roomReview->areas($levels)] + ['roof' => ['count' => count($roofPlan->parts), 'coverM2' => $roofPlan->bom()['coverM2']], 'slabM2' => $slabPlan->bom['areaM2'], 'stairs' => $stairPlan->bom['count']],
+                'telemetry' => $this->telemetry($normalized, $levels, $bom) + ['byType' => $byType = $this->roomReview->areas($levels), 'habitableM2' => round(array_sum(array_map(static fn (array $t): float => $t['habitable'] ? $t['m2'] : 0.0, $byType)), 2)] + ['roof' => ['count' => count($roofPlan->parts), 'coverM2' => $roofPlan->bom()['coverM2']], 'slabM2' => $slabPlan->bom['areaM2'], 'stairs' => $stairPlan->bom['count']],
             ],
         ];
     }

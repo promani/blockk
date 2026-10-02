@@ -28,6 +28,15 @@ export const getHouse = (id) => call('GET', `/api/houses/${encodeURIComponent(id
 
 export const deleteHouse = (id) => call('DELETE', `/api/houses/${encodeURIComponent(id)}?client=${clientId()}`);
 
+/** Cambia el nombre de una casa guardada (sin abrirla). Devuelve su tarjeta. */
+export const renameHouse = (id, name) => call('PATCH', `/api/houses/${encodeURIComponent(id)}`, { client: clientId(), name });
+
+/** Código de un solo uso para llevar las casas de este navegador a otro: {codigo, casas, venceEn}. */
+export const createTransfer = () => call('POST', '/api/houses/transfer', { client: clientId() });
+
+/** Canjea un código: copia esas casas a este navegador. Devuelve {copiadas, omitidas}. */
+export const claimTransfer = (code) => call('POST', `/api/houses/transfer/${encodeURIComponent(code)}`, { client: clientId() });
+
 /** Id de la casa guardada que corresponde al proyecto abierto en el editor, o null. */
 export function linkedHouse() {
     try {

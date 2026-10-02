@@ -86,6 +86,7 @@ function render() {
             kpi('Costo de referencia', money(bom.totalCost, bom.currency), 'precios editables')),
         section('Desglose por nivel y mampostería', [scopeTabs(), blocksTable(scopeData()), materialsTable(scopeData()),
             h('p', { class: 'small muted' }, state.scope === 'total' ? 'El total de obra optimiza los cortes con todas las piezas juntas: los remanentes se reaprovechan también entre niveles.' : 'Cada nivel se optimiza por separado; la suma puede superar al total de obra.')]),
+        telemetry.byType?.some((t) => t.type) ? section('Superficies por tipo de ambiente', [areasTable(telemetry)]) : null,
         section('Optimización de cortes', [comparison(bom), patterns(tot)]),
         section('Estructura de madera del entrepiso', [timber(analysis.timber)]),
         section('Cotización y comparativa de materiales', [prices(project), quote(bom), sendToDistributor()]),
@@ -110,6 +111,18 @@ function scopeTabs() {
 /** Encabezado de tabla: un '<' inicial alinea la columna a la izquierda (texto). */
 const th = (...labels) => h('thead', {}, h('tr', {}, labels.map((l) => (l.startsWith('<') ? h('th', { scope: 'col', class: 'l' }, l.slice(1)) : h('th', { scope: 'col' }, l)))));
 const tl = (...c) => h('td', { class: 'l' }, ...c);
+
+/** m² útiles por tipo de ambiente; garajes y galerías se informan pero no cuentan como superficie habitable. */
+function areasTable(t) {
+    const share = (v) => (t.total.netM2 > 0 ? pct((100 * v) / t.total.netM2, 0) : '—');
+    return h('div', { class: 'tablewrap' }, h('table', { class: 'table' },
+        h('caption', {}, 'Superficie útil de los ambientes cerrados'),
+        th('<Tipo', 'Ambientes', 'm² útiles', '% del total'),
+        h('tbody', {}, t.byType.map((x) => h('tr', {}, tl(x.habitable ? x.label : `${x.label} (no habitable)`), h('td', {}, int(x.rooms)), h('td', {}, fmt(x.m2, 2)), h('td', {}, share(x.m2))))),
+        h('tfoot', {},
+            h('tr', {}, h('th', { scope: 'row' }, 'Superficie habitable'), h('td', {}, ''), h('td', {}, fmt(t.habitableM2, 2)), h('td', {}, share(t.habitableM2))),
+            h('tr', {}, h('th', { scope: 'row' }, 'Total'), h('td', {}, int(t.byType.reduce((a, x) => a + x.rooms, 0))), h('td', {}, fmt(t.total.netM2, 2)), h('td', {}, '100 %')))));
+}
 
 function blocksTable(s) {
     const rows = s.blocks.map((b) => h('tr', {},
