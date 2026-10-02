@@ -6,8 +6,8 @@
     <title>{% block title %}Blockk Studio{% endblock %} · Blockk Studio</title>
     <meta name="description" content="Modelado modular y cómputo constructivo en Hormigón Celular Curado en Autoclave (HCCA).">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231e293b'/%3E%3Cpath d='M6 12l10-5 10 5v9l-10 5-10-5z' fill='%238bc53f'/%3E%3Cpath d='M6 12l10 5 10-5M16 17v9' stroke='%231e293b' stroke-width='1.6' fill='none'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="{{ asset('styles/tema.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
-    <script>try { const v = JSON.parse(localStorage.getItem('blockk.theme.css.v1') || 'null'); if (v) for (const k in v) document.documentElement.style.setProperty(k, v[k]); } catch (e) { /* tema por defecto */ }</script>
     {% block stylesheets %}{% endblock %}
     {% block javascripts %}{{ importmap(['app'] | merge(entry is defined ? [entry] : [])) }}{% endblock %}
 </head>
@@ -20,9 +20,9 @@
     <nav class="mainnav" aria-label="Secciones">
         <a href="{{ path('editor') }}" {% if nav|default('') == 'editor' %}aria-current="page"{% endif %}>Editor 3D</a>
         <a href="{{ path('bom') }}" {% if nav|default('') == 'bom' %}aria-current="page"{% endif %}>Cómputo</a>
+        <a href="{{ path('planos') }}" {% if nav|default('') == 'planos' %}aria-current="page"{% endif %}>Planos</a>
         <a href="{{ path('gallery') }}" {% if nav|default('') == 'gallery' %}aria-current="page"{% endif %}>Galería</a>
         <a href="{{ path('catalog') }}" {% if nav|default('') == 'catalog' %}aria-current="page"{% endif %}>Catálogo técnico</a>
-        <a href="{{ path('styles') }}" {% if nav|default('') == 'styles' %}aria-current="page"{% endif %}>Estilos</a>
     </nav>
     <div class="topbar-slot" id="topbar-slot">{% block topbar %}{% endblock %}</div>
 </header>

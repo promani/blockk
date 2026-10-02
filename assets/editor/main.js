@@ -14,6 +14,7 @@ import { magnet } from './snap.js';
 import { mountGuide } from './guide.js';
 import { wallRect, G } from './pick.js';
 import { mountAssistant } from './ai.js';
+import { mountShare } from './share.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
 const store = new Store(config);
@@ -789,6 +790,7 @@ $('#file-open').addEventListener('change', async (e) => {
     try {
         const data = JSON.parse(await file.text());
         if (!Array.isArray(data.levels)) throw new Error('el archivo no es un proyecto de Blockk');
+        share.unlink();
         await store.load(data);
         fitView();
         toast(`Proyecto «${store.project.name}» abierto.`);
@@ -808,10 +810,13 @@ $('#form-new').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.target));
     dlg.close();
+    share.unlink();
     await store.load(blankProject({ name: String(f.name).trim() || 'Proyecto sin título', lotW: Number(f.lotW), lotD: Number(f.lotD), t: Number(f.t), lat: Number(f.lat) }));
     fitView();
     store.ensureSolar();
 });
+
+const share = mountShare({ store, toast, fitView });
 
 /* ------------------------------------------------------------------ arranque */
 (async function boot() {
@@ -830,8 +835,8 @@ $('#form-new').addEventListener('submit', async (e) => {
     refreshOptions();
     resize();
 
-    const saved = loadProject() ?? blankProject();
-    await store.load(saved);
+    // Un enlace compartido (/?compartido=…) manda sobre lo guardado en este navegador.
+    if (!(await share.boot())) await store.load(loadProject() ?? blankProject());
     // En sólo lectura se muestra la casa completa, con techo.
     if (readOnly() && store.project.levels.some((l) => l.walls.length)) setLevel(ROOF_LEVEL);
     fitView();

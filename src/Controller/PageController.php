@@ -33,6 +33,12 @@ final class PageController extends AbstractController
         return $this->render('bom/index.html.twig', ['config' => ClientConfig::json(), 'nav' => 'bom']);
     }
 
+    #[Route('/planos', name: 'planos', methods: ['GET'])]
+    public function planos(): Response
+    {
+        return $this->render('planos/index.html.twig', ['config' => ClientConfig::json(), 'nav' => 'planos']);
+    }
+
     #[Route('/galeria', name: 'gallery', methods: ['GET'])]
     public function gallery(): Response
     {
@@ -62,11 +68,5 @@ final class PageController extends AbstractController
     public function catalog(): Response
     {
         return $this->render('catalog/index.html.twig', ['nav' => 'catalog', 'sys' => ClientConfig::catalog()]);
-    }
-
-    #[Route('/estilos', name: 'styles', methods: ['GET'])]
-    public function styles(): Response
-    {
-        return $this->render('styles/index.html.twig', ['nav' => 'styles', 'config' => ClientConfig::json()]);
     }
 }

@@ -81,6 +81,8 @@ sequenceDiagram
   bloques U en `Hcca::SYSTEMS`; el motor usa `Hcca::blockL()` y compañía, nunca un largo fijo.
 - **Asistente** (Redis, 60 días, claves con prefijo `blockk:`): `conv:{id}` (historia para el modelo, eventos para la
   interfaz, casa actual y su programa), `design:{id}`, contadores `rl:*`.
+- **Proyectos compartidos** (Redis, 180 días desde el último cambio): `share:{id}` con `{project, version, updated}`;
+  el id (32 hexadecimales al azar) es la credencial de lectura y escritura (`src/Share/SharedProjects.php`).
 
 ## API
 
@@ -96,6 +98,7 @@ sequenceDiagram
 | `POST /api/assistant/conversations` | Nueva conversación `{client, modo, inicio:{tipo: nueva\|plantilla\|proyecto, …}, texto?, respuestas?}`. |
 | `POST /api/assistant/conversations/{id}/messages` | Mensaje `{client, texto?, respuestas?, project?}`. |
 | `GET /api/assistant/conversations/{id}`, `GET /api/assistant/designs/{id}` | Retomar una conversación; casa de una conversación. |
+| `POST /api/compartidos`, `GET/PUT /api/compartidos/{id}` | Enlaces para compartir editables: crear (`{project}` → `{id, version, url}`, 60 por hora por IP), leer y guardar (gana el último). |
 | `GET /api/admin/ping`, `GET/POST /api/admin/galeria`, `GET/PUT/DELETE /api/admin/galeria/{slug}` | **API de administración de la Galería** (`Authorization: Bearer $ADMIN_API_TOKEN`; sin token configurado no existe). Crea, edita y borra modelos que ve todo el mundo en `/galeria` (guardados en Redis, clave `gallery:{slug}`, máx. 100). Cuerpo: `nombre`, `descripcion?`, `etiquetas?`, `slug?` y un dibujo: `programa` (generador), `plantilla` (clonar) o `project`; en `PUT` también `operaciones` sobre el actual. Las plantillas del código no se editan ni borran. |
 
 ## Decisiones y trade-offs
@@ -103,8 +106,8 @@ sequenceDiagram
 - **Reglas sólo en el servidor.** El cliente no duplica reglas: para validar en vivo (p. ej. dónde entra una puerta) el
   servidor devuelve los tramos libres de cada muro. Costo: una ida y vuelta por edición (~50 ms por análisis de una
   casa de 2 plantas).
-- **Sin base de datos para el editor.** El proyecto vive en el navegador: cero cuentas y cero datos personales; a
-  cambio no hay proyectos compartidos. Redis sólo para el asistente.
+- **Sin base de datos para el editor.** El proyecto vive en el navegador: cero cuentas y cero datos personales. Sólo
+  si alguien aprieta «Compartir» la casa se guarda en Redis, sin dueño: el enlace es la credencial.
 - **La IA no dibuja.** El modelo elige un programa o una operación y el código construye y valida; así toda casa que
   muestra la IA pasa la misma Revisión que una dibujada a mano. Costo: el generador sólo produce plantas en «tira».
 - **Dos modelos.** Uno liviano (barato) coordina y pregunta; uno pesado arma el JSON y las acciones. El formulario

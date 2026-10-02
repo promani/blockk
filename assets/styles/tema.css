@@ -1,0 +1,46 @@
+/*
+ * Tema de Blockk Studio: todos los colores del sitio en un solo lugar. Para cambiarlos, editá este archivo y recargá
+ * (no hace falta compilar nada). Los colores del dibujo los lee el editor al arrancar; usá hexadecimales (#rrggbb).
+ * Las miniaturas de la Galería se generan con estos colores: después de cambiar el dibujo, correr `composer miniaturas`.
+ */
+:root {
+    /* ---- Interfaz ---- */
+    --green: #78c23a;        /* acento: botones principales, pestañas activas */
+    --green-600: #609b2e;    /* acento oscuro (bordes, hover) */
+    --green-800: #36571a;    /* texto sobre fondos verdes claros */
+    --green-100: #ebf6e1;    /* fondo verde muy claro (avisos, chips) */
+    --graphite: #1b2a41;     /* barra superior y texto principal */
+    --graphite-700: #3d4a5e; /* texto secundario fuerte */
+    --surface: #f4f8ff;      /* fondo de las páginas */
+    --panel: #ffffff;        /* paneles y tarjetas */
+    --border: #cdd3dd;       /* bordes */
+    --muted: #5e6a7c;        /* texto atenuado */
+    --danger: #b42318;
+    --danger-bg: #fdecea;
+    --warn: #93520a;
+    --warn-bg: #fdf3e2;
+    --info: #1e4fbf;
+    --info-bg: #e8effd;
+    --ok: #2f6b12;
+
+    /* ---- Dibujo del editor, miniaturas y planos ---- */
+    --dibujo-fondo: #dcebfb;     /* fondo del lienzo */
+    --dibujo-terreno: #cde7b0;   /* terreno */
+    --dibujo-bloque: #f3f1ec;    /* bloque entero */
+    --dibujo-corte: #ffcb5c;     /* bloque cortado */
+    --dibujo-bloque-u: #7fc93c;  /* bloque U (dinteles y corona) */
+    --dibujo-techo: #d9552c;     /* cubierta */
+    --dibujo-vidrio: #62bdf0;
+    --dibujo-puerta: #b8692e;
+    --dibujo-madera: #e3a04c;    /* tirantes, cabios, deck */
+    --dibujo-losa: #a3b1c5;      /* losas y escaleras */
+    /* pisos de los ambientes (se repiten en este orden) */
+    --dibujo-piso-1: #ffd49a;
+    --dibujo-piso-2: #9fd8f5;
+    --dibujo-piso-3: #d3bdff;
+    --dibujo-piso-4: #b6e699;
+    --dibujo-piso-5: #ffb3b3;
+    --dibujo-piso-6: #ffec8f;
+    --dibujo-piso-7: #93e0cc;
+    --dibujo-piso-8: #ffc2e2;
+}

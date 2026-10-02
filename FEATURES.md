@@ -107,7 +107,12 @@ trabajo en equipo).
   alfresco) más los modelos que se agreguen por la API, con miniaturas de planta e isométrica.
 - **API de administración** con token para que otra herramienta (por ejemplo Claude Code) cree, edite y borre modelos
   de la Galería disponibles para todos.
-- **Temas** de color (`/estilos`) y diseño que se adapta al celular, donde el editor es **de sólo lectura**.
+- **Enlace para compartir editable**: «Compartir» guarda la casa en el servidor y da un enlace; quien lo abre la ve
+  y la edita, y los cambios se guardan solos en el enlace (gana lo último guardado; vence a los 180 días sin cambios).
+- **Planos en PDF** (`/planos`): portada con la isométrica, una planta por nivel, la planta de techos, un alzado por
+  muro hilada por hilada (cada corte con su medida y el hastial encima) y la lista de materiales.
+- **Colores** en un solo archivo (`assets/styles/tema.css`) y diseño que se adapta al celular, donde el editor es
+  **de sólo lectura**.
 
 ## 4. Lo que no hay
 
@@ -117,24 +122,25 @@ trabajo en equipo).
 | --- | --- |
 | Texturas, materiales de terminación y muebles de catálogo | No cambian el cómputo de mampostería; agregan peso y distraen. Los **muebles simples como gabarito** (camas, mesas, mesadas, artefactos de baño) están en el [BACKLOG.md](BACKLOG.md): sirven para validar medidas, no para decorar. |
 | Render fotorrealista y recorrido virtual | El dibujo es esquemático para entender la casa, no para venderla. |
-| Cotas, cortes y planos de taller | La herramienta calcula materiales; no documenta una obra. |
+| Cortes y planos de taller completos | Los planos son de obra gruesa (plantas, techos, alzados con despiece); no documentan instalaciones ni detalles. |
 | Muros curvos o diagonales, retículas libres | Todo el motor (trabas, cortes, jambas) depende de muros a 90° sobre la retícula del bloque. |
 | Más de 2 plantas con muros portantes | Es el límite autoportante del sistema (PB + PA ≤ 6 m). |
 | Cálculo estructural, sísmico y térmico detallado | Se predimensiona y se avisa; el cálculo es de un profesional. |
-| Instalaciones (agua, gas, electricidad) | Fuera del foco de mampostería; ver backlog para un cómputo grueso. |
-| Cuentas, nube y trabajo en equipo | Cero fricción de entrada; el archivo `.json` es el medio de intercambio. |
+| Instalaciones (agua, gas, electricidad) | Fuera del foco de mampostería; ni siquiera un cómputo grueso (sería de precisión muy baja). |
+| Otros sistemas constructivos y marcas | El producto es para bloques HCCA Lika; el motor aísla los datos del bloque, pero sin datos reales de fabricantes no se suman. |
+| Terreno en pendiente y retiros | El terreno es un rectángulo plano: la pendiente toca cimientos, que están fuera del cómputo. |
+| Edición desde el celular | En pantallas chicas el editor es de sólo lectura; dibujar con el dedo no justifica la complejidad. |
+| Cuentas y trabajo en equipo con permisos | Cero fricción de entrada; el enlace compartido es la credencial y el `.json` sigue sirviendo de respaldo. |
 | Precios reales, stock y flete de distribuidores | Los precios son de referencia y editables; cada distribuidor cotiza lo suyo. |
 
 ### 4.2 Todavía no (ver [BACKLOG.md](BACKLOG.md))
 
 - Un **tipo** por ambiente (dormitorio, baño…) con revisiones propias; hoy el nombre es texto libre.
 - **Muebles simples** como gabarito (camas, mesa con sillas, mesadas, artefactos de baño).
-- Vigas libres, techo a cuatro aguas o de forma libre, balcones y voladizos, terreno en pendiente y retiros.
-- Planos exportables con cotas; importar un plano como fondo para calcarlo.
-- Guardado y enlace compartible; comparar alternativas de una misma casa.
-- Otros sistemas constructivos (ladrillo cerámico, steel frame) y otras marcas de bloque con datos reales.
-- Instalaciones y rubros de obra más allá de la mampostería, estructura y cubierta.
-- Edición desde el celular; el asistente con todas las operaciones del editor (pilares, nombres, aberturas).
+- Vigas libres, techo a cuatro aguas o de forma libre, balcones y voladizos.
+- Cotas internas y fachadas en los planos; importar un plano como fondo para calcarlo.
+- Comparar alternativas de una misma casa.
+- El asistente con todas las operaciones del editor (pilares, nombres, aberturas).
 
 ## 5. Cuándo conviene y cuándo no
 

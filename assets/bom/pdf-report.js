@@ -83,7 +83,7 @@ export function buildPdf(project, analysis, config) {
     return pdf.toBlob();
 }
 
-function header(pdf, title, subtitle) {
+export function header(pdf, title, subtitle) {
     const W = pdf.pageWidth;
     pdf.rect(0, 0, W, 58, { fill: GRAPHITE });
     pdf.rect(M, 16, 26, 26, { fill: GREEN });
@@ -94,7 +94,7 @@ function header(pdf, title, subtitle) {
 }
 
 /** Tabla simple con corte de página y encabezado repetido. Devuelve la nueva coordenada y. */
-function table(pdf, y, caption, cols, rows, { boldLast = false } = {}) {
+export function table(pdf, y, caption, cols, rows, { boldLast = false } = {}) {
     const rowH = 15;
     const draw = (yy) => {
         pdf.text(M, yy + 10, caption, { size: 10, bold: true });
@@ -141,7 +141,7 @@ function fit(pdf, text, maxW, bold) {
 }
 
 /** Planta del nivel como vectores: muros (unión de las hiladas 1 y 2), vanos, ambientes y cotas generales. */
-function drawPlan(pdf, level, analysis, area, north) {
+export function drawPlan(pdf, level, analysis, area, north) {
     const rects = new Map();
     for (const c of [0, 1]) {
         for (const run of analysis.courses[c] ?? []) {
@@ -156,10 +156,22 @@ function drawPlan(pdf, level, analysis, area, north) {
     const maxX = Math.max(...list.map((r) => r[2]));
     const minY = Math.min(...list.map((r) => r[1]));
     const maxY = Math.max(...list.map((r) => r[3]));
+    // margen para la hoja de las puertas que abren hacia afuera y para las cotas
+    const leaf = Math.max(0, ...level.openings.filter((o) => o.kind !== 'window').map((o) => o.w * 12.5));
     const pad = 34;
-    const s = Math.min((area.w - 2 * pad) / (maxX - minX), (area.h - 2 * pad) / (maxY - minY));
+    const s = Math.min((area.w - 2 * pad) / (maxX - minX + 2 * leaf), (area.h - 2 * pad) / (maxY - minY + 2 * leaf));
     const ox = area.x + (area.w - (maxX - minX) * s) / 2 - minX * s;
     const oy = area.y + (area.h - (maxY - minY) * s) / 2 - minY * s;
+    /** Hoja de la puerta y su giro (cuarto de círculo) con bisagra en (hx, hy). */
+    const swing = (hx, hy, ang0, ang1, r) => {
+        const pts = [];
+        for (let i = 0; i <= 12; i++) {
+            const a = ang0 + ((ang1 - ang0) * i) / 12;
+            pts.push([X(hx + Math.cos(a) * r), Y(hy + Math.sin(a) * r)]);
+        }
+        for (let i = 1; i < pts.length; i++) pdf.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], { width: 0.4, color: MUTED });
+        pdf.line(X(hx), Y(hy), X(hx + Math.cos(ang1) * r), Y(hy + Math.sin(ang1) * r), { width: 0.8 });
+    };
     const X = (v) => ox + v * s;
     const Y = (v) => oy + v * s;
 
@@ -177,26 +189,36 @@ function drawPlan(pdf, level, analysis, area, north) {
         if (horizontal) {
             pdf.rect(X(from), Y(line - t / 2 - 0.2), len * s, (t + 0.4) * s, { fill: [255, 255, 255] });
             if (o.kind === 'window') for (const off of [-t / 4, 0, t / 4]) pdf.line(X(from), Y(line + off), X(from + len), Y(line + off), { width: 0.6 });
-            else pdf.line(X(from), Y(line), X(from), Y(line + (o.flip ? -len : len)), { width: 0.8 });
+            else swing(from, line, 0, (o.flip ? -1 : 1) * Math.PI / 2, len);
         } else {
             pdf.rect(X(line - t / 2 - 0.2), Y(from), (t + 0.4) * s, len * s, { fill: [255, 255, 255] });
             if (o.kind === 'window') for (const off of [-t / 4, 0, t / 4]) pdf.line(X(line + off), Y(from), X(line + off), Y(from + len), { width: 0.6 });
-            else pdf.line(X(line), Y(from), X(line + (o.flip ? -len : len)), Y(from), { width: 0.8 });
+            else swing(line, from, Math.PI / 2, o.flip ? Math.PI : 0, len);
         }
     }
 
+    // Nombres: los que se escribieron en el editor (donde se pusieron) o «Ambiente N» en el centro. En ambientes
+    // angostos (un placard) la letra se achica para que entre.
+    const name = (cx, cy, text, room, area) => {
+        const roomW = room ? room.bbox.w * 12.5 * s - 6 : Infinity;
+        const size = Math.max(5, Math.min(8, (8 * roomW) / Math.max(pdf.textWidth(text, 8, true), pdf.textWidth(area ?? '', 8))));
+        pdf.text(cx, cy, text, { size, bold: true, align: 'center' });
+        if (area) pdf.text(cx, cy + size + 2, area, { size, color: MUTED, align: 'center' });
+    };
     for (const r of analysis.rooms) {
-        const cx = X((r.bbox.x + r.bbox.w / 2) * 12.5);
-        const cy = Y((r.bbox.y + r.bbox.h / 2) * 12.5);
-        pdf.text(cx, cy, r.name, { size: 8, bold: true, align: 'center' });
-        pdf.text(cx, cy + 10, `${fmt(r.netM2, 2)} m²`, { size: 8, color: MUTED, align: 'center' });
+        if (r.labels) continue;
+        name(X((r.bbox.x + r.bbox.w / 2) * 12.5), Y((r.bbox.y + r.bbox.h / 2) * 12.5), r.name, r, `${fmt(r.netM2, 2)} m²`);
+    }
+    for (const lb of analysis.labels ?? []) {
+        const room = analysis.rooms.find((q) => q.id === lb.room);
+        name(X((lb.x + 0.5) * 12.5), Y((lb.y + 0.5) * 12.5), lb.name, room, room?.labels === 1 ? `${fmt(room.netM2, 2)} m²` : null);
     }
 
     // cotas generales (a ejes)
-    const dimY = Y(maxY) + 16;
+    const dimY = Y(maxY) + leaf * s + 16;
     pdf.line(X(minX), dimY, X(maxX), dimY, { width: 0.6, color: MUTED });
     pdf.text((X(minX) + X(maxX)) / 2, dimY + 11, `${fmt((maxX - minX) / 100, 2)} m (exterior)`, { size: 8, color: MUTED, align: 'center' });
-    const dimX = X(maxX) + 16;
+    const dimX = X(maxX) + leaf * s + 16;
     pdf.line(dimX, Y(minY), dimX, Y(maxY), { width: 0.6, color: MUTED });
     pdf.text(dimX + 4, (Y(minY) + Y(maxY)) / 2, `${fmt((maxY - minY) / 100, 2)} m`, { size: 8, color: MUTED });
 

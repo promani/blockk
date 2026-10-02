@@ -15,7 +15,7 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
 
 (async () => {
     const browser = await chromium.launch();
-    const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+    const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true })).newPage();
     let errors = [];
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     page.on('pageerror', (e) => errors.push(String(e)));
@@ -46,6 +46,12 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     await page.goto(`${base}/computo`);
     await page.waitForTimeout(800);
     checkConsole('página de cómputo');
+    await page.goto(`${base}/planos`);
+    await page.waitForSelector('.planos-list', { timeout: 20000 });
+    const [pdf] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.click('#btn-planos')]);
+    const size = (await require('fs').promises.stat(await pdf.path())).size;
+    log(size > 20000, `planos: PDF generado (${Math.round(size / 1024)} KB)`);
+    checkConsole('página de planos');
 
     // 2) Proyecto en blanco: dibujar con el mouse
     await page.goto(`${base}/`);

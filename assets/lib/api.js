@@ -22,3 +22,8 @@ export const suggest = (project) => post('/api/suggest', project);
 export const solarPath = (lat, season, lon = null, tz = 0) => request(`/api/solar?lat=${encodeURIComponent(lat)}&season=${encodeURIComponent(season)}${lon === null || lon === undefined ? '' : `&lon=${encodeURIComponent(lon)}&tz=${encodeURIComponent(tz)}`}`);
 export const template = (slug) => request(`/api/templates/${encodeURIComponent(slug)}`);
 export const calcPanel = (params) => request(`/api/calc/panel?${new URLSearchParams(params)}`);
+
+/* Proyectos compartidos por enlace (quien tiene el enlace ve y edita). */
+export const shareCreate = (project) => post('/api/compartidos', { project });
+export const shareGet = (id) => request(`/api/compartidos/${encodeURIComponent(id)}`);
+export const shareSave = (id, project) => request(`/api/compartidos/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ project }) });

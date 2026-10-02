@@ -104,9 +104,17 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
   el mouse está encima). Las de las plantillas se pregeneran con `composer miniaturas` (`public/img/plantillas`, con
   hash del proyecto); los modelos creados por la API de administración no tienen imágenes pregeneradas y muestran la planta en SVG; cada una con «Usar» y «✦ Modificar con IA». Antes de reemplazar el proyecto del
   editor se pide confirmación.
-- **Estilos** (`/estilos`): paletas (Vivo, Clásico, Tierra, Contraste) y cada color de la interfaz y del dibujo, con
-  vista previa; se guarda en el navegador (`assets/lib/theme.js`). Las miniaturas pregeneradas de la Galería usan la
-  paleta por defecto.
+- **Planos** (`/planos`): lista de los planos del proyecto actual y botón «Generar planos», que arma un PDF vectorial
+  (`assets/planos/planos.js`, con `assets/lib/pdf.js`): portada con la isométrica (JPEG del renderer), planta por
+  nivel, planta de techos, un alzado por muro (código `N1-M3`: hiladas, cortes con medida, U, vanos, hastial y
+  ubicación) y la lista de materiales.
+- **Compartir** (botón de la barra del editor, `assets/editor/share.js`): guarda el proyecto en `/api/compartidos` y
+  abre `/?compartido=<id>`; quien tenga el enlace edita y los cambios se guardan solos (1,2 s después del último). Al
+  volver a la pestaña se trae la versión más nueva si no hay cambios propios sin guardar. «Nuevo» y «Abrir» dejan de
+  usar el enlace.
+- **Colores**: todos en `assets/styles/tema.css` (interfaz y dibujo, variables `--dibujo-*` que lee
+  `assets/lib/theme.js`). Se edita el archivo y se recarga; las miniaturas de la Galería se regeneran con
+  `composer miniaturas`.
 - **Catálogo técnico** (`/catalogo`): fichas de piezas, reglas críticas de colocación, módulo y niveles, calculadora
   rápida de paño y mortero y preguntas frecuentes. Ver [HCCA.md](HCCA.md).
 

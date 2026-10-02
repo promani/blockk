@@ -54,6 +54,13 @@ Todas tienen valor por defecto en `.env`; las secretas van en `.env.local` (no s
 | `ASSISTANT_HOURLY_LIMIT`, `ASSISTANT_DAILY_LIMIT` | Mensajes al asistente por hora por IP (60) y por día en total (500). |
 | `ADMIN_API_TOKEN` | Token de la API de administración (`/api/admin/*`, crear casas desde fuera del navegador). Vacío: la API no existe. Generarlo largo y aleatorio. |
 
+### Colores
+
+Los colores de la interfaz y del dibujo (bloques, cortes, U, techo, vidrio, pisos por ambiente…) están todos en
+[`assets/styles/tema.css`](assets/styles/tema.css), como variables CSS comentadas. Para cambiar el estilo del sitio se
+edita ese archivo y se recarga la página; si cambian los colores del dibujo, regenerar las miniaturas de la Galería con
+`composer miniaturas`.
+
 ### Producción
 
 El `Dockerfile` arma una imagen PHP 8.4 + Apache que escucha en el **puerto 8080**, con los assets compilados y la

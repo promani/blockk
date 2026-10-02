@@ -13,6 +13,8 @@
         <button type="button" class="btn btn-ghost" id="btn-save" title="Descargar el proyecto (.json)">Guardar</button>
         <button type="button" class="btn btn-ghost" id="btn-open" title="Abrir un proyecto (.json)">Abrir</button>
         <input type="file" id="file-open" accept="application/json,.json" hidden>
+        <span class="share-status" id="share-status" role="status" aria-live="polite" hidden></span>
+        <button type="button" class="btn btn-primary" id="btn-share" title="Crear un enlace para que otra persona vea y edite este proyecto">Compartir</button>
     </div>
 {% endblock %}
 {% block body %}
@@ -73,6 +75,17 @@
         <details open class="card" id="card-issues"><summary>Revisión <span class="badge" id="issues-badge">0</span></summary><div id="issues" class="card-body"></div></details>
     </aside>
 </main>
+<dialog id="dlg-share" class="dialog" aria-labelledby="share-title">
+    <h2 id="share-title">Compartir el proyecto</h2>
+    <p>Cualquiera con este enlace puede <b>ver y editar</b> el proyecto. Los cambios se guardan solos en el enlace, de un lado y del otro.</p>
+    <div class="share-row">
+        <label class="sr-only" for="share-url">Enlace</label>
+        <input id="share-url" type="text" readonly>
+        <button type="button" class="btn btn-primary" id="share-copy">Copiar</button>
+    </div>
+    <p class="small muted">El enlace vence a los 180 días sin cambios. Si dos personas editan a la vez, queda lo último que se guardó. «Nuevo» o «Abrir» dejan de usar el enlace.</p>
+    <div class="dialog-actions"><button type="button" class="btn btn-ghost" id="share-close">Cerrar</button></div>
+</dialog>
 <dialog id="dlg-new" class="dialog">
     <form method="dialog" id="form-new">
         <h2>Nuevo proyecto</h2>
