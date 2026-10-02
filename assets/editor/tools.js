@@ -1934,7 +1934,31 @@ export function createTools(app) {
     };
 
     // ---------------- muebles simples ----------------
-    const furnitureState = { kind: Object.keys(cfg.furniture ?? {})[0] ?? '', rot: 0 };
+    // Al entrar a la herramienta se abre el menú de muebles: no se coloca nada hasta elegir uno.
+    const furnitureState = { kind: null, rot: 0, active: false };
+    let furnitureMenu = null;
+    const closeFurnitureMenu = () => {
+        furnitureMenu?.remove();
+        furnitureMenu = null;
+    };
+    const openFurnitureMenu = () => {
+        closeFurnitureMenu();
+        const pick = (id) => {
+            furnitureState.kind = id;
+            closeFurnitureMenu();
+            app.refreshOptions();
+            app.render();
+            app.canvas.focus({ preventScroll: true });
+        };
+        furnitureMenu = h('div', { class: 'furniture-menu', role: 'dialog', 'aria-label': 'Elegir un mueble' },
+            h('div', { class: 'fm-head' },
+                h('strong', {}, '¿Qué mueble vas a colocar?'),
+                furnitureState.kind ? h('button', { type: 'button', class: 'ai-x', 'aria-label': 'Cerrar', onclick: closeFurnitureMenu }, '×') : null),
+            furnitureGroups(cfg).map(([group, items]) => h('div', { class: 'fm-group' },
+                h('div', { class: 'kv-title' }, group),
+                h('div', { class: 'fm-items' }, items.map(([id, def]) => h('button', { type: 'button', class: 'chip', 'aria-pressed': String(id === furnitureState.kind), onclick: () => pick(id) }, def.name))))));
+        document.getElementById('stage').append(furnitureMenu);
+    };
     /** El mueble a colocar, centrado bajo el cursor. */
     const furnitureAt = (p) => {
         const m = { kind: furnitureState.kind, rot: furnitureState.rot, x: 0, y: 0 };
@@ -1948,14 +1972,31 @@ export function createTools(app) {
         snap: 1,
         hotkey: 'g',
         label: 'Mueble',
-        hint: 'Elegí un mueble y hacé clic para colocarlo; X lo gira. Son gabaritos de tamaño real para ver si el ambiente alcanza: no entran al cómputo. Después se mueve arrastrándolo.',
+        hint: 'Elegí un mueble del menú y hacé clic para colocarlo; X lo gira. Son gabaritos de tamaño real para ver si el ambiente alcanza: no entran al cómputo. Después se mueve arrastrándolo.',
         disabled: () => (store.ui.level === 2 ? 'Elegí «Nivel 1» o «Nivel 2».' : null),
-        options: () => h('span', { class: 'row' },
-            h('label', { class: 'field-inline' }, 'Mueble',
-                h('select', { onchange: (e) => { furnitureState.kind = e.target.value; app.render(); } },
-                    furnitureGroups(cfg).map(([group, items]) => h('optgroup', { label: group }, items.map(([id, def]) => h('option', { value: id, selected: id === furnitureState.kind }, def.name)))))),
-            h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: turnTool }, `Girar (X) · ${furnitureState.rot * 90}°`)),
+        options: () => {
+            if (!furnitureState.active) {
+                // recién elegida la herramienta: primero el menú, para decidir qué se va a colocar
+                furnitureState.active = true;
+                furnitureState.kind = null;
+                openFurnitureMenu();
+            }
+            const def = cfg.furniture?.[furnitureState.kind];
+            return h('span', { class: 'row' },
+                def
+                    ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', id: 'furniture-change', onclick: openFurnitureMenu }, `${def.name} · cambiar ▾`)
+                    : h('span', { class: 'muted' }, 'Elegí un mueble del menú para colocarlo.'),
+                def ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: turnTool }, `Girar (X) · ${furnitureState.rot * 90}°`) : null);
+        },
+        reset() {
+            furnitureState.active = false;
+            closeFurnitureMenu();
+        },
         down(p) {
+            if (!furnitureState.kind) {
+                openFurnitureMenu();
+                return;
+            }
             const m = furnitureAt(p);
             if (!m) return;
             store.commit('Agregar mueble', (d) => {

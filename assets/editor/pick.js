@@ -85,6 +85,15 @@ export function pickWall(app, sx, sy) {
     return pickWallHit(app, sx, sy)?.wall ?? null;
 }
 
+/**
+ * Alto (cm) con el que se ve un muro del nivel activo: con «Ver adentro» los muros se dibujan recortados, y lo que
+ * queda a la vista detrás de la parte recortada se tiene que poder elegir.
+ */
+export function visibleWallHeight(store, w) {
+    const courses = w.h ?? 12;
+    return (store.ui.cut < 12 ? Math.min(courses, store.ui.cut) : courses) * 25;
+}
+
 /** Igual que pickWall, con la profundidad del muro (para compararla con otros elementos). */
 function pickWallHit(app, sx, sy) {
     const { cam, store } = app;
@@ -94,9 +103,10 @@ function pickWallHit(app, sx, sy) {
     let best = null;
     for (const w of level.walls) {
         const rect = wallRect(w);
-        const hull = boxHull(cam, rect, base, (w.h ?? 12) * 25);
+        const height = visibleWallHeight(store, w);
+        const hull = boxHull(cam, rect, base, height);
         if (!inHull(hull, sx, sy)) continue;
-        const depth = rayDepth(cam, sx, sy, rect, base, base + (w.h ?? 12) * 25) ?? depthOf(cam, rect, wx, wy);
+        const depth = rayDepth(cam, sx, sy, rect, base, base + height) ?? depthOf(cam, rect, wx, wy);
         if (!best || depth > best.depth) best = { wall: w, depth };
     }
     return best;

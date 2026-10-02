@@ -239,7 +239,9 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     // Muebles simples: colocar girado, mover arrastrando, girar desde el panel; y apagar muebles y árboles
     const furniture = () => page.evaluate(() => window.blockk.store.project.levels[0].furniture ?? []);
     await page.keyboard.press('g');
-    await page.selectOption('#tooloptions label:has-text("Mueble") select', 'cama2');
+    log(await page.isVisible('.furniture-menu') && (await furniture()).length === 0, 'la herramienta Mueble abre el menú para elegir antes de colocar');
+    await page.click('.furniture-menu .chip:has-text("Cama de 2 plazas")');
+    log(!(await page.isVisible('.furniture-menu')) && await page.isVisible('#furniture-change'), 'elegido el mueble, el menú se cierra y queda a mano para cambiarlo');
     await focusCanvas();
     await page.keyboard.press('x');
     await at(300, 250);
