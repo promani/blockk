@@ -9,7 +9,8 @@ import { KIND, sortedItems, visibleFaces } from './scene.js';
 import { fmt } from '../lib/format.js';
 import { drawTheme, mix } from '../lib/theme.js';
 import { planeEq, planeHoles, gableHoles, withHoles } from './roofclip.js';
-import { ZONE_KINDS, TREE_SIZES, zoneLabel } from './site.js';
+import { ZONE_KINDS, zoneLabel } from './site.js';
+import { treeModel } from './tree-model.js';
 
 const G = 12.5;
 
@@ -160,76 +161,195 @@ export class Renderer {
         }
     }
 
-    /** Árbol en la isométrica: sombra en el suelo, tronco y copa. */
+    /**
+     * Árbol en la isométrica: tronco, ramas y racimos de hojas (ver tree-model.js), de atrás hacia adelante para que las
+     * ramas se vean entre los huecos de la copa. La sombra va aparte (drawTreeShadows), con el sol.
+     */
     drawTree(ctx, cam, b) {
-        const d = TREE_SIZES[b.treeSize] ?? TREE_SIZES.M;
-        const cx = (b.x0 + b.x1) / 2;
-        const cy = (b.y0 + b.y1) / 2;
-        const unit = Math.hypot(...cam.project(cx + 1, cy, 0).map((v, i) => v - cam.project(cx, cy, 0)[i])) || cam.zoom;
+        const t = { id: b.tree, size: b.treeSize };
+        const m = treeModel(t);
+        const ox = (b.x0 + b.x1) / 2;
+        const oy = (b.y0 + b.y1) / 2;
+        const P = (p) => cam.project(ox + p[0], oy + p[1], p[2]);
+        const depth = (p) => cam.project(ox + p[0], oy + p[1], 0)[1];
+        const unit = cam.zoom;
+        const picked = this.frame?.ui?.selection?.type === 'tree' && this.frame.ui.selection.id === b.tree;
+        const items = [
+            ...m.branches.map((br) => ({ d: depth([(br.a[0] + br.b[0]) / 2, (br.a[1] + br.b[1]) / 2]), br })),
+            ...m.leaves.map((lf) => ({ d: depth([lf.x, lf.y]) + lf.z * 0.001, lf })),
+        ].sort((p, q) => p.d - q.d);
         ctx.save();
-        // sombra propia (siempre): una elipse suave sobre el suelo
-        const ring = Array.from({ length: 24 }, (_, i) => {
-            const a = (i / 24) * Math.PI * 2;
-            return cam.project(cx + Math.cos(a) * d.r * 0.85 + d.r * 0.12, cy + Math.sin(a) * d.r * 0.85 + d.r * 0.12, 0.3);
-        });
-        ctx.beginPath();
-        ring.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(15,23,42,.18)';
-        ctx.fill();
-        // tronco
-        const [bx, by] = cam.project(cx, cy, 0);
-        const [tx, ty] = cam.project(cx, cy, d.trunkH + d.r * 0.5);
-        ctx.strokeStyle = '#6b4a2b';
         ctx.lineCap = 'round';
-        ctx.lineWidth = Math.max(2, d.trunk * 2 * unit);
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.lineTo(tx, ty);
-        ctx.stroke();
-        // copa
-        const [sx, sy] = cam.project(cx, cy, d.h - d.r);
-        const rpx = d.r * unit * 1.18;
-        const grad = ctx.createRadialGradient(sx - rpx * 0.35, sy - rpx * 0.4, rpx * 0.1, sx, sy, rpx);
-        grad.addColorStop(0, '#9fd16a');
-        grad.addColorStop(1, '#4f8a33');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(sx, sy, rpx, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(30,60,20,.45)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        // la luz viene de arriba a la izquierda de la pantalla
+        for (const it of items) {
+            if (it.br) {
+                const [ax, ay] = P(it.br.a);
+                const [bx, by] = P(it.br.b);
+                ctx.strokeStyle = '#6b4a2b';
+                ctx.lineWidth = Math.max(1, it.br.w * 2 * unit);
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(bx, by);
+                ctx.stroke();
+                continue;
+            }
+            const lf = it.lf;
+            const [sx, sy] = P([lf.x, lf.y, lf.z]);
+            const rpx = Math.max(1.5, lf.r * unit);
+            const light = Math.max(0, Math.min(1, 0.55 + lf.nz * 0.35 + (it.d - depth([0, 0])) / (m.size.r * unit * 6)));
+            const grad = ctx.createRadialGradient(sx - rpx * 0.35, sy - rpx * 0.4, rpx * 0.1, sx, sy, rpx);
+            grad.addColorStop(0, mix('#8cc95a', '#c2e88f', light));
+            grad.addColorStop(1, mix('#2f6b25', '#4f8a33', light));
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(sx, sy, rpx, 0, Math.PI * 2);
+            ctx.fill();
+            // hojas sueltas sobre el racimo (girasol: ángulo áureo) cuando hay zoom para verlas
+            if (rpx > 7) {
+                ctx.fillStyle = mix('#7fb850', '#b9e08a', light);
+                for (let k = 1; k <= 7; k++) {
+                    const a = k * 2.39996;
+                    const rr = rpx * 0.75 * Math.sqrt(k / 7);
+                    ctx.beginPath();
+                    ctx.ellipse(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr * 0.8, rpx * 0.16, rpx * 0.08, a, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            ctx.strokeStyle = picked ? '#2563eb' : 'rgba(30,60,20,.35)';
+            ctx.lineWidth = picked ? 1.6 : 0.7;
+            ctx.stroke();
+        }
         ctx.restore();
     }
 
-    /** Árboles en planta: copa translucida, tronco y una sombra corrida. */
+    /** Árboles en planta (vistos desde arriba): ramas y racimos translúcidos, los más altos encima. */
     drawPlanTrees(f) {
         const { ctx } = this;
         const { cam, project, ui } = f;
         for (const t of project.trees ?? []) {
-            const d = TREE_SIZES[t.size] ?? TREE_SIZES.M;
-            const [cx, cy] = cam.project(t.x * G, t.y * G, 0);
-            const [sx, sy] = cam.project(t.x * G + d.r * 0.14, t.y * G + d.r * 0.14, 0);
-            const r = d.r * cam.zoom;
+            const m = treeModel(t);
+            const ox = t.x * G;
+            const oy = t.y * G;
+            const picked = ui?.selection?.type === 'tree' && ui.selection.id === t.id;
             ctx.save();
-            ctx.fillStyle = 'rgba(15,23,42,.14)';
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#6b4a2b';
+            for (const br of m.branches) {
+                const [ax, ay] = cam.project(ox + br.a[0], oy + br.a[1], 0);
+                const [bx, by] = cam.project(ox + br.b[0], oy + br.b[1], 0);
+                ctx.lineWidth = Math.max(1, br.w * 2 * cam.zoom);
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(bx, by);
+                ctx.stroke();
+            }
+            for (const lf of [...m.leaves].sort((p, q) => p.z - q.z)) {
+                const [sx, sy] = cam.project(ox + lf.x, oy + lf.y, 0);
+                const light = 0.5 + lf.nz * 0.5;
+                ctx.fillStyle = mix('#4f8a33', '#a7d977', light);
+                ctx.globalAlpha = 0.55;
+                ctx.beginPath();
+                ctx.arc(sx, sy, Math.max(1.5, lf.r * cam.zoom), 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            const [cx, cy] = cam.project(ox, oy, 0);
+            ctx.strokeStyle = picked ? '#2563eb' : 'rgba(40,90,30,.55)';
+            ctx.lineWidth = picked ? 2.5 : 1;
+            ctx.setLineDash(picked ? [] : [4, 3]);
             ctx.beginPath();
-            ctx.arc(sx, sy, r, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = 'rgba(111,170,70,.62)';
-            ctx.strokeStyle = ui?.selection?.type === 'tree' && ui.selection.id === t.id ? '#2563eb' : 'rgba(40,90,30,.8)';
-            ctx.lineWidth = ui?.selection?.type === 'tree' && ui.selection.id === t.id ? 2.5 : 1.3;
-            ctx.beginPath();
-            ctx.arc(cx, cy, r, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.arc(cx, cy, m.size.r * cam.zoom, 0, Math.PI * 2);
             ctx.stroke();
-            ctx.fillStyle = '#6b4a2b';
-            ctx.beginPath();
-            ctx.arc(cx, cy, Math.max(2, d.trunk * cam.zoom), 0, Math.PI * 2);
-            ctx.fill();
             ctx.restore();
         }
+    }
+
+    /**
+     * Sombra de los árboles con el sol: cada rama y cada racimo de hojas proyectado al suelo. Es una sombra parcial (la
+     * luz pasa entre las hojas): se pinta rayada y más clara que la de la casa.
+     */
+    drawTreeShadows(f) {
+        const { cam, project, ui, sun } = f;
+        if (!project.trees?.length || !sun || !ui?.solar?.show || sun.alt < 3) return;
+        const disp = this.sunDisp(project, sun);
+        this.treeShadow ??= document.createElement('canvas');
+        const c = this.treeShadow;
+        if (c.width !== this.shadow.width || c.height !== this.shadow.height) [c.width, c.height] = [this.shadow.width, this.shadow.height];
+        const sctx = c.getContext('2d');
+        sctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        sctx.globalCompositeOperation = 'source-over';
+        sctx.clearRect(0, 0, cam.w, cam.h);
+        sctx.fillStyle = '#000';
+        sctx.strokeStyle = '#000';
+        sctx.lineCap = 'round';
+        const ground = (x, y, z) => {
+            const o = disp(z);
+            return cam.project(x + o[0], y + o[1], 0);
+        };
+        for (const t of project.trees) {
+            const m = treeModel(t);
+            const ox = t.x * G;
+            const oy = t.y * G;
+            for (const br of m.branches) {
+                const [ax, ay] = ground(ox + br.a[0], oy + br.a[1], br.a[2]);
+                const [bx, by] = ground(ox + br.b[0], oy + br.b[1], br.b[2]);
+                sctx.lineWidth = Math.max(1, br.w * 2 * cam.zoom);
+                sctx.beginPath();
+                sctx.moveTo(ax, ay);
+                sctx.lineTo(bx, by);
+                sctx.stroke();
+            }
+            // la sombra de una esfera es una elipse estirada hacia donde va la luz: casco de tres anillos
+            for (const lf of m.leaves) {
+                const pts = [];
+                for (let i = 0; i < 10; i++) {
+                    const a = (i / 10) * Math.PI * 2;
+                    for (const dz of [-0.7, 0, 0.7]) {
+                        const rr = lf.r * 0.85 * Math.sqrt(1 - dz * dz);
+                        pts.push(ground(ox + lf.x + rr * Math.cos(a), oy + lf.y + rr * Math.sin(a), lf.z + dz * lf.r * 0.85));
+                    }
+                }
+                const hull = convexHull(pts);
+                sctx.beginPath();
+                hull.forEach(([x, y], i) => (i ? sctx.lineTo(x, y) : sctx.moveTo(x, y)));
+                sctx.closePath();
+                sctx.fill();
+            }
+        }
+        // rayado: se recorta la máscara con un patrón de franjas diagonales
+        sctx.globalCompositeOperation = 'source-in';
+        sctx.fillStyle = this.stripes(sctx);
+        sctx.fillRect(0, 0, cam.w, cam.h);
+        sctx.globalCompositeOperation = 'source-over';
+        const { ctx } = this;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 0.3;
+        ctx.drawImage(c, 0, 0);
+        ctx.restore();
+    }
+
+    /** Patrón de franjas diagonales para las sombras parciales. */
+    stripes(ctx) {
+        if (!this.stripeTile) {
+            const s = 8;
+            const tile = document.createElement('canvas');
+            tile.width = s;
+            tile.height = s;
+            const g = tile.getContext('2d');
+            g.fillStyle = 'rgba(15,23,42,.35)';
+            g.fillRect(0, 0, s, s);
+            g.strokeStyle = '#0f172a';
+            g.lineWidth = 2.6;
+            g.beginPath();
+            for (const o of [-s, 0, s]) {
+                g.moveTo(o, s);
+                g.lineTo(o + s, 0);
+            }
+            g.stroke();
+            this.stripeTile = tile;
+        }
+        return ctx.createPattern(this.stripeTile, 'repeat');
     }
 
     // ---------- suelo, retícula ----------
@@ -662,16 +782,21 @@ export class Renderer {
     }
 
     // ---------- sombras ----------
-    drawShadows(f) {
-        const { cam, project, analysis, ui, sun } = f;
-        if (!sun || sun.alt < 3) return;
-        const theta = (project.north * Math.PI) / 180;
+    /** Corrimiento en el suelo (cm) de un punto a altura h, según la posición del sol y el norte del proyecto. */
+    sunDisp(project, sun) {
+        const theta = ((project.north ?? 0) * Math.PI) / 180;
         const north = [Math.sin(theta), -Math.cos(theta)];
         const east = [Math.cos(theta), Math.sin(theta)];
         const az = (sun.az * Math.PI) / 180;
         const toSun = [east[0] * Math.sin(az) + north[0] * Math.cos(az), east[1] * Math.sin(az) + north[1] * Math.cos(az)];
         const k = 1 / Math.tan((sun.alt * Math.PI) / 180);
-        const disp = (h) => [-toSun[0] * h * k, -toSun[1] * h * k];
+        return (h) => [-toSun[0] * h * k, -toSun[1] * h * k];
+    }
+
+    drawShadows(f) {
+        const { cam, project, analysis, ui, sun } = f;
+        if (!sun || sun.alt < 3) return;
+        const disp = this.sunDisp(project, sun);
 
         const sctx = this.shadowCtx;
         sctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -704,31 +829,12 @@ export class Renderer {
                 }
             }
         }
-        for (const t of project.trees ?? []) {
-            const d = TREE_SIZES[t.size] ?? TREE_SIZES.M;
-            const cx = t.x * G;
-            const cy = t.y * G;
-            const zc = d.h - d.r;
-            const pts = [[cx, cy]];
-            for (let i = 0; i < 16; i++) {
-                const a = (i / 16) * Math.PI * 2;
-                for (const dz of [-0.7, 0, 0.7]) {
-                    const o = disp(zc + dz * d.r);
-                    const rr = d.r * Math.sqrt(1 - dz * dz);
-                    pts.push([cx + rr * Math.cos(a) + o[0], cy + rr * Math.sin(a) + o[1]]);
-                }
-            }
-            const hull = convexHull(pts).map(([x, y]) => cam.project(x, y, 0));
-            sctx.beginPath();
-            hull.forEach(([x, y], i) => (i ? sctx.lineTo(x, y) : sctx.moveTo(x, y)));
-            sctx.closePath();
-            sctx.fill();
-        }
         this.ctx.save();
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.globalAlpha = 0.27;
         this.ctx.drawImage(this.shadow, 0, 0);
         this.ctx.restore();
+        this.drawTreeShadows(f);
     }
 
     // ---------- planta ----------
@@ -767,6 +873,7 @@ export class Renderer {
             if (li === 1) this.drawPlanSlabs(f);
         }
         this.drawZoneLabels(f);
+        this.drawTreeShadows(f);
         this.drawPlanTrees(f);
         if (ui.level === 2) this.drawPlanRoof(f);
     }
