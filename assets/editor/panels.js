@@ -11,7 +11,6 @@ import { roomNamesList, roomAnchor, roomTypeItems, nameForType, setLabelType } f
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
 import { footprint, furnitureGroups, turnFurniture } from './furniture.js';
 import { contextOf, CONTEXT_TITLE, roomWalls, facing, openingM2, issueMatches } from './context.js';
-import { stairCoverage, stairBox, STAIR_BLOCKED } from './stair-fit.js';
 
 const G = 12.5;
 /** [nombre, latitud, longitud, huso horario (UTC)] */
@@ -508,7 +507,7 @@ export function mountPanels(app) {
                 field('Largo (cm)', num(z.h * G, 25, 90000, (v) => upd((x) => { x.h = Math.max(2, Math.round(v / G)); }), G)),
                 h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2((z.w * G * z.h * G) / 10000))),
                 h('div', { class: 'actions-row' }, delBtn),
-                h('p', { class: 'muted small' }, 'No es parte de la casa ni entra al cómputo. Para moverla, arrastrala.'),
+                h('p', { class: 'muted small' }, 'No es parte de la casa ni entra al cómputo. Para moverla, arrastrala; para agrandarla o achicarla, arrastrá los puntos azules de sus lados.'),
             );
             return;
         }
@@ -644,8 +643,6 @@ export function mountPanels(app) {
                 store.project.upper ? field('Apoya sobre', sel(r.level, [[0, 'Nivel 1'], [1, 'Nivel 2']], (v) => upd((x) => { x.level = Number(v); }))) : null,
                 field('Ancho (× 12,5 cm)', num(r.w, 2, 900, (v) => upd((x) => { x.w = v; }))),
                 field('Profundidad (× 12,5 cm)', num(r.h, 2, 900, (v) => upd((x) => { x.h = v; }))),
-                field('Posición X (× 12,5 cm)', num(r.x, 0, 1000, (v) => upd((x) => { x.x = v; }))),
-                field('Posición Y (× 12,5 cm)', num(r.y, 0, 1000, (v) => upd((x) => { x.y = v; }))),
                 check('Hastial A (extremo inicial)', 'gableA'),
                 check('Hastial B (extremo final)', 'gableB'),
                 field('Espesor de hastiales', sel(r.gableT, [10, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.gableT = Number(v); }))),
@@ -685,8 +682,6 @@ export function mountPanels(app) {
                 field('Espesor', sel(sl.thickness, [10, 12, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.thickness = Number(v); }))),
                 field('Ancho (× 12,5 cm)', num(sl.w, 2, 900, (v) => upd((x) => { x.w = v; }))),
                 field('Profundidad (× 12,5 cm)', num(sl.h, 2, 900, (v) => upd((x) => { x.h = v; }))),
-                field('Posición X (× 12,5 cm)', num(sl.x, 0, 1000, (v) => upd((x) => { x.x = v; }))),
-                field('Posición Y (× 12,5 cm)', num(sl.y, 0, 1000, (v) => upd((x) => { x.y = v; }))),
                 plan ? h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2(plan.areaM2)), h('dt', {}, 'Hormigón'), h('dd', {}, `${fmt((plan.areaM2 * sl.thickness) / 100, 2)} m³`)) : null,
                 h('div', { class: 'actions-row' }, delBtn),
             );
@@ -698,17 +693,6 @@ export function mountPanels(app) {
             if (!st) return void (store.ui.selection = null);
             const upd = (fn) => store.commit('Editar escalera', (d) => fn(d.levels[0].stairs.find((x) => x.id === st.id)));
             const plan = store.analysis?.floors?.stairs?.find((x) => x.id === st.id);
-            // Mover desde el panel: tampoco puede atravesar un muro ni salir de la habitación.
-            const moveTo = (nx, ny) => {
-                const now = stairBox(store.analysis, st.id);
-                const next = stairBox(store.analysis, st.id, nx - st.x, ny - st.y);
-                if (now && next && stairCoverage(store.analysis, next) < stairCoverage(store.analysis, now) - 1e-6) {
-                    app.toast(STAIR_BLOCKED);
-                    renderProps();
-                    return;
-                }
-                upd((x) => { x.x = nx; x.y = ny; });
-            };
             add(el.props,
                 h('div', { class: 'kv-title' }, 'Escalera'),
                 field('Forma', sel(st.shape, [['straight', 'Recta'], ['L', 'En L con descanso'], ['U', 'En U con descanso']], (v) => upd((x) => { x.shape = v; }))),
@@ -716,8 +700,6 @@ export function mountPanels(app) {
                 st.shape !== 'straight' ? field('Gira a', sel(st.turn, [['right', 'la derecha'], ['left', 'la izquierda']], (v) => upd((x) => { x.turn = v; }))) : null,
                 field('Ancho (× 12,5 cm)', num(st.w, 7, 16, (v) => upd((x) => { x.w = v; }))),
                 field('Huella (cm)', num(st.tread, 25, 32, (v) => upd((x) => { x.tread = v; }))),
-                field('Posición X (× 12,5 cm)', num(st.x, 0, 1000, (v) => moveTo(v, st.y))),
-                field('Posición Y (× 12,5 cm)', num(st.y, 0, 1000, (v) => moveTo(st.x, v))),
                 plan ? h('dl', { class: 'dl' },
                     h('dt', {}, 'Contrahuella'), h('dd', {}, `${fmt(plan.riseCm, 1)} cm`),
                     h('dt', {}, 'Peldaños'), h('dd', {}, int(plan.steps.length)),
@@ -751,6 +733,7 @@ export function mountPanels(app) {
             h('div', { class: 'lot-row' },
                 h('label', {}, 'Ancho (m)', num(store.project.lot.w, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, w: v }; }))),
                 h('label', {}, 'Fondo (m)', num(store.project.lot.d, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, d: v }; })))),
+            field('Frente (calle)', sel(store.project.lot.front ?? 'S', ['S', 'N', 'W', 'E'].map((d) => [d, sideLabel(d, store.project.north)]), (v) => store.commit('Frente del terreno', (d) => { d.lot = { ...d.lot, front: v }; }))),
             h('div', { class: 'check-row' },
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', checked: store.ui.showLot !== false, onchange: (e) => store.setUi({ showLot: e.target.checked }) }), 'Mostrar terreno'),
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', checked: store.ui.showGrid !== false, onchange: (e) => store.setUi({ showGrid: e.target.checked }) }), 'Mostrar cuadrícula')),

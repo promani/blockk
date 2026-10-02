@@ -9,11 +9,18 @@ import { KIND, sortedItems, visibleFaces } from './scene.js';
 import { fmt } from '../lib/format.js';
 import { drawTheme, mix } from '../lib/theme.js';
 import { planeEq, planeHoles, gableHoles, withHoles } from './roofclip.js';
-import { ZONE_KINDS, zoneLabel } from './site.js';
+import { ZONE_KINDS, TREE_SIZES, zoneLabel } from './site.js';
 import { treeModel } from './tree-model.js';
 import { backEdge, furnitureOn, treesOn } from './furniture.js';
 
 const G = 12.5;
+
+/** Frente del terreno: ancho de la vereda y de la calzada (cm). */
+const STREET = { walk: 200, road: 700 };
+
+/** Opacidad del repaso de un árbol sobre lo que tapa: las ramas se insinúan y las hojas casi no tapan (se enciman muchas). */
+const BRANCH_OVER = 0.45;
+const LEAF_OVER = 0.12;
 
 /** Colores de piso por ambiente (del tema): el mismo ambiente conserva su color al editar. */
 export const roomColor = (room) => {
@@ -113,6 +120,7 @@ export class Renderer {
         ctx.fillStyle = showLot ? drawTheme().ground : drawTheme().sky;
         ctx.fillRect(0, 0, cam.w, cam.h);
         if (showLot) this.drawGrass(f);
+        if (showLot && f.project) this.drawStreet(f);
         this.drawGround(f);
         this.drawBackdrop(f);
         if (f.project) {
@@ -171,7 +179,7 @@ export class Renderer {
      * Árbol en la isométrica: tronco, ramas y racimos de hojas (ver tree-model.js), de atrás hacia adelante para que las
      * ramas se vean entre los huecos de la copa. La sombra va aparte (drawTreeShadows), con el sol.
      */
-    drawTree(ctx, cam, b) {
+    drawTree(ctx, cam, b, leafAlpha = 1) {
         const t = { id: b.tree, size: b.treeSize };
         const m = treeModel(t);
         const ox = (b.x0 + b.x1) / 2;
@@ -203,9 +211,58 @@ export class Renderer {
             const [sx, sy] = P([lf.x, lf.y, lf.z]);
             const rpx = Math.max(1.5, lf.r * unit);
             const light = Math.max(0, Math.min(1, 0.55 + lf.nz * 0.35 + (it.d - depth([0, 0])) / (m.size.r * unit * 6)));
+            if (leafAlpha < 1) ctx.globalAlpha = leafAlpha;
             leafCluster(ctx, sx, sy, rpx, light, picked);
+            if (leafAlpha < 1) ctx.globalAlpha = BRANCH_OVER;
         }
         ctx.restore();
+    }
+
+    /**
+     * Árboles delante de la casa. El pintor los dibuja en la capa del suelo y las hiladas de más arriba los tapan aunque
+     * estén detrás: acá se repasan traslúcidos sobre lo que tienen detrás (la casa se sigue viendo a través) y, recortado
+     * a la silueta del árbol (copa y tronco), se vuelve a pintar lo que está delante de ellos.
+     */
+    drawTreesOver(ctx, cam, trees, drawn, strokeOn) {
+        for (const t of trees) {
+            const d = TREE_SIZES[t.b.treeSize] ?? TREE_SIZES.M;
+            const ox = (t.b.x0 + t.b.x1) / 2;
+            const oy = (t.b.y0 + t.b.y1) / 2;
+            const cx = (t.x0 + t.x1) / 2;
+            const cy = (t.y0 + t.y1) / 2;
+            // En pantalla la x sale de x' − y' (marco girado): sólo importa lo que cae en la franja de la copa.
+            const reach = (t.x1 - t.x0) * 0.9;
+            const front = [];
+            const back = [];
+            for (const it of drawn) {
+                if (it.x1 - it.y0 < cx - cy - reach || it.x0 - it.y1 > cx - cy + reach) continue;
+                if ((cx <= it.x0 + 0.01 && cy < it.y1) || (cy <= it.y0 + 0.01 && cx < it.x1)) front.push(it);
+                else if (it.b.zs > 0.5) back.push(it.b); // lo de la capa del suelo se pinta antes que el árbol: no lo tapa
+            }
+            if (!back.length) continue;
+            const [sx, sy] = cam.project(ox, oy, d.h - d.r);
+            const [bx, by] = cam.project(ox, oy, 0);
+            const lw = Math.max(2, d.trunk * 2 * cam.zoom) + 2;
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(sx, sy, d.r * cam.zoom * 1.25, 0, Math.PI * 2);
+            ctx.rect(bx - lw / 2, sy, lw, by - sy + 2);
+            ctx.clip();
+            // El repaso va sólo sobre lo que tapó al árbol: fuera de ahí el árbol ya está pintado, opaco.
+            ctx.save();
+            ctx.beginPath();
+            for (const b of back) {
+                const hull = convexHull([b.z0, b.z1].flatMap((z) => [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]].map(([x, y]) => cam.project(x, y, z))));
+                hull.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+                ctx.closePath();
+            }
+            ctx.clip();
+            ctx.globalAlpha = BRANCH_OVER;
+            this.drawTree(ctx, cam, t.b, LEAF_OVER);
+            ctx.restore();
+            for (const it of front) this.drawBox(ctx, cam, it, strokeOn);
+            ctx.restore();
+        }
     }
 
     /** Árboles en planta (vistos desde arriba): ramas y racimos translúcidos, los más altos encima. */
@@ -431,6 +488,71 @@ export class Renderer {
         ctx.restore();
     }
 
+    /**
+     * Calle y vereda sobre el frente del terreno (`lot.front`, un lado de la planta): del lado de afuera, la vereda
+     * pegada a la línea del lote y después la calzada. Sólo indican hacia dónde da el frente: no entran al cómputo.
+     */
+    drawStreet(f) {
+        const { ctx } = this;
+        const { cam, project } = f;
+        const W = (project.lot?.w ?? 24) * 100;
+        const D = (project.lot?.d ?? 20) * 100;
+        const side = project.lot?.front ?? 'S';
+        const across = side === 'N' || side === 'S'; // la calle corre a lo ancho (eje x)
+        const len = across ? W : D;
+        const edge = side === 'S' ? D : side === 'E' ? W : 0;
+        const out = side === 'S' || side === 'E' ? 1 : -1;
+        const FAR = 8000; // la calle sigue más allá del lote
+        // (u a lo largo de la calle, v hacia afuera desde la línea del frente) → pantalla
+        const P = (u, v) => (across ? cam.project(u, edge + out * v, 0) : cam.project(edge + out * v, u, 0));
+        const band = (v0, v1, color) => {
+            ctx.beginPath();
+            [P(-FAR, v0), P(len + FAR, v0), P(len + FAR, v1), P(-FAR, v1)].forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        };
+        const line = (u0, v0, u1, v1) => {
+            const [ax, ay] = P(u0, v0);
+            const [bx, by] = P(u1, v1);
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(bx, by);
+        };
+        const k = Math.hypot(P(100, 0)[0] - P(0, 0)[0], P(100, 0)[1] - P(0, 0)[1]) / 100; // px por cm a lo largo
+        ctx.save();
+        band(0, STREET.walk, '#d8d9dc');
+        band(STREET.walk, STREET.walk + STREET.road, '#7d828c');
+        // juntas de la vereda (cada 2 m) y cordón
+        if (200 * k >= 7) {
+            ctx.strokeStyle = 'rgba(30,41,59,.16)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let u = -FAR; u <= len + FAR; u += 200) line(u, 0, u, STREET.walk);
+            ctx.stroke();
+        }
+        ctx.strokeStyle = '#f3f4f6';
+        ctx.lineWidth = Math.max(1.5, 12 * k);
+        ctx.beginPath();
+        line(-FAR, STREET.walk, len + FAR, STREET.walk);
+        ctx.stroke();
+        // eje de la calzada, discontinuo
+        ctx.strokeStyle = 'rgba(255,255,255,.8)';
+        ctx.lineWidth = Math.max(1, 10 * k);
+        ctx.setLineDash([300 * k, 300 * k]);
+        ctx.beginPath();
+        line(-FAR, STREET.walk + STREET.road / 2, len + FAR, STREET.walk + STREET.road / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (cam.view === 'plan') {
+            const [sx, sy] = P(len / 2, STREET.walk + STREET.road / 2);
+            ctx.font = '600 12px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            this.tag(ctx, 'Calle', sx, sy);
+        }
+        ctx.restore();
+    }
+
     drawGrid(cam, W, D, z) {
         const { ctx } = this;
         // Retícula simple: una línea por metro (tenue) y una más marcada cada 5 m. El ajuste real (12,5 cm o el bloque) se ve como
@@ -473,6 +595,8 @@ export class Renderer {
 
         const list = sortedItems(scene, scene.all, cam.rot, 'all');
         const margin = 40;
+        const trees = [];
+        const drawn = [];
         this.drawRoomFloors(f, 0, 0);
         let upperFloors = f.project.upper && activeLevel >= 1;
         for (const it of list) {
@@ -491,9 +615,11 @@ export class Renderer {
             if (b.opening) {
                 if (b.level === activeLevel && ui.cut < 12 && b.course >= ui.cut) continue;
             }
+            (b.kind === KIND.TREE ? trees : drawn).push(it);
             this.drawBox(ctx, cam, it, strokeOn);
         }
         if (upperFloors) this.drawRoomFloors(f, 1, 300);
+        if (trees.length) this.drawTreesOver(ctx, cam, trees, drawn, strokeOn);
     }
 
     /** Piso de color de cada ambiente cerrado del nivel `li`, a la cota `z`. */

@@ -59,6 +59,7 @@ final class ProjectFactory
             utcOffset: $this->floatInRange($data['tz'] ?? -3.0, -12.0, 14.0, 'tz'),
             zones: $this->zones($data['zones'] ?? []),
             trees: $this->trees($data['trees'] ?? []),
+            lotFront: in_array($lot['front'] ?? null, ['N', 'E', 'S', 'W'], true) ? $lot['front'] : 'S',
         );
 
         if ([] !== $this->errors) {

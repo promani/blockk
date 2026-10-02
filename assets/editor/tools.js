@@ -160,7 +160,7 @@ export function createTools(app) {
     /** Rectángulo de un techo (con su cota de apoyo) o null. */
     const roofRect = (id) => store.project.roofs?.find((r) => r.id === id) ?? null;
 
-    /** Manijas de la selección: muro (perpendicular), esquinas de un ambiente o esquinas de un techo. */
+    /** Manijas de la selección: muro (perpendicular), esquinas de un ambiente, esquinas y bordes de un techo o lados de una zona. */
     const handlesOf = (cam) => {
         const sel = store.ui.selection;
         const out = [];
@@ -190,6 +190,12 @@ export function createTools(app) {
                     const [sx, sy] = cam.project(cx * G, cy * G, z);
                     out.push({ kind: 'rside', sx, sy, side, r });
                 }
+            }
+        } else if (sel.type === 'zone' && store.ui.level <= 1) {
+            const z = store.project.zones?.find((q) => q.id === sel.id);
+            for (const [side, cx, cy] of z ? [['y0', z.x + z.w / 2, z.y], ['x1', z.x + z.w, z.y + z.h / 2], ['y1', z.x + z.w / 2, z.y + z.h], ['x0', z.x, z.y + z.h / 2]] : []) {
+                const [sx, sy] = cam.project(cx * G, cy * G, 0.5);
+                out.push({ kind: 'zside', sx, sy, side, z });
             }
         }
         return out;
@@ -289,8 +295,8 @@ export function createTools(app) {
                 ctx.closePath();
                 ctx.fill();
             }
-        } else if (hd.kind === 'rside') {
-            // borde de techo: círculo azul chico
+        } else if (hd.kind === 'rside' || hd.kind === 'zside') {
+            // borde de techo o lado de zona: círculo azul chico
             ctx.beginPath();
             ctx.arc(hd.sx, hd.sy, 7, 0, Math.PI * 2);
             ctx.fill();
@@ -381,6 +387,22 @@ export function createTools(app) {
      * Corre el grupo elegido, de a un movimiento por vez: el servidor normaliza los muros (los parte o los une y cambian
      * sus ids), así que al terminar el grupo se vuelve a elegir con la caja ya corrida.
      */
+    /**
+     * Mueve lo elegido, pero una escalera no puede quedar atravesando un muro ni fuera de la planta baja: si con el
+     * movimiento queda menos dentro de una habitación que antes, se deshace. Se mira después del cálculo porque los
+     * muros elegidos se mueven con ella. Devuelve false si se deshizo.
+     */
+    const guardedMove = async (sel, dx, dy) => {
+        const cover = (id) => { const b = stairBox(store.analysis, id); return b ? stairCoverage(store.analysis, b) : 1; };
+        const before = sel.stairs.map(([, id]) => cover(id));
+        await applyMove(sel, dx, dy);
+        if (store.fresh && sel.stairs.some(([, id], i) => cover(id) < before[i] - 1e-6)) {
+            await store.undo();
+            app.toast(STAIR_BLOCKED);
+            return false;
+        }
+        return true;
+    };
     let moving = Promise.resolve();
     const moveMulti = (dx, dy) => {
         moving = moving.then(async () => {
@@ -388,16 +410,7 @@ export function createTools(app) {
             if (!box) return;
             const o = clampOffset(box, dx, dy);
             if (!o.dx && !o.dy) return;
-            // La escalera no puede quedar atravesando un muro ni fuera de la planta baja: si con el movimiento queda menos
-            // dentro de una habitación que antes, se deshace (los muros elegidos se mueven con ella, por eso se mira después).
-            const cover = (id) => { const b = stairBox(store.analysis, id); return b ? stairCoverage(store.analysis, b) : 1; };
-            const before = multi.sel.stairs.map(([, id]) => cover(id));
-            await applyMove(multi.sel, o.dx, o.dy);
-            if (store.fresh && multi.sel?.stairs.some(([, id], i) => cover(id) < before[i] - 1e-6)) {
-                await store.undo();
-                app.toast(STAIR_BLOCKED);
-                return;
-            }
+            if (!(await guardedMove(multi.sel, o.dx, o.dy))) return;
             if (multi.sel) setMulti(collectIn(box.x0 + o.dx, box.y0 + o.dy, box.x1 + o.dx, box.y1 + o.dy));
         });
     };
@@ -454,10 +467,9 @@ export function createTools(app) {
     const CLIP_KINDS = ['walls', 'slabs', 'stairs', 'timber', 'columns', 'labels', 'furniture', 'roofs', 'zones', 'trees'];
     const clipCount = (c) => CLIP_KINDS.reduce((n, k) => n + c[k].length, 0);
     /** Lo elegido como grupo: el del rectángulo o el elemento suelto (una abertura sola se trata aparte). */
-    const selectionGroup = () => {
-        if (multi.sel) return multi.sel;
-        const s = store.ui.selection;
-        if (!s) return null;
+    const selectionGroup = () => multi.sel ?? (store.ui.selection ? groupOf(store.ui.selection) : null);
+    /** Un elemento suelto ({ type, id }) como grupo, para moverlo o copiarlo con lo mismo que un grupo. */
+    const groupOf = (s) => {
         const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [], furniture: [], zones: [], trees: [] };
         const key = { wall: 'walls', stair: 'stairs', slab: 'slabs', timber: 'timber', column: 'columns', label: 'labels', furniture: 'furniture' }[s.type];
         if (key) {
@@ -684,7 +696,7 @@ export function createTools(app) {
     T.select = {
         hotkey: 'v',
         label: 'Elegir',
-        hint: `Clic en un muro, vano, losa, escalera o techo; doble clic elige la habitación. Arrastrá un rectángulo para elegir varios elementos y después movelos juntos (flechas: ${fmt(BL, 1)} cm). Ctrl+C / Ctrl+V copian y pegan lo elegido.`,
+        hint: `Clic en una pieza para elegirla; doble clic elige la habitación. Aberturas, pilares, muebles, escaleras, zonas, árboles y nombres se mueven arrastrándolos; un muro, una losa, un entrepiso o un techo, arrastrándolo una vez elegido. Arrastrá un rectángulo para elegir varios elementos y después movelos juntos (flechas: ${fmt(BL, 1)} cm). Ctrl+C / Ctrl+V copian y pegan lo elegido.`,
         options: () => {
             const n = countSel(multi.sel);
             return h('span', { class: 'row' },
@@ -714,7 +726,7 @@ export function createTools(app) {
                 return;
             }
             if (multi.press?.item && Math.hypot(p.sx - multi.press.sx, p.sy - multi.press.sy) > DRAG_PX) {
-                // aberturas, pilares y nombres se mueven arrastrándolos
+                // las piezas se mueven arrastrándolas
                 const { type, id } = multi.press.item;
                 const press = multi.press;
                 const lv = store.level();
@@ -737,6 +749,21 @@ export function createTools(app) {
                 } else if (type === 'zone') {
                     const z = store.project.zones?.find((q) => q.id === id);
                     if (z) drag = { kind: 'zone', z: { ...z }, off: [press.wx / G - z.x, press.wy / G - z.y], nx: z.x, ny: z.y };
+                } else if (type === 'wall') {
+                    // igual que su manija: el muro se corre perpendicular a sí mismo
+                    const w = lv.walls.find((q) => q.id === id);
+                    if (w) {
+                        const horizontal = w.y1 === w.y2;
+                        const line0 = horizontal ? w.y1 : w.x1;
+                        const chain = new Set(collinearChain(lv.walls, w).map((q) => q.id));
+                        drag = { kind: 'wall', w, horizontal, line0, line: line0, x0: press.wx, y0: press.wy, ...anchorsFor({ exclude: chain }) };
+                    }
+                } else if (['stair', 'slab', 'timber', 'roof'].includes(type)) {
+                    // escaleras, losas, entrepisos, vigas y techos: se corren enteros, de a 12,5 cm, dentro del terreno
+                    const sel = groupOf({ type, id });
+                    const box = sel && selBox(sel);
+                    const z = type === 'roof' ? ((roofRect(id)?.level ?? 0) + 1) * cfg.levelHeight : type === 'stair' ? 0.5 : cfg.levelHeight;
+                    if (box) drag = { kind: 'shift', sel, box, dx: 0, dy: 0, x0: press.wx, y0: press.wy, z };
                 }
                 if (drag) {
                     store.setUi({ selection: type === 'opening' ? { type, id, wall: drag.o.wall } : { type, id } });
@@ -769,6 +796,14 @@ export function createTools(app) {
                 } else if (drag.kind === 'label') {
                     drag.nx = Math.floor(p.wx / G);
                     drag.ny = Math.floor(p.wy / G);
+                } else if (drag.kind === 'zside') {
+                    // el lado opuesto queda fijo y la zona no baja de 25 cm
+                    const x = drag.side[0] === 'x';
+                    const z = drag.z;
+                    const v = clamp(Math.round((x ? p.wx : p.wy) / G), 0, x ? lot().w : lot().d);
+                    drag.nv = drag.side[1] === '0' ? Math.min(v, (x ? z.x + z.w : z.y + z.h) - 2) : Math.max(v, (x ? z.x : z.y) + 2);
+                } else if (drag.kind === 'shift') {
+                    Object.assign(drag, clampOffset(drag.box, Math.round((p.wx - drag.x0) / G), Math.round((p.wy - drag.y0) / G)));
                 } else if (drag.kind === 'wall') drag.line = snapAxis(p, drag.horizontal ? 'ay' : 'ax', drag.line0);
                 else if (drag.kind === 'corner') {
                     drag.nx = snapAxis(p, 'ax', drag.vx);
@@ -806,6 +841,10 @@ export function createTools(app) {
                     drag = { kind: 'wall', w: hd.w, horizontal, line0, line: line0, x0: p.wx, y0: p.wy, ...anchorsFor({ exclude: chain }) };
                 } else if (hd.kind === 'corner') {
                     drag = { kind: 'corner', vx: hd.vx, vy: hd.vy, nx: hd.vx, ny: hd.vy, x0: p.wx, y0: p.wy, ...anchorsFor({}) };
+                } else if (hd.kind === 'zside') {
+                    const z = hd.z;
+                    const v0 = { x0: z.x, x1: z.x + z.w, y0: z.y, y1: z.y + z.h }[hd.side];
+                    drag = { kind: 'zside', z, side: hd.side, v0, nv: v0 };
                 } else {
                     // Techos: se alinean con los muros del nivel donde apoyan (y los del otro nivel).
                     const anchors = anchorsFor({ level: hd.r.level });
@@ -828,7 +867,12 @@ export function createTools(app) {
             }
             // Se decide al soltar: sin moverse es un clic (elige lo de abajo); arrastrando, un rectángulo.
             const under = pickAt(app, p.sx, p.sy);
-            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: ['opening', 'column', 'label', 'tree', 'zone', 'furniture'].includes(under?.type) ? under : null };
+            // Las piezas sueltas se arrastran directo; un muro, una losa, un entrepiso o un techo, sólo si ya está elegido
+            // (son grandes: apretar sobre ellos y arrastrar sigue siendo el rectángulo de selección).
+            const chosen = store.ui.selection;
+            const grab = ['opening', 'column', 'label', 'tree', 'zone', 'furniture', 'stair'].includes(under?.type)
+                || (['wall', 'slab', 'timber', 'roof'].includes(under?.type) && chosen?.type === under.type && chosen.id === under.id);
+            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: grab ? under : null };
         },
         up(p) {
             if (multi.paste) return;
@@ -879,6 +923,12 @@ export function createTools(app) {
                 if (d.nx !== d.z.x || d.ny !== d.z.y) store.commit('Mover zona', (dr) => Object.assign(dr.zones.find((q) => q.id === d.z.id), { x: d.nx, y: d.ny }));
             } else if (d.kind === 'label') {
                 if (d.nx !== d.lb.x || d.ny !== d.lb.y) store.commit('Mover nombre', (dr) => Object.assign(dr.levels[store.ui.level].labels.find((q) => q.id === d.lb.id), { x: d.nx, y: d.ny }));
+            } else if (d.kind === 'zside') {
+                if (d.nv === d.v0) return;
+                const e = { x0: d.z.x, x1: d.z.x + d.z.w, y0: d.z.y, y1: d.z.y + d.z.h, [d.side]: d.nv };
+                store.commit('Estirar zona', (dr) => Object.assign(dr.zones.find((q) => q.id === d.z.id), { x: e.x0, y: e.y0, w: e.x1 - e.x0, h: e.y1 - e.y0 }));
+            } else if (d.kind === 'shift') {
+                if (d.dx || d.dy) guardedMove(d.sel, d.dx, d.dy);
             } else if (d.kind === 'wall') {
                 if (d.line !== d.line0) wallMoveCommit(d.w.id, d.line);
             } else if (d.kind === 'corner') {
@@ -952,6 +1002,16 @@ export function createTools(app) {
                 if (drag.kind === 'opening') {
                     const sp = drag.spot;
                     if (sp) ghostBox(ctx, cam, openingBox(sp.wall, sp.pos, drag.o.w, drag.o.sill, drag.o.h, z), sp.ok ? { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' } : { fill: 'rgba(180,35,24,.35)', stroke: '#b42318' });
+                    return;
+                }
+                if (drag.kind === 'zside' || drag.kind === 'shift') {
+                    const b = drag.kind === 'shift'
+                        ? { x0: drag.box.x0 + drag.dx, x1: drag.box.x1 + drag.dx, y0: drag.box.y0 + drag.dy, y1: drag.box.y1 + drag.dy }
+                        : { x0: drag.z.x, x1: drag.z.x + drag.z.w, y0: drag.z.y, y1: drag.z.y + drag.z.h, [drag.side]: drag.nv };
+                    const zr = drag.kind === 'shift' ? drag.z : 0.5;
+                    outlineRect(ctx, cam, b.x0 * G, b.y0 * G, b.x1 * G, b.y1 * G, zr, { stroke: '#2563eb', fill: 'rgba(37,99,235,.2)', width: 2, dash: [6, 4] });
+                    const [sx, sy] = cam.project(((b.x0 + b.x1) / 2) * G, ((b.y0 + b.y1) / 2) * G, zr);
+                    label(ctx, drag.kind === 'shift' ? `→ ${fmt((drag.dx * G) / 100)} m · ↓ ${fmt((drag.dy * G) / 100)} m` : `${fmt(((b.x1 - b.x0) * G) / 100)} × ${fmt(((b.y1 - b.y0) * G) / 100)} m`, sx, sy, { bg: 'rgba(37,99,235,.92)' });
                     return;
                 }
                 if (drag.kind === 'column') {
