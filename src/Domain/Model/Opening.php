@@ -20,12 +20,14 @@ final readonly class Opening
         public OpeningKind $kind,
         public string $preset = '',
         public bool $flip = false,
+        public bool $hingeEnd = false,
+        public string $mode = 'swing',
     ) {
     }
 
     public function withPlacement(string $wallId, int $pos): self
     {
-        return new self($this->id, $wallId, $pos, $this->w, $this->sill, $this->h, $this->kind, $this->preset, $this->flip);
+        return new self($this->id, $wallId, $pos, $this->w, $this->sill, $this->h, $this->kind, $this->preset, $this->flip, $this->hingeEnd, $this->mode);
     }
 
     public function endU(): int
@@ -52,6 +54,8 @@ final readonly class Opening
             'kind' => $this->kind->value,
             'preset' => $this->preset,
             'flip' => $this->flip,
+            'hingeEnd' => $this->hingeEnd,
+            'mode' => $this->mode,
         ];
     }
 }

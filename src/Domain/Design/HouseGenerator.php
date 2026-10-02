@@ -180,6 +180,10 @@ final class HouseGenerator
                 ->roofPart($levels - 1, 0, $yS, $W, $D - $yS, 'shed', 'S', 30, self::section($D - $yS));
         }
 
+        foreach ($rooms as $r) {
+            $b->label($r['nivel'] - 1, $r['rect'][0] + intdiv($r['rect'][2], 2), $r['rect'][1] + intdiv($r['rect'][3], 2), $r['nombre']);
+        }
+
         $project = $b->build();
         $project['lot'] = ['w' => max(24, (int) ceil($W * 0.125) + 8), 'd' => max(20, (int) ceil($D * 0.125) + 8)];
 

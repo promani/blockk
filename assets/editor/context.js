@@ -3,7 +3,7 @@
  * panel derecho muestran sólo lo que sirve para eso.
  */
 const G = 12.5;
-const OPENING_TOOLS = new Set(['door', 'window']);
+const OPENING_TOOLS = new Set(['opening']);
 const FLOOR_TOOLS = new Set(['piso', 'slab', 'floor', 'beam', 'stair']);
 
 export const CONTEXT_TITLE = {

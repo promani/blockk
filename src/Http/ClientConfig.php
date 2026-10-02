@@ -33,6 +33,7 @@ final class ClientConfig
                 static fn (array $p): array => ['kind' => $p['kind']->value, 'label' => $p['label'], 'w' => $p['w'], 'sill' => $p['sill'], 'h' => $p['h']],
                 Hcca::openingPresets(),
             ),
+            'columnSizes' => Hcca::COLUMN_SIZES_CM,
             'timberSections' => Hcca::timberSections(),
             'joistBearing' => Hcca::JOIST_BEARING_CM,
             'levelNames' => Project::LEVEL_NAMES,

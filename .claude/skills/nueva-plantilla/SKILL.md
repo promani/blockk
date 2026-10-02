@@ -29,7 +29,11 @@ del ambiente que sirven).
 (new TemplateBuilder('Nombre'))
     ->room($level, $x, $y, $w, $h, $t = 20)      // 4 muros perimetrales (nivel 0 = Nivel 1)
     ->wall($level, $x1, $y1, $x2, $y2, $t)        // muro suelto; tabiques de 10, portantes de 15 o 20
-    ->opening($level, 'P87', 'x'|'y', $line, $start, flip: false)  // 'x' = muro horizontal en y=$line; $start = coordenada inicial; flip: la puerta abre hacia arriba/izquierda
+    ->opening($level, 'P87', 'x'|'y', $line, $start, flip: false, hingeEnd: false, mode: '')  // 'x' = muro horizontal en y=$line; $start = coordenada inicial;
+                                                                  // flip: abre hacia arriba/izquierda; hingeEnd: bisagra en el extremo final; mode: swing|slide|fixed|overhead
+    ->column($level, $x, $y, 25)                  // pilar de hormigón armado (20, 25, 30 o 40 cm), centrado en el nodo (x, y)
+    ->label($level, $x, $y, 'Cocina')             // nombre del ambiente: celda dentro de él (se ve en la planta); varios en un espacio abierto
+    ->shift($dx, $dy)                             // corre todo lo que sigue (deja lugar al norte, p. ej. para un alfresco)
     ->roofPart($level, $x, $y, $w, $h, 'gable'|'shed', 'x'|'y'|'N'|'S'|'E'|'W')
     ->joists($x, $y, $w, $h, 'x'|'y')             // entrepiso de madera sobre el Nivel 1
     ->slab($level, $x, $y, $w, $h) / ->stair($level, $x, $y, 'N')
@@ -42,6 +46,9 @@ Vanos (`src/Domain/Hcca.php`, `openingPresets()`); `w` en unidades:
 | Puertas | Ventanas |
 | --- | --- |
 | P75 (6), P87 (7), P100 (8), P150 doble (12) | V62 (5), V100 (8), V125 (10), V150 (12), V187 (15), VT62 ventiluz (5), VT100 (8), VG150 ventanal 150 × 200 (12) |
+
+Los portones (`PG250`, `PG300`) superan los 2,00 m de luz y la Revisión los advierte (`opening.span`): una plantilla sin advertencias no los usa.
+Nombrá todos los ambientes con `label()`.
 
 Para un ala o un cuerpo pegado, no repitas el muro compartido: agregá sólo los muros nuevos (los colineales se unen
 solos). Un vano se ubica en el tramo de muro que lo contiene; si no entra, el builder tira `LogicException`.

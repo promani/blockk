@@ -15,11 +15,14 @@ const ISO_ROT = 0;
 function bounds(project, config) {
     const walls = project.levels.flatMap((l) => l.walls);
     if (!walls.length) return null;
+    // también pilares y techos: un alfresco sobre pilares tiene que entrar en el cuadro
+    const xs = [...walls.flatMap((w) => [w.x1, w.x2]), ...project.levels.flatMap((l) => (l.columns ?? []).map((c) => c.x)), ...(project.roofs ?? []).flatMap((r) => [r.x, r.x + r.w])];
+    const ys = [...walls.flatMap((w) => [w.y1, w.y2]), ...project.levels.flatMap((l) => (l.columns ?? []).map((c) => c.y)), ...(project.roofs ?? []).flatMap((r) => [r.y, r.y + r.h])];
     return {
-        minX: Math.min(...walls.map((w) => w.x1)) * G - 60,
-        maxX: Math.max(...walls.map((w) => w.x2)) * G + 60,
-        minY: Math.min(...walls.map((w) => w.y1)) * G - 60,
-        maxY: Math.max(...walls.map((w) => w.y2)) * G + 60,
+        minX: Math.min(...xs) * G - 60,
+        maxX: Math.max(...xs) * G + 60,
+        minY: Math.min(...ys) * G - 60,
+        maxY: Math.max(...ys) * G + 60,
         zTop: config.levelHeight * project.levels.filter((l) => l.walls.length).length + 160,
     };
 }

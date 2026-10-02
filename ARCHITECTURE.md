@@ -73,7 +73,7 @@ sequenceDiagram
 ## Datos
 
 - **Proyecto** (`v1`, JSON): `{name, north, lat, lot:{w,d}, settings, upper, roofs:[…], levels:[{walls, openings,
-  ubeams, timber, slabs, stairs}, …]}`. Lo valida `ProjectFactory` (frontera de confianza: tipos, rangos, ids,
+  ubeams, timber, slabs, stairs, columns, labels}, …]}` (las aberturas llevan `kind` puerta/ventana/portón y `mode`). Lo valida `ProjectFactory` (frontera de confianza: tipos, rangos, ids,
   espesores, presets y presupuestos de tamaño).
 - **Unidades**: coordenadas del proyecto en unidades de **12,5 cm** (enteros); geometría interna en **ticks de 0,5 mm**
   (12,5 cm = 250 ticks), así no hay errores de coma flotante en trabas y remanentes.

@@ -144,7 +144,31 @@ final class ProjectFactory
             );
         }
 
-        return new Level($walls, $openings, $ubeams, $timber, $slabs, $stairs);
+        $columns = [];
+        foreach ($this->list($d['columns'] ?? [], Hcca::MAX_COLUMNS_PER_LEVEL, "$path.columns") as $i => $c) {
+            $size = (int) ($c['size'] ?? 20);
+            if (!in_array($size, Hcca::COLUMN_SIZES_CM, true)) {
+                $this->errors[] = "$path.columns[$i].size: usar ".implode(' / ', Hcca::COLUMN_SIZES_CM).' cm';
+                $size = 20;
+            }
+            $columns[] = new Column(
+                $this->id($c['id'] ?? null, "$path.columns[$i].id", $ids),
+                $this->coord($c['x'] ?? null, "$path.columns[$i].x"),
+                $this->coord($c['y'] ?? null, "$path.columns[$i].y"),
+                $size,
+            );
+        }
+        $labels = [];
+        foreach ($this->list($d['labels'] ?? [], Hcca::MAX_LABELS_PER_LEVEL, "$path.labels") as $i => $l) {
+            $labels[] = new Label(
+                $this->id($l['id'] ?? null, "$path.labels[$i].id", $ids),
+                $this->coord($l['x'] ?? null, "$path.labels[$i].x"),
+                $this->coord($l['y'] ?? null, "$path.labels[$i].y"),
+                $this->string($l['name'] ?? '', 40, "$path.labels[$i].name"),
+            );
+        }
+
+        return new Level($walls, $openings, $ubeams, $timber, $slabs, $stairs, $columns, $labels);
     }
 
     /** @param array<string, mixed> $o @param array<string, true> $ids */
@@ -167,6 +191,8 @@ final class ProjectFactory
             kind: $kind,
             preset: isset($presets[$preset]) ? $preset : '',
             flip: (bool) ($o['flip'] ?? false),
+            hingeEnd: (bool) ($o['hingeEnd'] ?? false),
+            mode: in_array($o['mode'] ?? null, $kind->modes(), true) ? $o['mode'] : $kind->modes()[0],
         );
     }
 

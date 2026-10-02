@@ -15,8 +15,8 @@ final class TemplateBuilder
 {
     /** @var array<int, array{walls: list<array<string, mixed>>, openings: list<array<string, mixed>>, timber: list<array<string, mixed>>}> */
     private array $levels = [
-        0 => ['walls' => [], 'openings' => [], 'timber' => [], 'slabs' => [], 'stairs' => []],
-        1 => ['walls' => [], 'openings' => [], 'timber' => [], 'slabs' => [], 'stairs' => []],
+        0 => ['walls' => [], 'openings' => [], 'timber' => [], 'slabs' => [], 'stairs' => [], 'columns' => [], 'labels' => []],
+        1 => ['walls' => [], 'openings' => [], 'timber' => [], 'slabs' => [], 'stairs' => [], 'columns' => [], 'labels' => []],
     ];
     /** @var array<string, mixed> */
     private array $roof = ['type' => 'none'];
@@ -24,9 +24,19 @@ final class TemplateBuilder
     private ?array $roofs = null;
     private bool $upper = false;
     private int $seq = 0;
+    private int $dx = 0;
+    private int $dy = 0;
 
     public function __construct(private readonly string $name, private readonly int $north = 0, private readonly float $latitude = -34.6)
     {
+    }
+
+    /** Corre todo lo que se dibuje de acá en adelante (en unidades): sirve para dejar lugar al norte o al oeste sin renumerar. */
+    public function shift(int $dx, int $dy): self
+    {
+        [$this->dx, $this->dy] = [$dx, $dy];
+
+        return $this;
     }
 
     public function room(int $level, int $x, int $y, int $w, int $h, float $t = 20.0): self
@@ -39,7 +49,7 @@ final class TemplateBuilder
 
     public function wall(int $level, int $x1, int $y1, int $x2, int $y2, float $t): self
     {
-        $this->levels[$level]['walls'][] = ['id' => 'w'.(++$this->seq), 'x1' => $x1, 'y1' => $y1, 'x2' => $x2, 'y2' => $y2, 't' => $t];
+        $this->levels[$level]['walls'][] = ['id' => 'w'.(++$this->seq), 'x1' => $x1 + $this->dx, 'y1' => $y1 + $this->dy, 'x2' => $x2 + $this->dx, 'y2' => $y2 + $this->dy, 't' => $t];
 
         return $this;
     }
@@ -47,10 +57,13 @@ final class TemplateBuilder
     /**
      * @param string $axis 'x' (muro horizontal en y=$line) o 'y' (muro vertical en x=$line); $start = coordenada inicial del vano
      * @param bool   $flip la puerta abre hacia el lado negativo (arriba o a la izquierda) en vez del positivo (abajo o a la derecha)
+     * @param bool   $hingeEnd la bisagra va en el extremo final del vano (derecha o abajo) en vez del inicial
+     * @param string $mode forma de abrir: `swing`, `slide`, `fixed` u `overhead`; vacío, la habitual del tipo
      */
-    public function opening(int $level, string $preset, string $axis, int $line, int $start, bool $flip = false): self
+    public function opening(int $level, string $preset, string $axis, int $line, int $start, bool $flip = false, bool $hingeEnd = false, string $mode = ''): self
     {
         $spec = Hcca::openingPresets()[$preset] ?? throw new \InvalidArgumentException("Preset desconocido: $preset");
+        [$line, $start] = 'x' === $axis ? [$line + $this->dy, $start + $this->dx] : [$line + $this->dx, $start + $this->dy];
         foreach ($this->levels[$level]['walls'] as $w) {
             $horizontal = $w['y1'] === $w['y2'];
             if (($horizontal ? 'x' : 'y') !== $axis || ($horizontal ? $w['y1'] : $w['x1']) !== $line) {
@@ -59,7 +72,7 @@ final class TemplateBuilder
             $from = min($horizontal ? [$w['x1'], $w['x2']] : [$w['y1'], $w['y2']]);
             $to = max($horizontal ? [$w['x1'], $w['x2']] : [$w['y1'], $w['y2']]);
             if ($start >= $from && $start + $spec['w'] <= $to) {
-                $this->levels[$level]['openings'][] = ['id' => 'o'.(++$this->seq), 'wall' => $w['id'], 'pos' => $start - $from, 'preset' => $preset] + ($flip ? ['flip' => true] : []);
+                $this->levels[$level]['openings'][] = ['id' => 'o'.(++$this->seq), 'wall' => $w['id'], 'pos' => $start - $from, 'preset' => $preset] + ($flip ? ['flip' => true] : []) + ($hingeEnd ? ['hingeEnd' => true] : []) + ('' !== $mode ? ['mode' => $mode] : []);
 
                 return $this;
             }
@@ -69,7 +82,7 @@ final class TemplateBuilder
 
     public function joists(int $x, int $y, int $w, int $h, string $dir, string $section = '3x8'): self
     {
-        $this->levels[0]['timber'][] = ['id' => 't'.(++$this->seq), 'kind' => 'joists', 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h, 'dir' => $dir, 'section' => $section, 'spacing' => 40];
+        $this->levels[0]['timber'][] = ['id' => 't'.(++$this->seq), 'kind' => 'joists', 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'w' => $w, 'h' => $h, 'dir' => $dir, 'section' => $section, 'spacing' => 40];
 
         return $this;
     }
@@ -79,7 +92,7 @@ final class TemplateBuilder
     public function roofPart(int $level, int $x, int $y, int $w, int $h, string $type = 'gable', string $dir = 'x', int $slope = 30, string $section = '3x8', int $extra = 0, array $more = []): self
     {
         $this->roofs ??= [];
-        $this->roofs[] = ['id' => 'r'.(++$this->seq), 'level' => $level, 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h, 'type' => $type, 'dir' => $dir, 'slope' => $slope, 'section' => $section, 'overhang' => 40, 'spacing' => 50] + $more;
+        $this->roofs[] = ['id' => 'r'.(++$this->seq), 'level' => $level, 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'w' => $w, 'h' => $h, 'type' => $type, 'dir' => $dir, 'slope' => $slope, 'section' => $section, 'overhang' => 40, 'spacing' => 50] + $more;
 
         return $this;
     }
@@ -93,14 +106,30 @@ final class TemplateBuilder
 
     public function slab(int $level, int $x, int $y, int $w, int $h): self
     {
-        $this->levels[$level]['slabs'][] = ['id' => 'l'.(++$this->seq), 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h, 'thickness' => 12];
+        $this->levels[$level]['slabs'][] = ['id' => 'l'.(++$this->seq), 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'w' => $w, 'h' => $h, 'thickness' => 12];
 
         return $this;
     }
 
     public function stair(int $level, int $x, int $y, string $dir = 'N', string $shape = 'straight', int $w = 8): self
     {
-        $this->levels[$level]['stairs'][] = ['id' => 's'.(++$this->seq), 'x' => $x, 'y' => $y, 'dir' => $dir, 'shape' => $shape, 'w' => $w, 'tread' => 28, 'turn' => 'right'];
+        $this->levels[$level]['stairs'][] = ['id' => 's'.(++$this->seq), 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'dir' => $dir, 'shape' => $shape, 'w' => $w, 'tread' => 28, 'turn' => 'right'];
+
+        return $this;
+    }
+
+    /** Pilar de hormigón de `$size` cm de lado, centrado en el nodo (x, y) de la retícula. */
+    public function column(int $level, int $x, int $y, int $size = 20): self
+    {
+        $this->levels[$level]['columns'][] = ['id' => 'c'.(++$this->seq), 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'size' => $size];
+
+        return $this;
+    }
+
+    /** Nombre de un ambiente: se dibuja en la planta sobre la celda que empieza en (x, y). */
+    public function label(int $level, int $x, int $y, string $name): self
+    {
+        $this->levels[$level]['labels'][] = ['id' => 'n'.(++$this->seq), 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'name' => $name];
 
         return $this;
     }
@@ -124,7 +153,8 @@ final class TemplateBuilder
             'settings' => ['defaultT' => 20, 'reservePct' => 3, 'currency' => 'USD'],
             'upper' => $this->upper,
             ...(null === $this->roofs ? ['roof' => $this->roof] : ['roofs' => $this->roofs]),
-            'levels' => [$this->levels[0], $this->levels[1]],
+            // sin pilares ni nombres no se agregan las claves: así las plantillas viejas conservan su hash
+            'levels' => array_map(static fn (array $l): array => array_filter($l, static fn (mixed $v, string $k): bool => !in_array($k, ['columns', 'labels'], true) || [] !== $v, ARRAY_FILTER_USE_BOTH), [$this->levels[0], $this->levels[1]]),
         ];
     }
 }

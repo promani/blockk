@@ -6,6 +6,8 @@ import { roomColor } from './renderer.js';
 import { anchorLines } from './snap.js';
 import { sideLabel } from '../lib/orient.js';
 import { collinearChain } from './wallmove.js';
+import { OPENING_TYPES, openingTitle, defaultMode, turnOptions, turnValue, applyTurn } from './openings.js';
+import { roomNamesList, roomAnchor } from './names.js';
 import { contextOf, CONTEXT_TITLE, roomWalls, facing, openingM2, issueMatches } from './context.js';
 
 const G = 12.5;
@@ -237,6 +239,8 @@ export function mountPanels(app) {
                 else if (r && side === 'B') r.gableB = false;
             } else if (sel_.type === 'slab') d.levels[1].slabs = d.levels[1].slabs.filter((x) => x.id !== sel_.id);
             else if (sel_.type === 'stair') d.levels[0].stairs = d.levels[0].stairs.filter((x) => x.id !== sel_.id);
+            else if (sel_.type === 'column') lv.columns = (lv.columns ?? []).filter((x) => x.id !== sel_.id);
+            else if (sel_.type === 'label') lv.labels = (lv.labels ?? []).filter((x) => x.id !== sel_.id);
         });
     }
     app.deleteSelection = deleteSelection;
@@ -428,7 +432,7 @@ export function mountPanels(app) {
                 })(),
                 h('div', { class: 'kv-title' }, 'Agrandar / achicar la habitación'),
                 h('div', { class: 'nudge', role: 'group', 'aria-label': 'Mover el muro' }, moveButtons(w)),
-                ops.length ? h('div', {}, h('div', { class: 'kv-title' }, 'Vanos'), ops.map((o) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', style: 'margin:2px', onclick: () => store.setUi({ selection: { type: 'opening', id: o.id, wall: w.id } }) }, cfg.presets[o.preset]?.label ?? `${o.kind === 'door' ? 'Puerta' : 'Ventana'} ${cm(o.w * G)} cm`))) : null,
+                ops.length ? h('div', {}, h('div', { class: 'kv-title' }, 'Vanos'), ops.map((o) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', style: 'margin:2px', onclick: () => store.setUi({ selection: { type: 'opening', id: o.id, wall: w.id } }) }, `${openingTitle(o)} ${cm(o.w * G)} cm`))) : null,
                 beams.length ? h('div', {}, h('div', { class: 'kv-title' }, 'Vigas U'), beams.map((u) => h('button', { class: 'btn btn-outline btn-sm', type: 'button', style: 'margin:2px', onclick: () => store.setUi({ selection: { type: 'ubeam', id: u.id, wall: w.id } }) }, `Hilada ${u.course + 1} · ${cm(u.len * G)} cm`))) : null,
                 h('div', { class: 'actions-row' }, delBtn),
             );
@@ -439,17 +443,52 @@ export function mountPanels(app) {
             const o = lv.openings.find((x) => x.id === s.id);
             if (!o) return void (store.ui.selection = null);
             const wall = lv.walls.find((w) => w.id === o.wall);
-            const upd = (fn) => modify('Editar vano', (l) => fn(l.openings.find((x) => x.id === o.id)));
-            const wallU = wall ? wallLen(wall) : 40;
-            add(el.props, 
-                h('div', { class: 'kv-title' }, o.kind === 'door' ? 'Puerta' : 'Ventana'),
-                field('Tipo', sel(o.preset, Object.entries(cfg.presets).map(([k, p]) => [k, p.label]), (v) => { const p = cfg.presets[v]; upd((x) => Object.assign(x, { preset: v, w: p.w, sill: p.sill, h: p.h, kind: p.kind })); })),
-                field('Ancho (× 12,5 cm)', num(o.w, 2, 40, (v) => upd((x) => { x.w = v; x.preset = ''; }))),
-                o.kind === 'window' ? field('Antepecho (hiladas)', sel(o.sill, [0, 1, 2, 3, 4, 5, 6, 7].map((n) => [n, `${n} (${fmt((n * 25) / 100)} m)`]), (v) => upd((x) => { x.sill = Number(v); x.h = cfg.openingTopCourse - Number(v); x.preset = ''; }))) : null,
-                field('Posición (× 12,5 cm)', num(o.pos, 0, Math.max(0, wallU - o.w), (v) => upd((x) => { x.pos = v; }))),
-                o.kind === 'door' ? h('div', { class: 'proprow' }, h('label', {}, 'Abre hacia el otro lado', h('input', { type: 'checkbox', checked: o.flip, onchange: (e) => upd((x) => { x.flip = e.target.checked; }) }))) : null,
-                h('dl', { class: 'dl' }, h('dt', {}, 'Vano'), h('dd', {}, `${cm(o.w * G)} × ${cm(o.h * 25)} cm`), h('dt', {}, 'Dintel U'), h('dd', {}, `${cm(o.w * G + 50)} cm (apoyo 25 cm)`), h('dt', {}, 'Cara superior'), h('dd', {}, `hilada ${o.sill + o.h + 1}`)),
+            const upd = (fn) => modify('Editar abertura', (l) => fn(l.openings.find((x) => x.id === o.id)));
+            const top = cfg.openingTopCourse;
+            const type = OPENING_TYPES[o.kind] ?? OPENING_TYPES.door;
+            const mode = o.mode ?? defaultMode(o.kind);
+            const turns = (mode === 'swing' && o.kind === 'door') || mode === 'slide';
+            add(el.props,
+                h('div', { class: 'kv-title' }, openingTitle(o)),
+                field('Tipo', sel(o.kind, Object.entries(OPENING_TYPES).map(([k, x]) => [k, x.label]), (v) => upd((x) => {
+                    const n = OPENING_TYPES[v];
+                    Object.assign(x, { kind: v, preset: '', w: n.w, sill: n.sill, h: top - n.sill, mode: defaultMode(v), flip: false, hingeEnd: false });
+                }))),
+                field('Ancho (cm)', num(o.w * G, 25, 500, (v) => upd((x) => { x.w = Math.max(2, Math.round(v / G)); x.preset = ''; }), G)),
+                o.kind === 'window'
+                    ? field('Alto (cm)', sel(top - o.sill, [25, 50, 75, 100, 125, 150, 175, 200].map((n) => [n / 25, `${n}`]), (v) => upd((x) => { x.h = Number(v); x.sill = top - Number(v); x.preset = ''; })))
+                    : field('Alto (cm)', h('input', { type: 'text', value: cm(o.h * 25), disabled: true })),
+                field('Apertura', sel(mode, type.modes, (v) => upd((x) => { x.mode = v; }))),
+                turns ? field(mode === 'slide' ? 'Recorrido' : 'Giro', sel(turnValue(o), turnOptions(wall ? wall.y1 === wall.y2 : true, mode), (v) => upd((x) => applyTurn(x, v)))) : null,
                 h('div', { class: 'actions-row' }, delBtn, wall ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'wall', id: wall.id } }) }, 'Ver muro') : null),
+                h('p', { class: 'muted small' }, 'Para moverla, arrastrala por el muro.'),
+            );
+            return;
+        }
+
+        if (s?.type === 'column') {
+            const c = (lv.columns ?? []).find((x) => x.id === s.id);
+            if (!c) return void (store.ui.selection = null);
+            const upd = (fn) => modify('Editar pilar', (l) => fn(l.columns.find((x) => x.id === c.id)));
+            add(el.props,
+                h('div', { class: 'kv-title' }, 'Pilar de hormigón armado'),
+                field('Lado', sel(c.size, cfg.columnSizes.map((v) => [v, `${v} × ${v} cm`]), (v) => upd((x) => { x.size = Number(v); }))),
+                h('dl', { class: 'dl' }, h('dt', {}, 'Altura'), h('dd', {}, `${fmt(cfg.levelHeight / 100)} m`)),
+                h('div', { class: 'actions-row' }, delBtn),
+                h('p', { class: 'muted small' }, 'Para moverlo, arrastralo.'),
+            );
+            return;
+        }
+
+        if (s?.type === 'label') {
+            const lb = (lv.labels ?? []).find((x) => x.id === s.id);
+            if (!lb) return void (store.ui.selection = null);
+            add(el.props,
+                h('div', { class: 'kv-title' }, 'Nombre de ambiente'),
+                field('Nombre', h('input', { type: 'text', list: 'room-names', maxlength: 40, value: lb.name, onchange: (e) => modify('Renombrar ambiente', (l) => { l.labels.find((x) => x.id === lb.id).name = e.target.value.trim(); }) })),
+                roomNamesList(),
+                h('div', { class: 'actions-row' }, delBtn),
+                h('p', { class: 'muted small' }, 'Para moverlo, arrastralo.'),
             );
             return;
         }
@@ -474,6 +513,21 @@ export function mountPanels(app) {
             if (!room) return void (store.ui.selection = null);
             add(el.props,
                 h('div', { class: 'kv-title' }, h('span', { class: 'swatch', style: `background:${roomColor(room)}` }), room.name),
+                (() => {
+                    const named = (store.analysis?.levels?.[store.ui.level]?.labels ?? []).filter((x) => x.room === room.id);
+                    const setName = (name) => store.commit('Nombrar ambiente', (d) => {
+                        const l = d.levels[store.ui.level];
+                        l.labels ??= [];
+                        const cur = named[0] && l.labels.find((x) => x.id === named[0].id);
+                        if (cur && name === '' && named.length === 1) l.labels = l.labels.filter((x) => x.id !== cur.id);
+                        else if (cur) cur.name = name;
+                        else if (name !== '') l.labels.push({ id: nextId(d, 'n'), ...roomAnchor(room), name });
+                    });
+                    return h('div', {},
+                        field('Nombre', h('input', { type: 'text', list: 'room-names', maxlength: 40, value: named[0]?.name ?? '', placeholder: 'Ej.: Dormitorio', onchange: (e) => setName(e.target.value.trim()) })),
+                        roomNamesList(),
+                        named.length > 1 ? h('p', { class: 'muted small' }, 'Este espacio tiene varios nombres: elegí cada uno en la planta.') : null);
+                })(),
                 h('dl', { class: 'dl' },
                     h('dt', {}, 'Superficie útil'), h('dd', {}, m2(room.netM2)),
                     h('dt', {}, 'Superficie a ejes'), h('dd', {}, m2(room.grossM2)),

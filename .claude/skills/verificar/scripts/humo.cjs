@@ -72,8 +72,9 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     const rooms = await page.evaluate(() => window.blockk.store.analysis.levels[0].rooms.length);
     log(rooms === 1, `habitación dibujada con el mouse (ambientes: ${rooms})`);
 
-    for (const [tool, x, y] of [['Puerta', 300, 500], ['Ventana', 300, 0]]) {
-        await page.click(`.tool:has-text("${tool}")`);
+    for (const [kind, x, y] of [['door', 300, 500], ['window', 300, 0]]) {
+        await page.click('.tool:has-text("Abertura")');
+        await page.evaluate((k) => window.blockk.tools.opening.setKind(k), kind);
         const p = await toScreen(x, y);
         await page.mouse.move(p[0], p[1], { steps: 4 });
         await page.mouse.click(p[0], p[1]);
@@ -110,6 +111,33 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     await page.keyboard.press('Escape');
     await page.evaluate(() => window.blockk.store.undo());
     await ready();
+
+    // Pilar y nombre de ambiente; la abertura se mueve arrastrándola por el muro
+    await page.click('.tool:has-text("Pilar")');
+    const pc = await toScreen(200, 150);
+    await page.mouse.move(pc[0], pc[1], { steps: 3 });
+    await page.mouse.click(pc[0], pc[1]);
+    await ready();
+    await page.click('.tool:has-text("Nombre")');
+    await page.fill('#tooloptions input[list="room-names"]', 'Estar');
+    const pn = await toScreen(300, 250);
+    await page.mouse.move(pn[0], pn[1], { steps: 3 });
+    await page.mouse.click(pn[0], pn[1]);
+    await ready();
+    const named = await page.evaluate(() => [window.blockk.store.project.levels[0].columns.length, window.blockk.store.analysis.levels[0].rooms[0]?.name]);
+    log(named[0] === 1 && named[1] === 'Estar', `pilar y nombre de ambiente (${named.join(', ')})`);
+    await page.click('.tool:has-text("Elegir")');
+    const win = await page.evaluate(() => { const o = window.blockk.store.project.levels[0].openings.find((q) => q.kind === 'window'); return { id: o.id, pos: o.pos }; });
+    const wp = await toScreen(300, 0);
+    await page.mouse.move(wp[0], wp[1], { steps: 3 });
+    await page.mouse.down();
+    await page.mouse.move(wp[0] + 18, wp[1], { steps: 6 });
+    await page.mouse.move(wp[0] + 36, wp[1], { steps: 6 });
+    await page.mouse.up();
+    await ready();
+    const moved = await page.evaluate((id) => window.blockk.store.project.levels[0].openings.find((q) => q.id === id)?.pos, win.id);
+    log(moved !== win.pos, `la ventana se mueve arrastrándola (pos ${win.pos} → ${moved})`);
+    await page.keyboard.press('Escape');
 
     await page.click('[data-view="iso"]');
     for (const tool of await page.$$eval('.tool .tool-name', (els) => els.map((e) => e.textContent))) {

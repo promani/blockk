@@ -45,6 +45,8 @@ final class ProjectValidator
             $issues[] = new Issue(Issue::INFO, 'height.total', sprintf('Altura autoportante total: %.2f m (límite estructural %.2f m: PB + PA).', 2 * Hcca::LEVEL_HEIGHT_CM / 100, Hcca::MAX_TOTAL_HEIGHT_CM / 100));
         }
 
+        $this->columns($issues, $project);
+
         foreach ($levels as $index => $analysis) {
             foreach ($analysis->level->walls as $wall) {
                 $this->wall($issues, $index, $wall, $analysis);
@@ -200,6 +202,38 @@ final class ProjectValidator
                     $onSlab => new Issue(Issue::INFO, 'support.partition', 'Tabique de PA sobre losa: incluir su peso en el cálculo de la losa.', 1, $wall->id, $wall->x1, $wall->y1),
                     default => new Issue(Issue::ERROR, 'support.partition', 'Tabique de PA fuera del entrepiso y sin muro debajo: no tiene apoyo.', 1, $wall->id, $wall->x1, $wall->y1),
                 };
+            }
+        }
+    }
+
+    /**
+     * Pilares: dos en el mismo punto y los de la Planta Alta, que tienen que descargar sobre un pilar o un muro portante de abajo.
+     *
+     * @param list<Issue> $issues
+     */
+    private function columns(array &$issues, Project $project): void
+    {
+        foreach ($project->levels as $index => $level) {
+            foreach ($level->columns as $i => $c) {
+                if (array_any(array_slice($level->columns, 0, $i), static fn ($o): bool => $o->x === $c->x && $o->y === $c->y)) {
+                    $issues[] = new Issue(Issue::WARN, 'column.duplicate', 'Dos pilares en el mismo punto.', $index, $c->id, $c->x, $c->y);
+                }
+                if (1 !== $index) {
+                    continue;
+                }
+                $below = $project->level(0);
+                $onColumn = array_any($below->columns, static fn ($o): bool => abs($o->x - $c->x) <= 1 && abs($o->y - $c->y) <= 1);
+                $onWall = array_any($below->walls, static function (Wall $w) use ($c): bool {
+                    $half = Hcca::ticksToCm($w->t) / Hcca::GRID_CM / 2;
+                    $horizontal = $w->y1 === $w->y2;
+                    [$along, $across] = $horizontal ? [$c->x, $c->y] : [$c->y, $c->x];
+                    $line = $horizontal ? $w->y1 : $w->x1;
+
+                    return $w->isLoadBearing() && $along >= $w->startU() && $along <= $w->endU() && abs($across - $line) <= $half;
+                });
+                if (!$onColumn && !$onWall) {
+                    $issues[] = new Issue(Issue::WARN, 'support.column', 'Pilar de la Planta Alta sin apoyo: debajo no hay un pilar ni un muro portante.', 1, $c->id, $c->x, $c->y);
+                }
             }
         }
     }

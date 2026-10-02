@@ -11,6 +11,8 @@ import { nextId } from '../lib/storage.js';
 import { ICONS } from './icons.js';
 import { moveWallLine, collinearChain, mirrorMove } from './wallmove.js';
 import { wallLines, nearestLine, anchorLines, nearestAnchor, ANCHOR_LABEL } from './snap.js';
+import { OPENING_TYPES, defaultMode, newOpening } from './openings.js';
+import { roomNamesList } from './names.js';
 
 const DRAG_PX = 6;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -280,7 +282,7 @@ export function createTools(app) {
     /** Elementos cuya planta cae dentro del rectángulo (unidades), en todos los niveles: se mueven juntos, de arriba abajo. */
     const collectIn = (x0, y0, x1, y1) => {
         const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
-        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [] };
+        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [] };
         store.project.levels.forEach((lv, li) => {
             for (const w of lv.walls) if (inside(w.x1, w.y1) && inside(w.x2, w.y2)) sel.walls.push([li, w.id]);
             for (const sl of lv.slabs ?? []) if (inside(sl.x, sl.y) && inside(sl.x + sl.w, sl.y + sl.h)) sel.slabs.push([li, sl.id]);
@@ -288,6 +290,8 @@ export function createTools(app) {
                 const b = store.analysis?.floors?.stairs?.find((q) => q.id === st.id)?.bbox;
                 if (b && inside(b.x / G, b.y / G) && inside((b.x + b.w) / G, (b.y + b.h) / G)) sel.stairs.push([li, st.id]);
             }
+            for (const c of lv.columns ?? []) if (inside(c.x, c.y)) sel.columns.push([li, c.id]);
+            for (const lb of lv.labels ?? []) if (inside(lb.x, lb.y)) sel.labels.push([li, lb.id]);
             for (const t of lv.timber ?? []) {
                 const ok = t.kind === 'beam' ? inside(t.x1, t.y1) && inside(t.x2, t.y2) : inside(t.x, t.y) && inside(t.x + t.w, t.y + t.h);
                 if (ok) sel.timber.push([li, t.id]);
@@ -305,6 +309,8 @@ export function createTools(app) {
         for (const [li, id] of sel.walls) { const w = p.levels[li].walls.find((q) => q.id === id); if (w) { xs.push(w.x1, w.x2); ys.push(w.y1, w.y2); } }
         for (const [li, id] of sel.slabs) { const q = p.levels[li].slabs.find((z) => z.id === id); if (q) { xs.push(q.x, q.x + q.w); ys.push(q.y, q.y + q.h); } }
         for (const [li, id] of sel.timber) { const t = p.levels[li].timber.find((z) => z.id === id); if (t) { if (t.kind === 'beam') { xs.push(t.x1, t.x2); ys.push(t.y1, t.y2); } else { xs.push(t.x, t.x + t.w); ys.push(t.y, t.y + t.h); } } }
+        for (const [li, id] of sel.columns) { const c = p.levels[li].columns.find((z) => z.id === id); if (c) { xs.push(c.x); ys.push(c.y); } }
+        for (const [li, id] of sel.labels) { const lb = p.levels[li].labels.find((z) => z.id === id); if (lb) { xs.push(lb.x); ys.push(lb.y); } }
         for (const [, id] of sel.roofs) { const r = p.roofs.find((z) => z.id === id); if (r) { xs.push(r.x, r.x + r.w); ys.push(r.y, r.y + r.h); } }
         for (const [, id] of sel.stairs) { const b = store.analysis?.floors?.stairs?.find((q) => q.id === id)?.bbox; if (b) { xs.push(b.x / G, (b.x + b.w) / G); ys.push(b.y / G, (b.y + b.h) / G); } }
         return xs.length ? { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } : null;
@@ -320,6 +326,8 @@ export function createTools(app) {
             for (const [li, id] of sel.walls) { const w = d.levels[li].walls.find((q) => q.id === id); if (w) { w.x1 += dx; w.x2 += dx; w.y1 += dy; w.y2 += dy; } }
             for (const [li, id] of sel.slabs) { const q = d.levels[li].slabs.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
             for (const [li, id] of sel.stairs) { const q = d.levels[li].stairs.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
+            for (const [li, id] of sel.columns) { const q = d.levels[li].columns.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
+            for (const [li, id] of sel.labels) { const q = d.levels[li].labels.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
             for (const [li, id] of sel.timber) {
                 const t = d.levels[li].timber.find((z) => z.id === id);
                 if (!t) continue;
@@ -427,6 +435,26 @@ export function createTools(app) {
                 app.render();
                 return;
             }
+            if (multi.press?.item && Math.hypot(p.sx - multi.press.sx, p.sy - multi.press.sy) > DRAG_PX) {
+                // aberturas, pilares y nombres se mueven arrastrándolos
+                const { type, id } = multi.press.item;
+                const lv = store.level();
+                multi.press = null;
+                if (type === 'opening') {
+                    const o = lv.openings.find((q) => q.id === id);
+                    if (o) drag = { kind: 'opening', o: { ...o }, spot: null };
+                } else if (type === 'column') {
+                    const c = lv.columns?.find((q) => q.id === id);
+                    if (c) drag = { kind: 'column', c: { ...c }, nx: c.x, ny: c.y };
+                } else if (type === 'label') {
+                    const lb = lv.labels?.find((q) => q.id === id);
+                    if (lb) drag = { kind: 'label', lb: { ...lb }, nx: lb.x, ny: lb.y };
+                }
+                if (drag) {
+                    store.setUi({ selection: type === 'opening' ? { type, id, wall: drag.o.wall } : { type, id } });
+                    app.canvas.style.cursor = 'grabbing';
+                }
+            }
             if (multi.press && !multi.band && Math.hypot(p.sx - multi.press.sx, p.sy - multi.press.sy) > DRAG_PX) {
                 // el clic se volvió arrastre: rectángulo de selección desde donde se apretó
                 multi.band = { a: [multi.press.wx / G, multi.press.wy / G], b: [p.wx / G, p.wy / G] };
@@ -438,7 +466,14 @@ export function createTools(app) {
                 return;
             }
             if (drag) {
-                if (drag.kind === 'wall') drag.line = snapAxis(p, drag.horizontal ? 'ay' : 'ax', drag.line0);
+                if (drag.kind === 'opening') drag.spot = openingSpot(p, drag.o.w, drag.o) ?? drag.spot; // fuera de un muro queda el último lugar
+                else if (drag.kind === 'column') {
+                    drag.nx = Math.round(p.wx / G);
+                    drag.ny = Math.round(p.wy / G);
+                } else if (drag.kind === 'label') {
+                    drag.nx = Math.floor(p.wx / G);
+                    drag.ny = Math.floor(p.wy / G);
+                } else if (drag.kind === 'wall') drag.line = snapAxis(p, drag.horizontal ? 'ay' : 'ax', drag.line0);
                 else if (drag.kind === 'corner') {
                     drag.nx = snapAxis(p, 'ax', drag.vx);
                     drag.ny = snapAxis(p, 'ay', drag.vy);
@@ -491,7 +526,8 @@ export function createTools(app) {
                 return;
             }
             // Se decide al soltar: sin moverse es un clic (elige lo de abajo); arrastrando, un rectángulo.
-            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1 };
+            const under = pickAt(app, p.sx, p.sy);
+            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: ['opening', 'column', 'label'].includes(under?.type) ? under : null };
         },
         up(p) {
             if (multi.drag) {
@@ -525,7 +561,17 @@ export function createTools(app) {
             const d = drag;
             drag = null;
             app.canvas.style.cursor = '';
-            if (d.kind === 'wall') {
+            if (d.kind === 'opening') {
+                const sp = d.spot;
+                if (sp && !sp.ok) app.toast(sp.reason, 'error');
+                else if (sp && (sp.wall.id !== d.o.wall || sp.pos !== d.o.pos)) {
+                    store.commit('Mover abertura', (dr) => Object.assign(dr.levels[store.ui.level].openings.find((q) => q.id === d.o.id), { wall: sp.wall.id, pos: sp.pos }));
+                }
+            } else if (d.kind === 'column') {
+                if ((d.nx !== d.c.x || d.ny !== d.c.y) && inLot(d.nx, d.ny)) store.commit('Mover pilar', (dr) => Object.assign(dr.levels[store.ui.level].columns.find((q) => q.id === d.c.id), { x: d.nx, y: d.ny }));
+            } else if (d.kind === 'label') {
+                if (d.nx !== d.lb.x || d.ny !== d.lb.y) store.commit('Mover nombre', (dr) => Object.assign(dr.levels[store.ui.level].labels.find((q) => q.id === d.lb.id), { x: d.nx, y: d.ny }));
+            } else if (d.kind === 'wall') {
                 if (d.line !== d.line0) wallMoveCommit(d.w.id, d.line);
             } else if (d.kind === 'corner') {
                 if (d.nx !== d.vx || d.ny !== d.vy) cornerMoveCommit(d.vx, d.vy, d.nx, d.ny);
@@ -585,6 +631,21 @@ export function createTools(app) {
             drawMulti(ctx, cam);
             if (drag) {
                 const z = base();
+                if (drag.kind === 'opening') {
+                    const sp = drag.spot;
+                    if (sp) ghostBox(ctx, cam, openingBox(sp.wall, sp.pos, drag.o.w, drag.o.sill, drag.o.h, z), sp.ok ? { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' } : { fill: 'rgba(180,35,24,.35)', stroke: '#b42318' });
+                    return;
+                }
+                if (drag.kind === 'column') {
+                    const half = drag.c.size / 2;
+                    ghostBox(ctx, cam, { x0: drag.nx * G - half, x1: drag.nx * G + half, y0: drag.ny * G - half, y1: drag.ny * G + half, z0: z, z1: z + cfg.levelHeight }, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
+                    return;
+                }
+                if (drag.kind === 'label') {
+                    const [sx, sy] = cam.project((drag.nx + 0.5) * G, (drag.ny + 0.5) * G, z);
+                    label(ctx, drag.lb.name, sx, sy, { bg: 'rgba(37,99,235,.92)' });
+                    return;
+                }
                 if (drag.kind === 'wall') {
                     const horizontal = drag.w.y1 === drag.w.y2;
                     const delta = drag.line - drag.line0;
@@ -853,62 +914,88 @@ export function createTools(app) {
     T.wall = segmentTool({ key: 'w', label: 'Muro', hint: 'Clic en cada esquina (o arrastrá un muro). Al volver al punto de partida la habitación se cierra; Esc o doble clic terminan.', commitLabel: 'Agregar muro' });
     T.block = segmentTool({ key: 'b', label: 'Bloque suelto', hint: `Clic: un bloque de ${fmt(BL, 1)} cm. Arrastre: hilera de bloques enteros. X gira la orientación.`, module: true, commitLabel: 'Agregar bloques' });
 
-    // ---------------- puertas y ventanas ----------------
-    const openingTool = (kind) => {
-        let preset = kind === 'door' ? 'P87' : 'V125';
+    // ---------------- aberturas (puertas, ventanas, portones) ----------------
+    /**
+     * Lugar válido para una abertura de `w` unidades bajo el puntero: el tramo libre del muro más cercano (jambas ≥ 25 cm
+     * respecto de esquinas, muros y otras aberturas). Al mover una existente (`self`) se libera el lugar que ocupa.
+     */
+    const openingSpot = (p, w, self = null) => {
+        const wall = pickWall(app, p.sx, p.sy);
+        if (!wall) return null;
+        const info = store.analysis?.levels?.[store.ui.level]?.walls?.[wall.id];
+        if (!info) return null;
+        const desired = Math.round(alongPosition(app, wall, p.sx, p.sy) - w / 2);
+        let slots = info.slots.map((s) => [...s]);
+        if (self && self.wall === wall.id) {
+            slots.push([self.pos - 2, self.pos + self.w + 2]);
+            slots.sort((x, y) => x[0] - y[0]);
+            slots = slots.reduce((acc, s) => {
+                const last = acc.at(-1);
+                if (last && s[0] <= last[1]) last[1] = Math.max(last[1], s[1]);
+                else acc.push(s);
+                return acc;
+            }, []);
+        }
+        let best = null;
+        for (const [from, to] of slots) {
+            if (to - from < w) continue;
+            const pos = clamp(desired, from, to - w);
+            const dist = Math.abs(pos - desired);
+            if (!best || dist < best.dist) best = { pos, dist };
+        }
+        return best
+            ? { wall, pos: best.pos, ok: true, w }
+            : { wall, pos: clamp(desired, 0, Math.max(0, wallLen(wall) - w)), ok: false, w, reason: `No hay lugar libre de ${fmt(w * G, 1)} cm en este muro (jambas ≥ 25 cm respecto de esquinas, muros y otras aberturas).` };
+    };
+
+    const openingState = { kind: 'door', w: OPENING_TYPES.door.w, mode: 'swing', sill: OPENING_TYPES.window.sill };
+    const setOpeningKind = (kind) => {
+        openingState.kind = kind;
+        openingState.w = OPENING_TYPES[kind].w;
+        openingState.mode = defaultMode(kind);
+        openingState.sill = OPENING_TYPES[kind].sill;
+    };
+    {
         let ghost = null;
-        const spec = () => cfg.presets[preset];
-        const compute = (p) => {
-            const wall = pickWall(app, p.sx, p.sy);
-            if (!wall) return null;
-            const info = store.analysis?.levels?.[store.ui.level]?.walls?.[wall.id];
-            if (!info) return null;
-            const s = spec();
-            const desired = Math.round(alongPosition(app, wall, p.sx, p.sy) - s.w / 2);
-            let best = null;
-            for (const [from, to] of info.slots) {
-                if (to - from < s.w) continue;
-                const pos = clamp(desired, from, to - s.w);
-                const dist = Math.abs(pos - desired);
-                if (!best || dist < best.dist) best = { pos, dist };
-            }
-            return best
-                ? { wall, pos: best.pos, ok: true, w: s.w }
-                : { wall, pos: clamp(desired, 0, Math.max(0, wallLen(wall) - s.w)), ok: false, w: s.w, reason: `No hay lugar libre de ${fmt(s.w * G, 1)} cm en este muro (jambas ≥ 25 cm respecto de esquinas, muros y otros vanos).` };
-        };
-        return {
-            hotkey: kind === 'door' ? 'p' : 'n',
-            label: kind === 'door' ? 'Puerta' : 'Ventana',
-            hint: 'Apuntá a un muro: el fantasma verde indica un lugar válido (jambas ≥ 25 cm). Clic para colocar.',
-            options: () => h('span', { class: 'row' }, selectT('Tipo', preset, Object.entries(cfg.presets).filter(([, s]) => s.kind === kind).map(([k, s]) => [k, s.label]), (v) => { preset = v; app.render(); })),
+        T.opening = {
+            hotkey: 'p',
+            label: 'Abertura',
+            hint: 'Elegí el tipo (puerta, ventana o portón), el ancho y cómo abre; apuntá a un muro: el fantasma verde indica un lugar válido. Clic para colocar. Después se mueve arrastrándola.',
+            setKind: (kind) => { setOpeningKind(kind); app.refreshOptions(); app.render(); },
+            options: () => {
+                const t = OPENING_TYPES[openingState.kind];
+                return h('span', { class: 'row' },
+                    selectT('Tipo', openingState.kind, Object.entries(OPENING_TYPES).map(([k, x]) => [k, x.label]), (v) => { setOpeningKind(v); app.refreshOptions(); app.render(); }),
+                    selectT('Ancho', openingState.w, t.widths.map((n) => [n, `${fmt(n * G, 1)} cm`]), (v) => { openingState.w = Number(v); app.render(); }),
+                    openingState.kind === 'window' ? selectT('Alto', openingState.sill, [4, 5, 6, 0].map((n) => [n, `${fmt((cfg.openingTopCourse - n) * 25, 0)} cm`]), (v) => { openingState.sill = Number(v); app.render(); }) : null,
+                    selectT('Apertura', openingState.mode, t.modes, (v) => { openingState.mode = v; app.render(); }));
+            },
             reset() { ghost = null; },
             move(p) {
-                ghost = compute(p);
+                ghost = openingSpot(p, openingState.w);
                 app.render();
             },
             down(p) {
-                ghost = compute(p);
+                ghost = openingSpot(p, openingState.w);
                 if (!ghost) return;
                 if (!ghost.ok) {
                     app.toast(ghost.reason, 'error');
                     return;
                 }
-                const s = spec();
                 const g = ghost;
-                store.commit(kind === 'door' ? 'Agregar puerta' : 'Agregar ventana', (d) => {
-                    d.levels[store.ui.level].openings.push({ id: nextId(d, 'o'), wall: g.wall.id, pos: g.pos, w: s.w, sill: s.sill, h: s.h, kind: s.kind, preset, flip: false });
+                const st = { ...openingState };
+                store.commit(`Agregar ${OPENING_TYPES[st.kind].label.toLowerCase()}`, (d) => {
+                    d.levels[store.ui.level].openings.push({ id: nextId(d, 'o'), wall: g.wall.id, pos: g.pos, ...newOpening(st.kind, cfg.openingTopCourse, st.w), sill: st.sill, h: cfg.openingTopCourse - st.sill, mode: st.mode });
                 });
             },
             draw(ctx, cam) {
                 if (!ghost) return;
-                const s = spec();
-                const box = openingBox(ghost.wall, ghost.pos, s.w, s.sill, s.h, base());
+                const sill = openingState.kind === 'window' ? openingState.sill : 0;
+                const box = openingBox(ghost.wall, ghost.pos, openingState.w, sill, cfg.openingTopCourse - sill, base());
                 ghostBox(ctx, cam, box, ghost.ok ? { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' } : { fill: 'rgba(180,35,24,.35)', stroke: '#b42318' });
             },
         };
-    };
-    T.door = openingTool('door');
-    T.window = openingTool('window');
+    }
 
     // ---------------- viga U ----------------
     let uCourse = 5;
@@ -1466,8 +1553,75 @@ export function createTools(app) {
         },
     };
 
+    // ---------------- pilares ----------------
+    const columnState = { size: cfg.columnSizes?.[0] ?? 20 };
+    const levelOnly = () => (store.ui.level === 2 ? 'Elegí «Nivel 1» o «Nivel 2».' : null);
+    T.column = {
+        magnet: true,
+        snap: 1,
+        hotkey: 'c',
+        label: 'Pilar',
+        hint: 'Clic en un punto de la retícula: pilar de hormigón armado de piso a techo del nivel. Sostiene el techo o la losa donde no hay muro (alfresco, galería, portón ancho).',
+        disabled: levelOnly,
+        options: () => h('span', { class: 'row' },
+            selectT('Lado', columnState.size, (cfg.columnSizes ?? [20, 25, 30, 40]).map((v) => [v, `${v} × ${v} cm`]), (v) => { columnState.size = Number(v); app.render(); })),
+        down(p) {
+            if (!inLot(p.gx, p.gy)) return;
+            if (store.level().columns?.some((c) => c.x === p.gx && c.y === p.gy)) {
+                app.toast('Ya hay un pilar en ese punto.', 'error');
+                return;
+            }
+            store.commit('Agregar pilar', (d) => {
+                (d.levels[store.ui.level].columns ??= []).push({ id: nextId(d, 'c'), x: p.gx, y: p.gy, size: columnState.size });
+            });
+        },
+        draw(ctx, cam) {
+            const p = app.pointer;
+            if (!p || !inLot(p.gx, p.gy)) return;
+            const s = columnState.size / 2;
+            ghostBox(ctx, cam, { x0: p.gx * G - s, x1: p.gx * G + s, y0: p.gy * G - s, y1: p.gy * G + s, z0: base(), z1: base() + cfg.levelHeight }, { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' });
+        },
+    };
+
+    // ---------------- nombres de ambientes ----------------
+    const labelState = { name: 'Estar' };
+    T.label = {
+        hotkey: 'a',
+        label: 'Nombre',
+        hint: 'Escribí o elegí un nombre y hacé clic dentro de un ambiente: se ve en la planta. En un espacio abierto (cocina + estar) podés poner varios.',
+        disabled: levelOnly,
+        options: () => h('span', { class: 'row' },
+            h('label', { class: 'field-inline' }, 'Nombre',
+                h('input', { type: 'text', list: 'room-names', maxlength: 40, value: labelState.name, oninput: (e) => { labelState.name = e.target.value; } })),
+            roomNamesList()),
+        down(p) {
+            const name = labelState.name.trim();
+            if (!name) {
+                app.toast('Escribí un nombre para el ambiente.', 'error');
+                return;
+            }
+            const [wx, wy] = app.cam.unproject(p.sx, p.sy, base());
+            const x = Math.floor(wx / G);
+            const y = Math.floor(wy / G);
+            let id = null;
+            store.commit('Nombrar ambiente', (d) => {
+                id = nextId(d, 'n');
+                (d.levels[store.ui.level].labels ??= []).push({ id, x, y, name });
+            });
+            app.setTool('select');
+            store.setUi({ selection: { type: 'label', id } });
+        },
+        draw(ctx, cam) {
+            const p = app.pointer;
+            if (!p) return;
+            const [wx, wy] = cam.unproject(p.sx, p.sy, base());
+            const [sx, sy] = cam.project((Math.floor(wx / G) + 0.5) * G, (Math.floor(wy / G) + 0.5) * G, base());
+            label(ctx, labelState.name || '…', sx, sy);
+        },
+    };
+
     // metadatos para la barra de herramientas
-    const SHORT = { select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', door: 'Puerta', window: 'Ventana', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
+    const SHORT = { select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', opening: 'Abertura', column: 'Pilar', label: 'Nombre', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
     for (const [id, t] of Object.entries(T)) {
         t.id = id;
         t.short = SHORT[id] ?? t.label;

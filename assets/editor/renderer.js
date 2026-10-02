@@ -43,11 +43,15 @@ function PAL() {
         [KIND.BEAM]: mix(t.wood, '#000000', 0.12),
         [KIND.STEP]: mix(t.slab, '#ffffff', 0.5),
         [KIND.SLAB]: t.slab,
+        [KIND.COLUMN]: mix(t.slab, '#000000', 0.18),
     };
     palette = Object.fromEntries(Object.entries(base).map(([k, hex]) => [k, { top: shade(hex, 1.03), yp: shade(hex, 0.88), xp: shade(hex, 0.74) }]));
     paletteFor = t;
     return palette;
 }
+
+/** Debajo de esta superficie el rótulo del ambiente lleva sólo el nombre. */
+const SMALL_ROOM_M2 = 4;
 
 export class Renderer {
     constructor(canvas) {
@@ -614,6 +618,7 @@ export class Renderer {
             ctx.globalAlpha = 1;
             if (!ghost && ui.level !== 2) this.drawPlanRooms(f, li);
             this.drawPlanOpenings(f, project.levels[li], ghost);
+            this.drawPlanColumns(f, project.levels[li], ghost);
             if (li === 1 && !ghost) this.drawPlanTimber(f, false);
             if (li === 0) this.drawPlanStairs(f, ghost);
             if (li === 1) this.drawPlanSlabs(f);
@@ -798,24 +803,48 @@ export class Renderer {
     }
 
     drawPlanRooms(f, li) {
+        // en ambientes chicos (< 4 m²) sólo el nombre: con los m² el rótulo tapa a los vecinos
         const { ctx } = this;
         const { cam, analysis } = f;
         if (cam.zoom < 0.06) return;
         ctx.font = '600 12px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        for (const r of analysis.levels[li]?.rooms ?? []) {
-            const cx = (r.bbox.x + r.bbox.w / 2) * G;
-            const cy = (r.bbox.y + r.bbox.h / 2) * G;
-            const [sx, sy] = cam.project(cx, cy, 0);
-            this.pill(ctx, `${r.name}`, `${fmt(r.netM2, 2)} m²`, sx, sy);
+        const rooms = analysis.levels[li]?.rooms ?? [];
+        // Sin nombre: «Ambiente N» en el centro. Con nombre: el que se escribió, donde se puso (un espacio abierto puede tener varios).
+        for (const r of rooms) {
+            if (r.labels) continue;
+            const [sx, sy] = cam.project((r.bbox.x + r.bbox.w / 2) * G, (r.bbox.y + r.bbox.h / 2) * G, 0);
+            if (r.netM2 < SMALL_ROOM_M2) this.tag(ctx, `${r.name}`, sx, sy);
+            else this.pill(ctx, `${r.name}`, `${fmt(r.netM2, 2)} m²`, sx, sy);
+        }
+        const picked = f.ui.selection?.type === 'label' ? f.ui.selection.id : null;
+        for (const lb of analysis.levels[li]?.labels ?? []) {
+            const [sx, sy] = cam.project((lb.x + 0.5) * G, (lb.y + 0.5) * G, 0);
+            const room = rooms.find((q) => q.id === lb.room);
+            if (room?.labels === 1 && room.netM2 >= SMALL_ROOM_M2) this.pill(ctx, lb.name, `${fmt(room.netM2, 2)} m²`, sx, sy, lb.id === picked);
+            else this.tag(ctx, lb.name, sx, sy, lb.id === picked);
         }
     }
 
-    pill(ctx, line1, line2, sx, sy) {
+    /** Nombre de un ambiente sin superficie (espacios abiertos con varios nombres). */
+    tag(ctx, text, sx, sy, picked = false) {
+        const w = ctx.measureText(text).width + 14;
+        ctx.fillStyle = 'rgba(255,255,255,.86)';
+        ctx.strokeStyle = picked ? '#2563eb' : 'rgba(30,41,59,.25)';
+        ctx.lineWidth = picked ? 2 : 1;
+        roundRect(ctx, sx - w / 2, sy - 12, w, 24, 8);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#1e293b';
+        ctx.fillText(text, sx, sy);
+    }
+
+    pill(ctx, line1, line2, sx, sy, picked = false) {
         const w = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width) + 14;
         ctx.fillStyle = 'rgba(255,255,255,.86)';
-        ctx.strokeStyle = 'rgba(30,41,59,.25)';
+        ctx.strokeStyle = picked ? '#2563eb' : 'rgba(30,41,59,.25)';
+        ctx.lineWidth = picked ? 2 : 1;
         roundRect(ctx, sx - w / 2, sy - 18, w, 36, 8);
         ctx.fill();
         ctx.stroke();
@@ -823,6 +852,30 @@ export class Renderer {
         ctx.fillText(line1, sx, sy - 6);
         ctx.fillStyle = '#3f6212';
         ctx.fillText(line2, sx, sy + 8);
+    }
+
+    /** Pilares en planta: cuadrado oscuro con una cruz (símbolo del hormigón armado). */
+    drawPlanColumns(f, level, ghost) {
+        const { ctx } = this;
+        const { cam } = f;
+        for (const c of level.columns ?? []) {
+            const s = c.size / 2;
+            const [x0, y0, x1, y1] = [c.x * G - s, c.y * G - s, c.x * G + s, c.y * G + s];
+            ctx.globalAlpha = ghost ? 0.7 : 1;
+            ctx.fillStyle = ghost ? '#a9b4c4' : '#334155';
+            this.fillRectPlan(cam, x0, y0, x1, y1);
+            const [a, b] = [cam.project(x0, y0, 0), cam.project(x1, y1, 0)];
+            const [d, e] = [cam.project(x1, y0, 0), cam.project(x0, y1, 0)];
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(a[0], a[1]);
+            ctx.lineTo(b[0], b[1]);
+            ctx.moveTo(d[0], d[1]);
+            ctx.lineTo(e[0], e[1]);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
     }
 
     drawPlanOpenings(f, level, ghost) {
@@ -851,11 +904,32 @@ export class Renderer {
                     ctx.lineTo(b[0], b[1]);
                 }
                 ctx.stroke();
-            } else {
-                // hoja de puerta abierta 90° + arco de giro
+            } else if (o.mode === 'slide' || o.mode === 'overhead') {
+                // corrediza o seccional: sin arco; la hoja corre junto al muro y una guía punteada marca el recorrido
+                const off = (o.flip ? -1 : 1) * (t / 2 + 2.5);
+                const seg = (u0, u1) => (horizontal ? [P(u0, line + off), P(u1, line + off)] : [P(line + off, u0), P(line + off, u1)]);
+                if (o.mode === 'slide') {
+                    const u0 = o.hingeEnd ? from - len / 2 : from + len / 2;
+                    const [a, b] = seg(u0, u0 + len);
+                    ctx.moveTo(a[0], a[1]);
+                    ctx.lineTo(b[0], b[1]);
+                    ctx.stroke();
+                }
+                ctx.beginPath();
+                ctx.lineWidth = 0.9;
+                ctx.setLineDash([3, 3]);
+                const [c, d] = seg(from, from + len);
+                ctx.moveTo(c[0], c[1]);
+                ctx.lineTo(d[0], d[1]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            } else if (o.mode !== 'fixed') {
+                // hoja de puerta abierta 90° + arco de giro, con la bisagra en el extremo elegido
                 const sign = o.flip ? -1 : 1;
-                const hinge = horizontal ? [from, line] : [line, from];
-                const tip = horizontal ? [from, line + sign * len] : [line + sign * len, from];
+                const along = o.hingeEnd ? -1 : 1;
+                const hingeAt = o.hingeEnd ? from + len : from;
+                const hinge = horizontal ? [hingeAt, line] : [line, hingeAt];
+                const tip = horizontal ? [hingeAt, line + sign * len] : [line + sign * len, hingeAt];
                 const [h0, h1] = [P(...hinge), P(...tip)];
                 ctx.moveTo(h0[0], h0[1]);
                 ctx.lineTo(h1[0], h1[1]);
@@ -865,10 +939,10 @@ export class Renderer {
                 ctx.strokeStyle = 'rgba(30,41,59,.6)';
                 const steps = 12;
                 for (let i = 0; i <= steps; i++) {
-                    const a = (i / steps) * (Math.PI / 2);
-                    const px = horizontal ? from + Math.cos(a) * len : line + sign * Math.sin(a) * len;
-                    const py = horizontal ? line + sign * Math.sin(a) * len : from + Math.cos(a) * len;
-                    const [sx, sy] = P(px, py);
+                    const ang = (i / steps) * (Math.PI / 2);
+                    const u = hingeAt + along * Math.cos(ang) * len;
+                    const v = line + sign * Math.sin(ang) * len;
+                    const [sx, sy] = horizontal ? P(u, v) : P(v, u);
                     if (i) ctx.lineTo(sx, sy);
                     else ctx.moveTo(sx, sy);
                 }

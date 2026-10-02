@@ -14,6 +14,8 @@ final readonly class Level
      * @param list<TimberElement> $timber   estructura de entrepiso que apoya sobre este nivel
      * @param list<Slab>          $slabs    losas que hacen de piso de este nivel
      * @param list<Stair>         $stairs   escaleras que suben desde este nivel
+     * @param list<Column>        $columns  pilares de hormigón
+     * @param list<Label>         $labels   nombres de los ambientes
      */
     public function __construct(
         public array $walls = [],
@@ -22,6 +24,8 @@ final readonly class Level
         public array $timber = [],
         public array $slabs = [],
         public array $stairs = [],
+        public array $columns = [],
+        public array $labels = [],
     ) {
     }
 
@@ -54,13 +58,13 @@ final readonly class Level
      */
     public function withStructure(array $walls, array $openings, array $ubeams): self
     {
-        return new self($walls, $openings, $ubeams, $this->timber, $this->slabs, $this->stairs);
+        return new self($walls, $openings, $ubeams, $this->timber, $this->slabs, $this->stairs, $this->columns, $this->labels);
     }
 
     /** @param list<TimberElement> $timber */
     public function withTimber(array $timber): self
     {
-        return new self($this->walls, $this->openings, $this->ubeams, $timber, $this->slabs, $this->stairs);
+        return new self($this->walls, $this->openings, $this->ubeams, $timber, $this->slabs, $this->stairs, $this->columns, $this->labels);
     }
 
     /** @return array<string, mixed> */
@@ -73,6 +77,8 @@ final readonly class Level
             'timber' => array_map(static fn (TimberElement $t): array => $t->toArray(), $this->timber),
             'slabs' => array_map(static fn (Slab $t): array => $t->toArray(), $this->slabs),
             'stairs' => array_map(static fn (Stair $t): array => $t->toArray(), $this->stairs),
+            'columns' => array_map(static fn (Column $c): array => $c->toArray(), $this->columns),
+            'labels' => array_map(static fn (Label $l): array => $l->toArray(), $this->labels),
         ];
     }
 }

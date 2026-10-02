@@ -319,6 +319,25 @@ final class BomCalculator
         if (($st['landingM2'] ?? 0) > 0) {
             $add('Escaleras', 'DES', 'Descansos de escalera', 'm²', $st['landingM2'], $prices['stair_landing_m2']);
         }
+        // Pilares de hormigón armado: 4 Ø10 (con 40 cm de empalme) y estribos Ø8 cada 20 cm.
+        $cols = ['n' => 0, 'm3' => 0.0, 'd10M' => 0.0, 'd8M' => 0.0, 'formM2' => 0.0];
+        foreach ($project->levels as $level) {
+            foreach ($level->columns as $c) {
+                $s = $c->size / 100;
+                $hM = Hcca::LEVEL_HEIGHT_CM / 100;
+                ++$cols['n'];
+                $cols['m3'] += $s * $s * $hM;
+                $cols['d10M'] += 4 * ($hM + 0.4);
+                $cols['d8M'] += ceil($hM / 0.2) * 4 * max(0.1, $s - 0.06);
+                $cols['formM2'] += 4 * $s * $hM;
+            }
+        }
+        if ($cols['n'] > 0) {
+            $add('Pilares', 'PHO', 'Hormigón de pilares', 'm³', max(0.01, round($cols['m3'], 2)), $prices['concrete_m3'], sprintf('%d pilar(es)', $cols['n']));
+            $add('Pilares', 'PD10', 'Hierro Ø10 mm (barras longitudinales)', 'kg', round($cols['d10M'] * Hcca::REBAR10_KG_M, 1), $prices['rebar10_kg'], $this->fmt($cols['d10M']).' m');
+            $add('Pilares', 'PD8', 'Hierro Ø8 mm (estribos cada 20 cm)', 'kg', round($cols['d8M'] * Hcca::REBAR8_KG_M, 1), $prices['rebar8_kg'], $this->fmt($cols['d8M']).' m');
+            $add('Pilares', 'PEN', 'Encofrado de pilares', 'm²', round($cols['formM2'], 2), $prices['formwork_m2']);
+        }
         $sl = $extras['slabs'] ?? [];
         if (($sl['areaM2'] ?? 0) > 0) {
             $add('Losa de piso', 'LHO', 'Hormigón de losa', 'm³', max(0.01, $sl['concreteM3']), $prices['concrete_m3'], $this->fmt($sl['areaM2']).' m²');

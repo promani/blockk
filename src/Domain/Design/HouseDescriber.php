@@ -77,7 +77,7 @@ final class HouseDescriber
                 ];
             }
             foreach ($level['openings'] as $o) {
-                $out['vanos'][] = ['id' => $o['id'], 'nivel' => $li + 1, 'muro' => $o['wall'], 'tipo' => $o['preset'] ?? $o['kind'], 'desdeInicioDelMuro' => $this->m($o['pos']), 'ancho' => $this->m($o['w'])];
+                $out['vanos'][] = ['id' => $o['id'], 'nivel' => $li + 1, 'muro' => $o['wall'], 'tipo' => ($o['preset'] ?? '') ?: $o['kind'], 'desdeInicioDelMuro' => $this->m($o['pos']), 'ancho' => $this->m($o['w'])];
             }
         }
         $out['techos'] = array_map(static fn (array $r): array => ['id' => $r['id'], 'tipo' => 'shed' === $r['type'] ? 'un_agua' : 'dos_aguas', 'pendiente' => $r['slope'] ?? 30], $p['roofs'] ?? []);
@@ -115,7 +115,7 @@ final class HouseDescriber
                 $out[] = [
                     'id' => sprintf('N%d-A%d', $li + 1, $room['id']),
                     'nivel' => $li + 1,
-                    'nombre' => [] !== $label ? implode(' + ', array_unique($label)) : null,
+                    'nombre' => ($room['labels'] ?? 0) > 0 ? $room['name'] : ([] !== $label ? implode(' + ', array_unique($label)) : null),
                     'm2' => $room['netM2'],
                     'caja' => [$this->m($b['x']), $this->m($b['y']), $this->m($b['w']), $this->m($b['h'])],
                 ];

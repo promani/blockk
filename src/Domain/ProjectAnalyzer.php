@@ -150,10 +150,13 @@ final class ProjectAnalyzer
         $shapes = $l->regions->shapes();
         $rooms = array_map(static fn ($r): array => $r->toArray() + ['fill' => $shapes[$r->id]['fill'] ?? [], 'corners' => $shapes[$r->id]['corners'] ?? []], $l->regions->rooms);
 
+        [$rooms, $labels] = $this->nameRooms($rooms, $l->level->labels);
+
         return [
             'used' => !$l->level->isEmpty(),
             'walls' => $walls,
             'rooms' => $rooms,
+            'labels' => $labels,
             'courses' => $l->courses->toArray(),
             'junctions' => [
                 'tee' => $l->topology->count(Geometry\NodeType::Tee),
@@ -162,6 +165,41 @@ final class ProjectAnalyzer
             ],
             'stock' => $bomScope['stock'] ?? 0,
         ];
+    }
+
+    /**
+     * Pone a cada ambiente el nombre de las etiquetas que caen dentro (varias en un espacio abierto: «Cocina / Estar»).
+     *
+     * @param list<array<string, mixed>>        $rooms
+     * @param list<\App\Domain\Model\Label> $labels
+     *
+     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>}
+     */
+    private function nameRooms(array $rooms, array $labels): array
+    {
+        $byRoom = [];
+        $out = [];
+        foreach ($labels as $lb) {
+            $roomId = null;
+            foreach ($rooms as $r) {
+                if (array_any($r['fill'], static fn (array $f): bool => $lb->x >= $f[0] && $lb->x < $f[0] + $f[2] && $lb->y >= $f[1] && $lb->y < $f[1] + $f[3])) {
+                    $roomId = $r['id'];
+                    break;
+                }
+            }
+            if (null !== $roomId && '' !== $lb->name) {
+                $byRoom[$roomId][] = $lb->name;
+            }
+            $out[] = $lb->toArray() + ['room' => $roomId];
+        }
+        foreach ($rooms as $i => $r) {
+            $rooms[$i]['labels'] = count($byRoom[$r['id']] ?? []);
+            if (isset($byRoom[$r['id']])) {
+                $rooms[$i]['name'] = implode(' / ', $byRoom[$r['id']]);
+            }
+        }
+
+        return [$rooms, $out];
     }
 
     /**

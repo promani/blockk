@@ -6,7 +6,7 @@
  * Códigos adicionales de la escena: 4 hoja de puerta · 5 vidrio · 6 tirante · 7 placa de entrepiso · 8 viga.
  */
 
-export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8, STEP: 9, SLAB: 10, ROOF: 11, FRAME: 12 };
+export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8, STEP: 9, SLAB: 10, ROOF: 11, FRAME: 12, COLUMN: 13 };
 
 const G = 12.5;
 const COURSE_H = 25;
@@ -20,6 +20,7 @@ export function buildScene(project, analysis, config) {
         const courses = analysis.levels[li]?.courses ?? [];
         addMasonry(boxes, courses, base, li);
         addOpenings(boxes, project.levels[li], base, li);
+        addColumns(boxes, project.levels[li], base, li, config);
         levels.push({ index: li, boxes, base, used: (analysis.levels[li]?.used ?? false) });
     }
     const timber = buildTimber(analysis.timber, config);
@@ -81,6 +82,30 @@ function addMasonry(boxes, courses, base, li) {
     });
 }
 
+/** Pilares de hormigón armado: una caja lisa de piso a techo del nivel. */
+function addColumns(boxes, level, base, li, config) {
+    for (const c of level.columns ?? []) {
+        const half = c.size / 2;
+        boxes.push({
+            x0: c.x * G - half,
+            x1: c.x * G + half,
+            y0: c.y * G - half,
+            y1: c.y * G + half,
+            z0: base,
+            z1: base + config.levelHeight,
+            zs: base,
+            kind: KIND.COLUMN,
+            axis: 'x',
+            adjA: false,
+            adjB: false,
+            top: true,
+            flat: true,
+            level: li,
+            column: c.id,
+        });
+    }
+}
+
 /**
  * Vanos: marco (jambas, dintel y alféizar) que reviste el espesor del muro, con el vidrio o la hoja al medio. Las piezas se
  * parten por hilada para que el pintor las ordene junto con la mampostería; las caras de extremo de los bloques que dan al
@@ -99,7 +124,7 @@ function addOpenings(boxes, level, base, li) {
         const half = (w.t ?? 20) / 2;
         const z0 = base + o.sill * COURSE_H;
         const z1 = base + (o.sill + o.h) * COURSE_H;
-        const door = o.kind === 'door';
+        const door = o.kind !== 'window'; // puertas y portones
         const sillF = door ? 0 : F;
 
         for (const b of boxes) {
@@ -155,7 +180,7 @@ function addOpenings(boxes, level, base, li) {
             boxes.push(box(to - F, to, -half, half, lo, hi, zc0, KIND.FRAME, { adjB: true }));
             if (mullion !== null) boxes.push(box(mullion - F / 2, mullion + F / 2, -3, 3, lo, hi, zc0, KIND.FRAME));
             for (const [a, b] of panes) {
-                const handle = door && handleZ >= lo && handleZ < top ? { handle: { at: o.flip ? a + 8 : b - 8, z: handleZ } } : {};
+                const handle = door && handleZ >= lo && handleZ < top ? { handle: { at: o.hingeEnd ? a + 8 : b - 8, z: handleZ } } : {};
                 boxes.push(box(a, b, -leaf, leaf, lo, hi, zc0, door ? KIND.DOOR : KIND.GLASS, handle));
             }
         }

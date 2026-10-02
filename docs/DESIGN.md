@@ -54,8 +54,10 @@ Al final hay un caso de estudio (un plano real que se recreó) y las **brechas d
 
 ## 4. Puertas: tamaño y sentido
 
-Cada puerta se define por **ancho** (`P75`, `P87`, `P100`, `P150`), **lado** (hacia qué ambiente abre: casilla «Abre hacia
-el otro lado», `flip`) y **bisagra** (hoy siempre en el extremo inicial del vano; ver brechas).
+Una abertura se define con **tipo** (puerta, ventana, portón), **ancho**, **alto** y **apertura**; la posición no se
+escribe, se arrastra por el muro. Si la apertura es batiente, se elige el **giro** (en qué extremo va la bisagra y hacia
+qué lado abre); si es corrediza, hacia dónde corre la hoja. Anchos habituales: puerta 75 / 87,5 / 100 / 150 cm, ventana
+62,5 a 187,5 cm, portón 250 o 300 cm.
 
 | Regla | Detalle |
 | --- | --- |
@@ -67,6 +69,8 @@ el otro lado», `flip`) y **bisagra** (hoy siempre en el extremo inicial del van
 | **Dos puertas enfrentadas no se pisan** | Si dos arcos se cruzan, se desplazan o una pasa a corrediza. |
 | **No tapa una ventana ni un paso** | La hoja abierta no debe cubrir una ventana ni cortar una circulación. |
 | **Anchos** | 75 cm: baños, placards, despensa. 87,5 cm: dormitorios y estar. 100 cm: entrada y accesibles. 150 cm (doble): entrada principal, patio. Los pasos con muebles grandes, 87,5 como mínimo. |
+| **Corrediza donde la hoja no tiene lugar** | Baños y placards chicos, o un paso ancho al patio: la hoja corre junto al muro y no gira (apertura «Corrediza»). Necesita ese tramo de pared libre al costado. |
+| **Portón** | Garaje o acceso de vehículos de 2,5 a 3 m (apertura «Seccional» o «Corrediza»): no gira, y por su luz el dintel se verifica con cálculo (`opening.span`). |
 | **Ubicación en el muro** | ≥ 25 cm entre cada jamba y la esquina o el muro transversal (error `opening.pier` si no). Una puerta junto a una esquina abre hacia la pared que queda cerca. |
 | **Enfrentar la salida a un patio** | Una puerta-ventana (`VG150`, ventanal 150 × 200) o doble `P150` enfrentada al estar. |
 
@@ -84,8 +88,16 @@ el otro lado», `flip`) y **bisagra** (hoy siempre en el extremo inicial del van
 
 - **Módulo**: medidas entre ejes múltiplo de **0,50 m** (4 u): dan pocos cortes, y el descarte baja del 4 %. Tabla
   rápida: 1 m = 8 u; 3 m = 24 u; 4 m = 32 u; 5 m = 40 u; 9 m = 72 u.
-- **Espesores**: perimetrales y portantes de 20 cm (o 15 cm si el sistema lo permite); tabiques de 10 cm sólo
-  separan y no cargan.
+- **Espesores**: perimetrales y portantes de 20 cm (o 15 cm si el sistema lo permite).
+- **Mampostería interior con bloques más finos**: todo lo que **no carga** (divisiones de ambientes, baños, placards,
+  despensas, tabiques de la planta alta) se levanta con el bloque más delgado del sistema, **10 cm**, y no con el de 15 o
+  20. Se gana superficie útil (cada tabique de 10 cm en lugar de 20 devuelve 10 cm de ancho al ambiente), se baja el peso
+  sobre la losa o el entrepiso y se abarata. Los muros de 15 y 20 cm quedan para el perímetro y para los portantes que
+  apoyan losas, el nivel de arriba o el techo. Un tabique fino no lleva dinteles largos ni cargas colgadas
+  (cocina, termotanque, mueble alto) sin refuerzo.
+- **Pilares de hormigón armado** (20, 25, 30 o 40 cm de lado, de piso a techo): se usan donde el techo o la losa necesitan
+  apoyo y no hay muro: alfresco, galería, porche, portón ancho. Se alinean con los de abajo o con un muro portante (el
+  motor avisa con `support.column`) y se reparten a 2,5–3 m entre sí si sostienen un techo.
 - **Alineación vertical**: los portantes de la planta alta apoyan sobre portantes de la baja; los tabiques apoyan en la
   losa o entrepiso. La **luz de losa** (lado corto) hasta 4 m sin vigas: una losa grande se parte en paños que
   apoyan sobre muros.
@@ -95,10 +107,18 @@ el otro lado», `flip`) y **bisagra** (hoy siempre en el extremo inicial del van
   cruzados con limahoya. Luces de cabios según la sección (`3x8` hasta 3,75 m, `3x10` 4,75 m, `3x12` 5,75 m).
 - **Altura**: 3,00 m de muro (12 hiladas) y hasta 2 niveles.
 
+## 6 bis. Nombrar los ambientes
+
+Todo ambiente lleva nombre (herramienta «Nombre», o el campo «Nombre» al elegir la habitación): se ve en la planta junto
+con sus m² y le sirve a quien lee el plano, al asistente y a la Revisión. En un espacio abierto (cocina + estar +
+comedor) se pone **un nombre por zona**: la planta los muestra sin superficie, porque la zona no tiene paredes. Los
+nombres de ambientes chicos (menos de 4 m²) se muestran sin los m² para no tapar a los vecinos. Usá nombres de uso
+(«Dormitorio 2», «Baño en suite»), no de forma.
+
 ## 7. Lista de chequeo antes de dar por buena una casa
 
 1. ¿Se llega a cada ambiente sin atravesar otro (salvo las excepciones)?
-2. ¿Todas las puertas abren hacia donde corresponde y ninguna hoja pisa a otra?
+2. ¿Todas las puertas abren hacia donde corresponde y ninguna hoja pisa a otra? ¿Los tabiques que no cargan son de 10 cm?
 3. ¿Estar y dormitorios miran al norte; baños, lavadero y garaje, al sur u oeste?
 4. ¿Cada ambiente habitable tiene luz natural (≥ 1/8) y ventilación?
 5. ¿La escalera llega a un hall y no a un dormitorio? ¿Los baños de arriba caen sobre los de abajo?
@@ -132,42 +152,40 @@ llevaron al módulo de 0,50 m, y el techo es a dos aguas sobre todo el volumen.
 
 ## 9. Brechas del diseñador
 
-Salieron de dibujar el plano anterior. Ordenadas por cuánto destraban, con el costo estimado (S/M/L) de cada una.
+Salieron de dibujar el plano anterior. Ordenadas por cuánto destraban, con el costo estimado (S/M/L) de cada una. Las tres primeras se **resolvieron en su versión simple** (marcadas «hecho»); lo que sigue pendiente se detalla en cada una.
 
-### 9.1 Nombres de ambiente y zonas (alto, M)
+### 9.1 Nombres de ambiente y zonas — hecho (queda lo de tipos)
 
-- Hoy cada ambiente cerrado se llama **«Ambiente N»** con sus m². En el plano de arriba, el estar, la cocina, el comedor y el
-  hall son **un solo «Ambiente 1» de 66,7 m²**: el detector de ambientes sólo conoce paredes y no puede dividir un espacio
-  abierto.
-- **Propuesta**: un arreglo `rooms: [{x, y, name, type}]` en el proyecto (un punto dentro de cada ambiente, su nombre y su
-  tipo: estar, dormitorio, baño…). La vista cenital (planta) dibuja **nombre + m²** en el centro del ambiente o de la
-  zona; en un espacio abierto se pueden poner varios puntos, y cada uno nombra una **zona** sin pared.
-- Con tipo, la **Revisión puede ser más inteligente**: dormitorio sin ventana, baño sin ventilación, cocina sin
-  ventilación, superficies mínimas por tipo; y el **Cómputo** puede separar m² por tipo. El asistente ya trabaja con
-  nombres (`HouseDescriber`, el generador): unificar con este campo evita traducir.
+- **Hecho**: cada nivel guarda `labels: [{id, x, y, name}]` (una celda dentro del ambiente y su nombre). La planta dibuja el nombre
+  y, si el ambiente tiene un solo nombre, sus m²; con varios nombres (planta abierta) sólo los nombres. El generador de
+  casas y las plantillas los ponen solos.
+- **Falta**: un **tipo** por ambiente (estar, dormitorio, baño…) para que la **Revisión** avise de un dormitorio sin
+  ventana, un baño sin ventilación o una superficie mínima, y para que el **Cómputo** separe m² por tipo. Hoy el nombre es
+  texto libre.
 
-### 9.2 Columnas, pilares y vigas (alto, L)
+### 9.2 Columnas, pilares y vigas — hecho el pilar (queda la viga)
 
-- No hay **apoyo puntual**: el techo y la losa sólo apoyan sobre muros. Por eso no se pudo dibujar el **alfresco**, un
-  porche cubierto, una galería, un garaje abierto ni un voladizo grande.
-- **Propuesta**: elemento `column` (pilar de bloque lleno de hormigón, hormigón armado o madera; sección 20 × 20 o 30 × 30;
-  altura) y la **viga** que lo une con el muro (el encadenado U ya existe: extenderlo a vigas libres). Con ellas se
-  pueden hacer pórticos, vanos de más de 3 m (garaje, ventanal corredizo), losas con apoyos intermedios y
-  voladizos con tensor.
-- Reglas para la Revisión: carga puntual sobre fundación, esbeltez, luz de la viga, techo apoyado sin sostén.
+- **Hecho**: pilar de hormigón armado (`columns: [{id, x, y, size}]`, 20 a 40 cm de lado, de piso a techo), herramienta «Pilar»
+  (`C`), se arrastra para moverlo, entra al Cómputo (hormigón, hierro Ø10 y Ø8, encofrado) y la Revisión controla que los de
+  la Planta Alta tengan apoyo (`support.column`). Con él se dibuja el alfresco de la plantilla.
+- **Falta**: la **viga libre** entre pilares o entre un pilar y un muro (el encadenado U existe pero va sobre muros), la
+  carga puntual sobre la fundación y la esbeltez en la Revisión, y que un techo sin muros alrededor avise si le falta
+  apoyo. Con vigas se podrían hacer pórticos, vanos de más de 3 m y voladizos.
 
-### 9.3 Puertas y ventanas (alto, M)
+### 9.3 Puertas y ventanas — hecho lo principal
 
-| Falta | Hoy | Por qué importa |
-| --- | --- | --- |
-| **Bisagra a izquierda o derecha** | Sólo se elige el lado (`flip`); la bisagra va siempre al inicio del vano | Son 4 combinaciones (lado × bisagra); sin ella, el arco choca con la pared o con otra hoja |
-| **Puerta corrediza / de embutir** | No existe | Baños chicos, placards, comedor al patio; sin arco de giro |
-| **Puerta plegadiza o de placard** | No existe | Placards y lavaderos |
-| **Portón de garaje seccional (2,4–3,0 m)** | El máximo es `P150` y se dibuja con arco | El garaje del plano pide ≥ 2,4 m y no gira |
-| **Paso sin hoja (arco o vano libre)** | No existe | Cocina–comedor, pasillo–estar |
-| **Ventana esquinera, ventana fija, vidriera** | Sólo ventanas rectas de 62 a 187 cm | Estar al norte y fachadas con más luz |
-| **Puerta-ventana corrediza de 2–3 m** | `VG150` (1,5 m) y `P150` | Salida al patio y al alfresco |
-| **Alto y antepecho propios por vano** | Editables sólo sobre los presets | Ventanas de cocina sobre mesada, ventiluz de baño |
+- **Hecho**: una **abertura** tiene tipo (puerta, ventana, portón), ancho, alto y apertura (batiente con bisagra a izquierda o
+  derecha y lado, corrediza, fija, seccional); la posición se arrastra, no se tipea. El portón (`PG250`, `PG300`) no dibuja
+  arco.
+- **Falta**:
+
+| Falta | Por qué importa |
+| --- | --- |
+| **Puerta plegadiza o de placard** | Placards y lavaderos |
+| **Paso sin hoja (arco o vano libre)** | Cocina–comedor, pasillo–estar |
+| **Ventana esquinera y vidriera** | Estar al norte y fachadas con más luz |
+| **Ventana batiente con bisagra** (hoy se dibuja igual que una fija) | Ventanas que abren al pasillo o al patio |
+| **Alto de puerta distinto de 2,00 m** | Portones y puertas-ventana más altas |
 
 ### 9.4 Escaleras (medio, M)
 
@@ -209,8 +227,7 @@ Con ambientes nombrados (9.1) y puertas con bisagra (9.3) se puede revisar lo de
 
 - La planta abierta (cocina + estar + comedor) es la regla en casas modernas y el editor la trata como un ambiente solo:
   la luz natural por habitación se mide sobre los 66 m² juntos, así que no puede avisar si la cocina o el comedor quedaron mal iluminados por separado.
-- El **`TemplateBuilder`** no tenía forma de elegir el sentido de las puertas; se le agregó el parámetro `flip` en esta
-  versión.
+- El **`TemplateBuilder`** no tenía forma de elegir el sentido de las puertas; se le agregaron `flip`, `hingeEnd` y `mode`, y `shift()` para correr el dibujo y dejar lugar a un alfresco al norte.
 - Dibujar una casa «de plano» pide traducir metros a unidades y ajustarlas al módulo de 0,50 m a mano; una herramienta
   que importe un croquis o una lista de ambientes con medidas (el generador de `HouseGenerator` va por ese camino)
   ahorraría el paso.

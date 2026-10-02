@@ -100,6 +100,34 @@ function pickWallHit(app, sx, sy) {
     return best;
 }
 
+/** Pilar del nivel activo bajo el puntero, con su profundidad. */
+function pickColumnHit(app, sx, sy) {
+    const { cam, store } = app;
+    const base = store.ui.level * store.config.levelHeight;
+    const top = base + store.config.levelHeight;
+    const [wx, wy] = cam.unproject(sx, sy, base + 150);
+    let best = null;
+    for (const c of store.level().columns ?? []) {
+        const half = c.size / 2;
+        const rect = [c.x * G - half, c.y * G - half, c.x * G + half, c.y * G + half];
+        if (!inHull(boxHull(cam, rect, base, top - base), sx, sy)) continue;
+        const depth = rayDepth(cam, sx, sy, rect, base, top) ?? depthOf(cam, rect, wx, wy);
+        if (!best || depth > best.depth) best = { id: c.id, depth };
+    }
+    return best;
+}
+
+/** Nombre de ambiente bajo el puntero (sólo en planta, donde se dibujan). */
+function pickLabel(app, sx, sy) {
+    const { cam, store } = app;
+    if (cam.view !== 'plan') return null;
+    for (const lb of store.level().labels ?? []) {
+        const [lx, ly] = cam.project((lb.x + 0.5) * G, (lb.y + 0.5) * G, 0);
+        if (Math.abs(sx - lx) <= Math.max(28, lb.name.length * 3.6 + 10) && Math.abs(sy - ly) <= 16) return { type: 'label', id: lb.id };
+    }
+    return null;
+}
+
 /**
  * Escalera bajo el puntero: se prueba cada peldaño y descanso como caja en pantalla (no un plano a media altura, que
  * deja afuera los peldaños de abajo y de arriba). Devuelve la más cercana a la cámara.
@@ -175,7 +203,13 @@ const area = (p) => (p.geometry.rect.x1 - p.geometry.rect.x0) * (p.geometry.rect
 export function pickAt(app, sx, sy) {
     const { store, cam } = app;
     if (store.ui.level === 2) return pickRoof(app, sx, sy);
+    if (store.ui.level <= 1) {
+        const named = pickLabel(app, sx, sy);
+        if (named) return named;
+    }
     const hit = pickWallHit(app, sx, sy);
+    const column = pickColumnHit(app, sx, sy);
+    if (column && (!hit || column.depth > hit.depth)) return { type: 'column', id: column.id };
     // En la planta baja, una escalera delante de la pared del fondo gana sobre la pared (y una pared delante, sobre ella).
     const stair = store.ui.level === 0 ? pickStairHit(app, sx, sy) : null;
     if (stair && (!hit || stair.depth > hit.depth)) return { type: 'stair', id: stair.id };

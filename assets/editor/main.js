@@ -28,8 +28,8 @@ const ROOF_LEVEL = 2;
  * desde un nivel lleva a la pestaña Techo.
  */
 const TOOLSETS = {
-    0: { main: ['select', 'room', 'wall', 'door', 'window', 'stair', 'roof'], more: ['block', 'ubeam'] },
-    1: { main: ['select', 'room', 'wall', 'door', 'window', 'piso', 'roof'], more: ['block', 'ubeam', 'beam'] },
+    0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['block', 'ubeam'] },
+    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['block', 'ubeam', 'beam'] },
     2: { main: ['select', 'roof'], more: [] },
 };
 let showMore = false;
@@ -124,10 +124,11 @@ function fitView() {
         maxY = cy + Math.min(500, cy);
         zTop = 0;
     } else {
-        minX = Math.min(...walls.map((w) => w.x1)) * G - 150;
-        maxX = Math.max(...walls.map((w) => w.x2)) * G + 150;
-        minY = Math.min(...walls.map((w) => w.y1)) * G - 150;
-        maxY = Math.max(...walls.map((w) => w.y2)) * G + 150;
+        const cols = p.levels.flatMap((l) => l.columns ?? []);
+        minX = Math.min(...walls.map((w) => w.x1), ...cols.map((c) => c.x)) * G - 150;
+        maxX = Math.max(...walls.map((w) => w.x2), ...cols.map((c) => c.x)) * G + 150;
+        minY = Math.min(...walls.map((w) => w.y1), ...cols.map((c) => c.y)) * G - 150;
+        maxY = Math.max(...walls.map((w) => w.y2), ...cols.map((c) => c.y)) * G + 150;
         zTop = config.levelHeight * (store.topLevel + 1) + (store.ui.level === ROOF_LEVEL ? 160 : 0);
     }
     cam.fit(minX, minY, maxX, maxY, zTop, 70);
@@ -338,6 +339,7 @@ document.addEventListener('keydown', (e) => {
         setView(store.ui.view === 'iso' ? 'plan' : 'iso');
     } else if (k === '[') rotate(-1);
     else if (k === ']') rotate(1);
+    else if (k === 'n') setTool('window');
     else if (k === 'f') fitView();
     else if (k === '+' || k === '=') zoomBy(1.25);
     else if (k === '-') zoomBy(0.8);
@@ -353,6 +355,11 @@ document.addEventListener('keyup', (e) => { if (e.key === ' ') spaceDown = false
 
 /* ------------------------------------------------------------------ herramientas, niveles, vista */
 function setTool(id) {
+    // «Puerta» y «Ventana» (guía, atajo N, sugerencias) son la herramienta Abertura con ese tipo
+    if (id === 'door' || id === 'window' || id === 'gate') {
+        app.tools.opening.setKind(id);
+        id = 'opening';
+    }
     const tool = app.tools[id];
     if (!tool) return;
     if (id === 'roof' && store.ui.level !== ROOF_LEVEL) {
@@ -559,6 +566,7 @@ function focusIssue(issue) {
     else if (level.slabs?.some((x) => x.id === issue.ref)) selection = { type: 'slab', id: issue.ref };
     else if (store.project.levels[0].stairs?.some((x) => x.id === issue.ref)) selection = { type: 'stair', id: issue.ref };
     else if (level.walls.some((w) => w.id === issue.ref)) selection = { type: 'wall', id: issue.ref };
+    else if (level.columns?.some((c) => c.id === issue.ref)) selection = { type: 'column', id: issue.ref };
     else if (level.openings.some((o) => o.id === issue.ref)) selection = { type: 'opening', id: issue.ref };
     else if (store.project.levels[0].timber.some((t) => t.id === issue.ref)) selection = { type: 'timber', id: issue.ref };
     store.setUi({ selection });
@@ -580,6 +588,10 @@ function selectionBox(sel) {
         const o = lv.openings.find((x) => x.id === sel.id);
         const w = o && lv.walls.find((x) => x.id === o.wall);
         return o && w ? openingBox(w, o.pos, o.w, o.sill, o.h, base) : null;
+    }
+    if (sel.type === 'column') {
+        const c = (lv.columns ?? []).find((x) => x.id === sel.id);
+        return c ? { x0: c.x * G - c.size / 2, y0: c.y * G - c.size / 2, x1: c.x * G + c.size / 2, y1: c.y * G + c.size / 2, z0: base, z1: base + config.levelHeight } : null;
     }
     if (sel.type === 'roof' || sel.type === 'gable') {
         const part = store.analysis?.roof?.parts?.find((p) => p.id === (sel.type === 'roof' ? sel.id : String(sel.id).split(':')[0]));

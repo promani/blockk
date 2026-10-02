@@ -146,6 +146,10 @@ final class Hcca
     public const int MAX_TIMBER_PER_LEVEL = 40;
     public const int MAX_SLABS_PER_LEVEL = 20;
     public const int MAX_STAIRS_PER_LEVEL = 10;
+    public const int MAX_COLUMNS_PER_LEVEL = 40;
+    public const int MAX_LABELS_PER_LEVEL = 40;
+    /** Lados de pilar de hormigón armado (cm). */
+    public const array COLUMN_SIZES_CM = [20, 25, 30, 40];
     public const int MAX_ROOFS = 20;
     /** Presupuesto de complejidad tras normalizar (una vivienda real usa < 150 tramos por nivel). */
     public const int MAX_SEGMENTS_PER_LEVEL = 800;
@@ -166,6 +170,8 @@ final class Hcca
             'VT62' => ['kind' => OpeningKind::Window, 'label' => 'Ventiluz 62,5 × 50', 'w' => 5, 'sill' => 6, 'h' => 2],
             'VT100' => ['kind' => OpeningKind::Window, 'label' => 'Ventiluz 100 × 50', 'w' => 8, 'sill' => 6, 'h' => 2],
             'VG150' => ['kind' => OpeningKind::Window, 'label' => 'Ventanal 150 × 200', 'w' => 12, 'sill' => 0, 'h' => 8],
+            'PG250' => ['kind' => OpeningKind::Gate, 'label' => 'Portón 250 × 200', 'w' => 20, 'sill' => 0, 'h' => 8],
+            'PG300' => ['kind' => OpeningKind::Gate, 'label' => 'Portón 300 × 200', 'w' => 24, 'sill' => 0, 'h' => 8],
         ];
     }
 

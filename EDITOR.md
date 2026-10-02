@@ -34,7 +34,9 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 | Elegir | `V` | Clic en un muro, vano, losa, escalera, techo o hastial para verlo y cambiarlo; doble clic en el piso elige la habitación. Manijas azules para estirar. Arrastrando un rectángulo se eligen varios elementos (muros con sus vanos, escaleras, pisos y techos de todos los niveles) o `Ctrl+A` toda la casa; se arrastran o se corren con flechas de a un bloque dentro del terreno. |
 | Habitación | `R` | Arrastrar en diagonal dibuja cuatro muros; empezando desde una pared existente, se comparte. |
 | Muro | `W` | Muro a muro; al volver al punto de partida la cadena se cierra sola (igual que Habitación). |
-| Puerta / Ventana | `P` / `N` | Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Tipos predefinidos (P75…P150, V62…V187, ventiluces, ventanal). |
+| Abertura | `P` (`N`: ventana) | Una sola herramienta con **tipo** (puerta, ventana, portón), **ancho**, **alto** (ventanas) y **apertura** (batiente, corrediza, fija, seccional). Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Después se mueve **arrastrándola** (también a otro muro). |
+| Pilar | `C` | Clic en un punto de la retícula: pilar de hormigón armado (20, 25, 30 o 40 cm) de piso a techo. Se arrastra para moverlo; sostiene techos o losas donde no hay muro (alfresco, galería). |
+| Nombre | `A` | Escribir o elegir un nombre y hacer clic dentro de un ambiente: se ve en la planta. En un espacio abierto se pueden poner varios; se arrastran. También desde el campo «Nombre» al elegir una habitación. |
 | Escalera | `S` | Clic dentro de una habitación del Nivel 1: recta, en L o en U. Sigue al cursor, se acomoda dentro de la habitación y, si no entra, se gira sola. `X` gira. |
 | Piso | `L` | En el Nivel 2: clic dentro de una habitación de abajo; losa de hormigón o entrepiso de madera, con el hueco de la escalera recortado. |
 | Techo | `H` | Siempre en la barra; desde un nivel lleva a la pestaña Techo. Ahí: clic sobre una habitación (alta o baja: se elige la que se ve bajo el cursor) o un rectángulo sobre los muros. El techo apoya en los muros que lo rodean (el nivel sale solo), el alero va sólo donde cae el agua y, pegado a la planta alta, se propone a un agua bajando desde esa pared. Los cabios se eligen solos según la luz y los techos no generan observaciones: son para ver la casa completa y computar la madera. |
@@ -54,7 +56,8 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 - **Muro**: espesor (los del sistema: 10 / 15 / 20 cm con Lika), **alto** (de 50 cm a 3,00 m; sin nada encima hasta 4,00 m) y **corona U**
   (se puede sacar en paredes que son sólo mampostería).
-- **Vano**: tipo, antepecho y posición.
+- **Abertura**: tipo, ancho y alto (en cm), apertura y, si abre, el giro (bisagra y lado) o el recorrido de la hoja. No tiene campo de posición: se arrastra.
+- **Pilar**: lado (20 a 40 cm). **Nombre**: el texto.
 - **Techo**: tipo, sentido de la cumbrera o de la caída, pendiente, alero, sección y separación de cabios. Si dos techos
   se superponen sólo queda el más alto (dos techos a dos aguas cruzados forman una cruz). Los **hastiales** de bloque se
   despiezan hilada por hilada y se pueden quitar o cambiar de espesor.

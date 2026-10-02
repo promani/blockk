@@ -63,7 +63,7 @@ final class TemplateThumbnail
                 $t = Hcca::ticksToCm($w->t);
                 $from = ($w->startU() + $o->pos) * $g;
                 $len = $o->w * $g;
-                $fill = OpeningKind::Door === $o->kind ? '#f7f9ff' : '#8bc53f';
+                $fill = OpeningKind::Window !== $o->kind ? '#f7f9ff' : '#8bc53f';
                 $svg[] = Axis::X === $w->axis()
                     ? $rect($from, $w->y1 * $g - $t / 2, $len, $t, "fill=\"$fill\"")
                     : $rect($w->x1 * $g - $t / 2, $from, $t, $len, "fill=\"$fill\"");

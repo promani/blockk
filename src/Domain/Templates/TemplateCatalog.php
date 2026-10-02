@@ -238,9 +238,10 @@ final class TemplateCatalog
             ],
             'casa-doble-planta-garaje' => [
                 'name' => 'Casa de dos plantas con garaje (~234 m²)',
-                'description' => 'Planta baja de 9,00 × 14,00 m: cocina, estar y comedor abiertos al norte, sala de cine, despensa, garaje cerrado de 5,5 m, hall de entrada con escalera en U, lavabo, lavadero y escritorio. Arriba, tres dormitorios (el principal con vestidor y baño en suite), baño, placards y un estar de distribución. Las puertas abren hacia adentro de cada ambiente.',
+                'description' => 'Planta baja de 9,00 × 14,00 m: cocina, estar y comedor abiertos al norte, sala de cine, despensa, garaje con puerta doble, hall de entrada con escalera en U, lavabo, lavadero y escritorio, más un alfresco techado sobre tres pilares. Arriba, tres dormitorios (el principal con vestidor y baño en suite), baño, placards y un estar de distribución. Las puertas abren hacia adentro de cada ambiente.',
                 'tags' => ['2 plantas', 'Vivienda familiar', '3 dormitorios', 'Garaje'],
                 'build' => fn (): array => (new TemplateBuilder('Casa de dos plantas con garaje'))
+                    ->shift(0, 20)   // lugar al norte para el alfresco
                     ->room(0, 0, 0, 72, 112, 20)
                     ->wall(0, 32, 32, 32, 112, 20)
                     ->wall(0, 0, 32, 32, 32, 10)
@@ -253,7 +254,7 @@ final class TemplateCatalog
                     ->wall(0, 46, 84, 72, 84, 10)
                     ->wall(0, 46, 84, 46, 112, 10)
                     ->opening(0, 'V150', 'x', 0, 8)
-                    ->opening(0, 'VG150', 'x', 0, 40)
+                    ->opening(0, 'P150', 'x', 0, 40)                // estar → alfresco
                     ->opening(0, 'VG150', 'x', 0, 56)
                     ->opening(0, 'V100', 'y', 0, 12)
                     ->opening(0, 'VT62', 'y', 0, 35)
@@ -265,7 +266,7 @@ final class TemplateCatalog
                     ->opening(0, 'V125', 'y', 72, 90)
                     ->opening(0, 'V125', 'x', 112, 56)
                     ->opening(0, 'P87', 'x', 112, 36, flip: true)   // entrada: abre hacia adentro
-                    ->opening(0, 'P150', 'x', 112, 8, flip: true)   // portón del garaje
+                    ->opening(0, 'P150', 'x', 112, 8, flip: true)    // puerta doble del garaje
                     ->opening(0, 'P75', 'x', 32, 6)                 // despensa
                     ->opening(0, 'P75', 'y', 32, 35, flip: true)    // depósito
                     ->opening(0, 'P87', 'y', 32, 47, flip: true)    // sala de cine
@@ -274,6 +275,21 @@ final class TemplateCatalog
                     ->opening(0, 'P75', 'y', 62, 74)                // lavadero
                     ->opening(0, 'P75', 'y', 46, 90)                // escritorio
                     ->stair(0, 46, 58, 'N', 'U')
+                    ->column(0, 34, -18, 25)                          // alfresco: tres pilares sostienen el techo
+                    ->column(0, 52, -18, 25)
+                    ->column(0, 70, -18, 25)
+                    ->label(0, 14, 14, 'Cocina')
+                    ->label(0, 52, 16, 'Estar')
+                    ->label(0, 46, 44, 'Comedor')
+                    ->label(0, 9, 38, 'Despensa')
+                    ->label(0, 25, 38, 'Depósito')
+                    ->label(0, 16, 56, 'Sala de cine')
+                    ->label(0, 16, 90, 'Garaje')
+                    ->label(0, 38, 90, 'Hall')
+                    ->label(0, 66, 64, 'Lavabo')
+                    ->label(0, 66, 77, 'Lavadero')
+                    ->label(0, 59, 98, 'Escritorio')
+                    ->label(0, 52, -10, 'Alfresco')
                     ->upper()
                     ->room(1, 0, 0, 72, 112, 20)
                     ->wall(1, 0, 26, 72, 26, 10)
@@ -305,7 +321,18 @@ final class TemplateCatalog
                     ->slab(1, 0, 0, 32, 112)
                     ->slab(1, 32, 0, 20, 112)
                     ->slab(1, 52, 0, 20, 112)
+                    ->label(1, 12, 12, 'Dormitorio 2')
+                    ->label(1, 31, 12, 'Placard')
+                    ->label(1, 39, 12, 'Placard')
+                    ->label(1, 58, 12, 'Dormitorio 3')
+                    ->label(1, 12, 30, 'Pasillo')
+                    ->label(1, 12, 44, 'Baño')
+                    ->label(1, 12, 62, 'Vestidor')
+                    ->label(1, 12, 78, 'Baño en suite')
+                    ->label(1, 12, 100, 'Dormitorio principal')
+                    ->label(1, 54, 46, 'Estar')
                     ->roofPart(1, 0, 0, 72, 112, 'gable', 'y', 30, '3x12')
+                    ->roofPart(0, 32, -20, 40, 20, 'shed', 'N', 30, '3x8', more: ['gableA' => false, 'gableB' => false])
                     ->build(),
             ],
         ];
