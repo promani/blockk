@@ -73,6 +73,33 @@ final class AssistantApiTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
     }
 
+    public function testAPlanImageIsCheckedBeforeItReachesTheModel(): void
+    {
+        $client = static::createClient();
+        $browser = bin2hex(random_bytes(12));
+        KimiMock::$requests = [];
+        $png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+        foreach ([
+            ['tipo' => 'application/pdf', 'datos' => $png],
+            ['tipo' => 'image/png', 'datos' => base64_encode('esto no es una imagen')],
+            ['tipo' => 'image/jpeg', 'datos' => $png],
+            'plano.png',
+        ] as $bad) {
+            $this->post($client, '/api/assistant/conversations', ['client' => $browser, 'inicio' => ['tipo' => 'nueva'], 'adjunto' => $bad]);
+            self::assertResponseStatusCodeSame(400);
+        }
+        self::assertSame([], KimiMock::$requests);
+
+        KimiMock::$queue = [ScriptedLlm::call('calcar_plano', ['ambientes' => [['nombre' => 'Estar', 'x' => 0, 'y' => 0, 'ancho' => 5, 'fondo' => 4]]], 'p1')];
+        $conv = $this->post($client, '/api/assistant/conversations', ['client' => $browser, 'inicio' => ['tipo' => 'nueva'], 'adjunto' => ['tipo' => 'image/png', 'datos' => $png]]);
+        self::assertResponseStatusCodeSame(201);
+        self::assertSame(['usuario', 'casa'], array_column($conv['eventos'], 'tipo'));
+        self::assertTrue($conv['eventos'][0]['adjunto']);
+        self::assertSame('image_url', KimiMock::$requests[0]['messages'][1]['content'][1]['type']);
+        self::assertStringNotContainsString($png, json_encode($conv), 'la imagen no vuelve en la respuesta');
+    }
+
     public function testBadRequestsAreRejected(): void
     {
         $client = static::createClient();

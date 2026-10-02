@@ -6,7 +6,7 @@ import { roomColor } from './renderer.js';
 import { anchorLines } from './snap.js';
 import { sideLabel } from '../lib/orient.js';
 import { collinearChain } from './wallmove.js';
-import { OPENING_TYPES, openingTitle, defaultMode, turnOptions, turnValue, applyTurn } from './openings.js';
+import { OPENING_TYPES, openingTitle, defaultMode, turnOptions, turnValue, applyTurn, commercialFor, commercialOf } from './openings.js';
 import { roomNamesList, roomAnchor } from './names.js';
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
 import { contextOf, CONTEXT_TITLE, roomWalls, facing, openingM2, issueMatches } from './context.js';
@@ -217,6 +217,8 @@ export function mountPanels(app) {
     /** Nombre del techo para la interfaz: por su orden en el proyecto, no por su id interno. */
     const roofName = (id) => `Techo ${(store.project.roofs ?? []).findIndex((x) => x.id === id) + 1}`;
     const modify = (label, fn) => store.commit(label, (d) => fn(d.levels[store.ui.level], d));
+    /** Aberturas que la persona pasó a «A medida» aunque coincidan con una medida de catálogo. */
+    const customOpenings = new Set();
 
     function deleteSelection() {
         const sel_ = store.ui.selection;
@@ -451,14 +453,29 @@ export function mountPanels(app) {
             const type = OPENING_TYPES[o.kind] ?? OPENING_TYPES.door;
             const mode = o.mode ?? defaultMode(o.kind);
             const turns = (mode === 'swing' && o.kind === 'door') || mode === 'slide';
+            // Medida de catálogo (se deduce del tipo, el ancho y el antepecho) o a medida, con los campos libres.
+            const match = customOpenings.has(o.id) ? null : commercialOf(cfg, o);
             add(el.props,
                 h('div', { class: 'kv-title' }, openingTitle(o)),
                 field('Tipo', sel(o.kind, Object.entries(OPENING_TYPES).map(([k, x]) => [k, x.label]), (v) => upd((x) => {
                     const n = OPENING_TYPES[v];
                     Object.assign(x, { kind: v, preset: '', w: n.w, sill: n.sill, h: top - n.sill, mode: defaultMode(v), flip: false, hingeEnd: false });
                 }))),
-                field('Ancho (cm)', num(o.w * G, 25, 500, (v) => upd((x) => { x.w = Math.max(2, Math.round(v / G)); x.preset = ''; }), G)),
-                o.kind === 'window'
+                (() => {
+                    const list = commercialFor(cfg, o.kind);
+                    return list.length ? field('Medida', sel(match?.id ?? '', [...list.map((c) => [c.id, c.label]), ['', 'A medida']], (v) => {
+                        const c = list.find((x) => x.id === v);
+                        if (!c) {
+                            customOpenings.add(o.id);
+                            renderProps();
+                            return;
+                        }
+                        customOpenings.delete(o.id);
+                        upd((x) => Object.assign(x, { w: c.w, sill: c.sill, h: top - c.sill, mode: c.mode, preset: '' }));
+                    })) : null;
+                })(),
+                match ? null : field('Ancho (cm)', num(o.w * G, 25, 500, (v) => upd((x) => { x.w = Math.max(2, Math.round(v / G)); x.preset = ''; }), G)),
+                !match && o.kind === 'window'
                     ? field('Antepecho (cm del suelo)', sel(o.sill, [0, 1, 2, 3, 4, 5, 6, 7].map((n) => [n, `${n * 25}`]), (v) => upd((x) => { x.sill = Number(v); x.h = top - Number(v); x.preset = ''; })))
                     : null,
                 field('Alto (cm)', h('input', { type: 'text', value: cm(o.h * 25), disabled: true, title: o.kind === 'window' ? 'Llega hasta los 2,00 m: se baja o sube con el antepecho.' : 'Alto fijo de 2,00 m.' })),
@@ -567,6 +584,9 @@ export function mountPanels(app) {
                     h('dt', {}, 'Superficie a ejes'), h('dd', {}, m2(room.grossM2)),
                     h('dt', {}, 'Perímetro'), h('dd', {}, `${fmt(room.perimeterM, 2)} m`),
                     h('dt', {}, 'Medidas'), h('dd', {}, `${fmt((room.bbox.w * G) / 100, 2)} × ${fmt((room.bbox.h * G) / 100, 2)} m${room.rect ? '' : ' (en L / irregular)'}`)),
+                // Medida exacta a ejes: corre el muro derecho (ancho) o el de abajo (fondo), como al arrastrar su manija.
+                room.rect ? field('Ancho (m, a ejes)', num((room.bbox.w * G) / 100, 0.5, 100, (v) => app.setRoomSize(room.id, 'w', Math.round((v * 100) / G)), 0.125)) : null,
+                room.rect ? field('Fondo (m, a ejes)', num((room.bbox.h * G) / 100, 0.5, 100, (v) => app.setRoomSize(room.id, 'h', Math.round((v * 100) / G)), 0.125)) : null,
                 (() => {
                     const sug = roomSuggestions(room);
                     return sug.length

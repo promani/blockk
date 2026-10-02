@@ -64,7 +64,7 @@ export function mountAssistant(app) {
             }
             chat.render();
         },
-        onFirstMessage: (payload) => chat.start({ modo: 'editor', inicio: { tipo: 'proyecto', project: store.project, programa: linkedProgram() }, texto: payload.texto ?? '' }),
+        onFirstMessage: (payload) => chat.start({ modo: 'editor', inicio: { tipo: 'proyecto', project: store.project, programa: linkedProgram() }, texto: payload.texto ?? '', ...(payload.adjunto ? { adjunto: payload.adjunto } : {}) }),
     });
 
     async function undo(version) {
@@ -77,7 +77,7 @@ export function mountAssistant(app) {
     function intro() {
         const log = $('#ai-log', dialog);
         if (chat.conv || log.childElementCount) return;
-        add(log, h('div', { class: 'ai-msg ai-bot' }, 'Pedime cambios en esta casa y los aplico acá mismo (se pueden deshacer).'),
+        add(log, h('div', { class: 'ai-msg ai-bot' }, 'Pedime cambios en esta casa y los aplico acá mismo (se pueden deshacer). Con el clip podés adjuntar la imagen de un plano y lo calco.'),
             h('div', { class: 'ai-suggest' }, IDEAS.map((s) => h('button', { type: 'button', class: 'chip ai-chip', onclick: () => chat.submit({ texto: s }) }, s))));
     }
 

@@ -70,4 +70,24 @@ final class KimiClientTest extends TestCase
         // sin modelo liviano, todo va al pesado
         self::assertFalse((new KimiClient($http, 'k', 'pesado', 'https://x/v1'))->hasLight());
     }
+
+    #[Test]
+    public function turnsWithAnImageGoToTheVisionModelWhenThereIsOne(): void
+    {
+        $seen = [];
+        $http = new MockHttpClient(static function (string $method, string $url, array $options) use (&$seen): MockResponse {
+            $body = json_decode($options['body'], true);
+            $seen[] = [$body['model'], $body['thinking']['type'] ?? 'por defecto'];
+
+            return new MockResponse('{"choices":[{"message":{"role":"assistant","content":"ok"}}]}');
+        });
+        $plan = [['role' => 'user', 'content' => [['type' => 'text', 'text' => 'Calcá este plano.'], ['type' => 'image_url', 'image_url' => ['url' => 'data:image/png;base64,AAAA']]]]];
+        $client = new KimiClient($http, 'k', 'pesado', 'https://x/v1', 'liviano', 'con-vista');
+        $client->chat($plan, []);
+        $client->chat([['role' => 'user', 'content' => 'hola']], []);
+        (new KimiClient($http, 'k', 'pesado', 'https://x/v1'))->chat($plan, []);
+
+        // con un plano no se razona: razonando, el modelo no llega a responder
+        self::assertSame([['con-vista', 'disabled'], ['pesado', 'por defecto'], ['pesado', 'disabled']], $seen);
+    }
 }

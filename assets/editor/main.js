@@ -29,9 +29,9 @@ const ROOF_LEVEL = 2;
  * desde un nivel lleva a la pestaña Techo.
  */
 const TOOLSETS = {
-    0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['block', 'ubeam', 'zone', 'tree'] },
-    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['block', 'ubeam', 'beam', 'zone', 'tree'] },
-    2: { main: ['select', 'roof'], more: [] },
+    0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['measure', 'block', 'ubeam', 'zone', 'tree'] },
+    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['measure', 'block', 'ubeam', 'beam', 'zone', 'tree'] },
+    2: { main: ['select', 'roof', 'measure'], more: [] },
 };
 let showMore = false;
 
@@ -325,6 +325,23 @@ document.addEventListener('keydown', (e) => {
         store.redo();
         return;
     }
+    if (mod && e.key.toLowerCase() === 'c') {
+        // Ctrl+C: copia lo elegido en el editor, salvo que haya texto marcado en la página (ese lo copia el navegador)
+        if (String(window.getSelection() ?? '') !== '') return;
+        e.preventDefault();
+        app.copySelection();
+        return;
+    }
+    if (mod && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        app.pasteClipboard();
+        return;
+    }
+    if (mod && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        app.duplicateSelection();
+        return;
+    }
     if (mod) return;
 
     if (activeTool().keyDown?.(e)) return;
@@ -382,7 +399,7 @@ function setTool(id) {
 
 /** Motivo por el que una herramienta no está disponible ahora (null si lo está). */
 function toolDisabled(tool) {
-    if (tool.id === 'roof') return null;
+    if (tool.id === 'roof' || tool.id === 'measure') return null;
     if (store.ui.level === ROOF_LEVEL && tool.id !== 'select') return 'En la pestaña Techo solo se dibujan y editan techos: volvé a un nivel para dibujar muros, losas o escaleras.';
     return tool.disabled?.() ?? null;
 }
@@ -391,7 +408,7 @@ function refreshOptions() {
     const tool = activeTool();
     // En la pestaña Techo, tanto Elegir como Techo muestran las opciones del techo (elegido o de los nuevos), salvo que
     // haya un grupo elegido con un rectángulo: ahí van las de Elegir.
-    const roofOpts = store.ui.level === ROOF_LEVEL && !(tool.id === 'select' && app.multiCount());
+    const roofOpts = store.ui.level === ROOF_LEVEL && tool.id !== 'measure' && !(tool.id === 'select' && app.multiCount());
     const opts = roofOpts ? app.roofOptions() : tool.options?.();
     const title = roofOpts ? 'Techo' : tool.label;
     add(clear($('#tooloptions')), h('span', { class: 'title' }, title), opts);
@@ -747,6 +764,8 @@ store.addEventListener('ui', (e) => {
     if (k !== contextKey) {
         contextKey = k;
         panels.renderContext();
+        // Las opciones de Elegir dependen de lo elegido (botón «Duplicar»).
+        if (store.ui.tool === 'select' && store.ui.level !== ROOF_LEVEL) refreshOptions();
     }
     updateHistoryButtons();
     renderToolbar();

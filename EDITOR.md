@@ -31,10 +31,11 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 | Herramienta | Tecla | Qué hace |
 | --- | --- | --- |
-| Elegir | `V` | Clic en un muro, vano, losa, escalera, techo o hastial para verlo y cambiarlo; doble clic en el piso elige la habitación. Manijas azules para estirar. Arrastrando un rectángulo se eligen varios elementos (muros con sus vanos, escaleras, pisos y techos de todos los niveles) o `Ctrl+A` toda la casa; se arrastran o se corren con flechas de a un bloque dentro del terreno. |
+| Elegir | `V` | Clic en un muro, vano, losa, escalera, techo o hastial para verlo y cambiarlo; doble clic en el piso elige la habitación. Manijas azules para estirar. Arrastrando un rectángulo se eligen varios elementos (muros con sus vanos, escaleras, pisos y techos de todos los niveles) o `Ctrl+A` toda la casa; se arrastran o se corren con flechas de a un bloque dentro del terreno. Lo elegido se **copia y pega** (`Ctrl+C` / `Ctrl+V`, o «Duplicar», `Ctrl+D`): ver más abajo. |
 | Habitación | `R` | Arrastrar en diagonal dibuja cuatro muros; empezando desde una pared existente, se comparte. |
-| Muro | `W` | Muro a muro; al volver al punto de partida la cadena se cierra sola (igual que Habitación). |
-| Abertura | `P` (`N`: ventana) | Una sola herramienta con **tipo** (puerta, ventana, portón), **ancho**, **alto** (ventanas) y **apertura** (batiente, corrediza, fija, seccional). Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Después se mueve **arrastrándola** (también a otro muro). |
+| Muro | `W` | Muro a muro; al volver al punto de partida la cadena se cierra sola (igual que Habitación). Con el primer punto puesto se puede **escribir el largo** en metros (`3,25`) y `Enter` coloca el tramo hacia donde apunta el cursor, redondeado a 12,5 cm; `Retroceso` corrige. |
+| Abertura | `P` (`N`: ventana) | Una sola herramienta con **tipo** (puerta, ventana, portón), **medida** (de catálogo o «A medida», con **ancho** y **antepecho** libres) y **apertura** (batiente, corrediza, fija, seccional). Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Después se mueve **arrastrándola** (también a otro muro). |
+| Medir | `M` | Bajo «Más» (y en la pestaña Techo): clic en un punto y clic en otro muestra la distancia (y Δx / Δy si es diagonal). Los puntos se ajustan a la retícula de 12,5 cm y, cerca de un muro, a su **cara**: así se mide la luz libre entre paredes. No cambia el proyecto; `Esc` borra la medida. |
 | Zona | `Z` | Bajo «Más»: arrastrar un rectángulo sobre el terreno y elegir su tipo: pileta, patio o deck, jardín o camino. Marca cómo se usa el espacio; **no es parte de la casa ni entra al cómputo**. Se arrastra para moverla; el panel cambia tipo, nombre y medidas. |
 | Árbol | `O` | Bajo «Más»: clic para plantar un árbol chico, mediano o grande, con tronco, copa y sombra (con el sol activado, la sombra sigue su posición). Se arrastra para moverlo. No entra al cómputo. |
 | Pilar | `C` | Clic en un punto de la retícula: pilar de hormigón armado (20, 25, 30 o 40 cm) de piso a techo. Se arrastra para moverlo; sostiene techos o losas donde no hay muro (alfresco, galería). |
@@ -54,11 +55,31 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 - Al elegir una habitación, el panel **sugiere** agrandarla hasta los muros de abajo o la pared vecina.
 - Cada habitación cerrada se pinta con su color de piso; sus **esquinas azules** la agrandan o achican.
 
+## Copiar y pegar
+
+- `Ctrl+C` copia lo elegido: el grupo del rectángulo o un elemento suelto (un muro lleva sus vanos y vigas U; también
+  pilares, nombres, techos, losas, escaleras, madera, zonas y árboles). El portapapeles vive en la página (no pasa a
+  otra pestaña).
+- `Ctrl+V` deja el grupo como un fantasma azul que sigue al cursor, de a bloques enteros y dentro del terreno; un clic
+  lo pega (un solo paso de deshacer, «Pegar») y queda elegido para seguir moviéndolo. `Esc` cancela.
+- Si lo copiado es de un solo nivel y se pega con el otro nivel activo, los muros, vanos, vigas U, pilares y nombres van
+  al **nivel activo**: sirve para repetir la planta arriba. Losas, escaleras, madera y techos no cambian de nivel.
+- Una **abertura** sola se repite en el tramo libre más cercano del mismo muro (jambas de 25 cm).
+- `Ctrl+D` o el botón «Duplicar» de la barra de opciones hacen las dos cosas juntas.
+
 ## Propiedades por elemento
 
 - **Muro**: espesor (los del sistema: 10 / 15 / 20 cm con Lika), **alto** (de 50 cm a 3,00 m; sin nada encima hasta 4,00 m) y **corona U**
   (se puede sacar en paredes que son sólo mampostería).
-- **Abertura**: tipo, ancho (en cm), antepecho de las ventanas (distancia desde el suelo; el alto sale de ahí porque todas llegan a los 2,00 m), apertura y, si abre, el giro (bisagra y lado) o el recorrido de la hoja. No tiene campo de posición: se arrastra.
+- **Abertura**: tipo, **medida** y apertura y, si abre, el giro (bisagra y lado) o el recorrido de la hoja. La medida es una
+  **carpintería comercial** del catálogo (`Hcca::commercialOpenings()`: puertas 70 / 80 / 90 y doble 160 × 200, ventiluces,
+  ventanas de 100 a 200 × 110 y 120 / 150 × 150, puertas ventana de 150 a 240 × 200 y portones de 240 y 300 × 200), que
+  fija el **vano modular** que la contiene (ancho de a 12,5 cm y alto de a 25 cm: «Ventana 120 × 110 (vano 125 × 125)»),
+  o «A medida», con el ancho (en cm) y el antepecho de las ventanas (distancia desde el suelo; el alto sale de ahí
+  porque todas llegan a los 2,00 m). Son medidas de referencia: cada fabricante tiene las suyas. No tiene campo de
+  posición: se arrastra.
+- **Habitación** (rectangular): **ancho y fondo exactos** en metros, a ejes de muro (paso de 12,5 cm): corren el muro
+  derecho o el de abajo, igual que arrastrar su manija.
 - **Pilar**: lado (20 a 40 cm). **Nombre**: el texto.
 - **Techo**: tipo, sentido de la cumbrera o de la caída, pendiente, alero, sección y separación de cabios. Si dos techos
   se superponen sólo queda el más alto (dos techos a dos aguas cruzados forman una cruz). Los **hastiales** de bloque se
@@ -78,7 +99,7 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 | Acción | Control |
 | --- | --- |
-| Herramientas | `V R W P N S L H B U T` |
+| Herramientas | `V R W P N S L H B U T M` (`C` pilar, `A` nombre, `Z` zona, `O` árbol) |
 | Deshacer / rehacer | `Ctrl+Z` / `Ctrl+Y` (también los botones de la barra superior) |
 | Eliminar lo elegido | `Supr` o `Retroceso` |
 | Cancelar | `Esc` |
@@ -90,6 +111,8 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 | Nivel 1 / Nivel 2 / Techo | `1` `2` `3` |
 | Girar bloque o escalera | `X` |
 | Elegir toda la casa | `Ctrl+A` |
+| Copiar / pegar / duplicar lo elegido | `Ctrl+C` / `Ctrl+V` / `Ctrl+D` |
+| Largo exacto del muro en curso | dígitos y coma, `Enter` |
 
 ## Archivo
 

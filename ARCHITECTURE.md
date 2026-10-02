@@ -15,7 +15,7 @@ con la respuesta. El asistente de IA es una capa aparte (`src/Assistant`) que us
 | Cómputo, Galería, Catálogo | Páginas Twig + módulos ES: exportación CSV/PDF (generados en el navegador), plantillas, fichas | `templates/`, `assets/{bom,gallery,catalog}/` |
 | API de cálculo | `POST /api/analyze` y afines; sin estado | `src/Controller/Api/ProjectApiController.php` |
 | Motor (dominio) | Normalización, topología, ambientes, hiladas, cortes, madera, losas, escaleras, techos, cómputo, validación, sol | `src/Domain/` |
-| Generador y editor de casas | Programa de ambientes → casa válida; operaciones puntuales sobre un proyecto | `src/Domain/Design/` |
+| Generador y editor de casas | Programa de ambientes → casa válida; operaciones puntuales sobre un proyecto; calcado de un plano desde sus ambientes | `src/Domain/Design/` |
 | Asistente de IA | Conversación, herramientas, dos modelos (liviano/pesado), persistencia, límites | `src/Assistant/`, `src/Controller/Api/AssistantController.php`, `assets/lib/ai-chat.js` |
 | Kimi (externo) | LLM por API compatible con OpenAI | `KIMI_*` |
 | Redis (lab) | Conversaciones, diseños por navegador y contadores de uso | `REDIS_URL` |
@@ -93,8 +93,8 @@ sequenceDiagram
 | `POST /api/thumbnail` | Miniatura SVG de un proyecto. |
 | `GET /api/calc/panel?…` | Calculadora rápida de paño. |
 | `GET /api/assistant/status` | ¿Está configurado el asistente? |
-| `POST /api/assistant/conversations` | Nueva conversación `{client, modo, inicio:{tipo: nueva\|plantilla\|proyecto, …}, texto?, respuestas?}`. |
-| `POST /api/assistant/conversations/{id}/messages` | Mensaje `{client, texto?, respuestas?, project?}`. |
+| `POST /api/assistant/conversations` | Nueva conversación `{client, modo, inicio:{tipo: nueva\|plantilla\|proyecto, …}, texto?, respuestas?, adjunto?}`. |
+| `POST /api/assistant/conversations/{id}/messages` | Mensaje `{client, texto?, respuestas?, project?, adjunto?}`; `adjunto: {tipo, datos}` es la imagen de un plano en base64 para calcarlo. |
 | `GET /api/assistant/conversations/{id}`, `GET /api/assistant/designs/{id}` | Retomar una conversación; casa de una conversación. |
 | `GET /api/admin/ping`, `GET/POST /api/admin/galeria`, `GET/PUT/DELETE /api/admin/galeria/{slug}` | **API de administración de la Galería** (`Authorization: Bearer $ADMIN_API_TOKEN`; sin token configurado no existe). Crea, edita y borra modelos que ve todo el mundo en `/galeria` (guardados en Redis, clave `gallery:{slug}`, máx. 100). Cuerpo: `nombre`, `descripcion?`, `etiquetas?`, `slug?` y un dibujo: `programa` (generador), `plantilla` (clonar) o `project`; en `PUT` también `operaciones` sobre el actual. Las plantillas del código no se editan ni borran. |
 

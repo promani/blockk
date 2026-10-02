@@ -370,6 +370,10 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 .ai-chip { font-weight: 500; font-size: .85rem; padding: 5px 11px; background: var(--panel); }
 .ai-chip:hover { border-color: var(--green-600); background: var(--green-100); }
 .ai-input { display: flex; gap: 8px; }
+.ai-attach { flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; padding: 6px 9px; }
+.ai-attach.on { padding: 3px 7px 3px 3px; border-color: var(--green-600); background: var(--green-100); }
+.ai-attach img { width: 30px; height: 30px; object-fit: cover; border-radius: 5px; display: block; }
+.ai-attached { display: block; font-size: .8rem; opacity: .8; }
 .ai-input input { flex: 1; font: inherit; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); min-width: 0; }
 .ai-typing { display: inline-flex; align-items: center; gap: 4px; padding: 10px 14px; }
 .ai-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: ai-dot 1s infinite ease-in-out; }

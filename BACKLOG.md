@@ -25,7 +25,7 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 | --- | --- | :---: | :---: | --- |
 | 1 | Tipo de ambiente y revisión por tipo | 5 | M | Los nombres ya están; el tipo habilita avisos útiles y un cómputo por ambiente. |
 | 2 | Guardar y compartir por enlace | 5 | M | Hoy un proyecto muere en un navegador; el cómputo se comparte con el distribuidor. |
-| 3 | Calcar un plano (imagen de fondo a escala) | 5 | M | Convierte «tengo un plano en papel» en un proyecto en minutos. |
+| 3 | Calcar un plano: lo que falta (fondo a escala, PDF, escalera) | 4 | M | El asistente ya calca la imagen de un plano; falta corregirlo a mano contra el original. |
 | 4 | Comparar alternativas de una casa | 4 | M | Responde «¿2 o 3 dormitorios?» con números lado a lado. |
 | 5 | Muebles simples como gabarito | 4 | M | Con camas, mesas, mesadas y artefactos a escala se ve si una habitación alcanza y si la puerta abre. |
 | 6 | Pedido por etapas y lista de compra | 4 | S–M | Nadie compra todo junto: cimientos, paredes, techo. |
@@ -40,6 +40,8 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 | 15 | Otros sistemas constructivos y marcas | 4 | L | Ensancha el público; el motor ya aísla los datos del bloque. |
 | 16 | Instalaciones: cómputo grueso por ambiente | 3 | L | Completa «la casa» más allá de la mampostería. |
 | 17 | Edición básica desde el celular | 3 | M–L | Hoy en el celular solo se mira. |
+| 18 | Cálculo de mano de obra (sección propia, más abajo) | 5 | M | El presupuesto de hoy es sólo de materiales: falta la otra mitad del costo. |
+| 19 | Entrepisos y losas (sección propia, más abajo) | 4 | M–L | Hoy hay una losa maciza y un entrepiso de madera; la losa más usada (viguetas) no existe. |
 
 ## Detalle
 
@@ -61,12 +63,17 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 - **Sin cuentas**: el enlace es la credencial; vence a los 60 días como los diseños del asistente.
 - **Complejidad**: persistencia (ya hay Redis), límites de uso y tamaño, y decidir qué pasa con el borrado.
 
-### 3. Calcar un plano (valor 5 · M)
-- **Qué**: cargar una imagen de plano como **fondo en la planta**, fijar la escala con una medida conocida y dibujar los
-  muros encima con el imán de siempre. El fondo no entra al proyecto ni al cómputo.
-- **Por qué**: casi toda casa real parte de un plano existente. Es el camino más corto entre un papel y un cómputo.
-- **Variante futura**: un modelo con visión que proponga los muros desde la imagen (ver el punto 8).
-- **Complejidad**: cámara, escala y opacidad en el renderer; sin cambios en el motor.
+### 3. Calcar un plano: lo que falta (valor 4 · M)
+- **Hecho**: el asistente calca la **imagen de un plano adjunta** (clip del chat): lee los ambientes y sus cotas y arma
+  la casa con `calcar_plano` (ver [LLM.md](LLM.md)). Un plano simple de una planta sale casi exacto; uno complejo o de
+  dos plantas queda aproximado y hay que corregirlo.
+- **Qué falta**:
+  - La imagen como **fondo en la planta**, a escala y con opacidad, para corregir el calcado (o calcar a mano) mirando
+    el original. El fondo no entra al proyecto ni al cómputo.
+  - **PDF**: hoy sólo se adjuntan imágenes (JPG, PNG, WebP); un PDF hay que capturarlo antes.
+  - La **escalera** y el **techo de plantas que no son un rectángulo** no se calcan: se agregan en el editor.
+  - Sentido de las puertas, pilares y medidas de carpintería leídas del plano.
+- **Complejidad**: cámara, escala y opacidad en el renderer para el fondo; sin cambios en el motor.
 
 ### 4. Comparar alternativas (valor 4 · M)
 - **Qué**: guardar variantes de una casa («2 dormitorios», «3 dormitorios») y ver lado a lado superficie, bloques,
@@ -110,8 +117,7 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 ### 8. El asistente con todas las operaciones (valor 4 · M)
 - **Qué**: que `editar_casa` conozca pilares, nombres de ambiente y las aberturas nuevas (tipo, ancho, alto,
   apertura), y que pueda **nombrar** y **cambiar el sentido de las puertas** sin romper el resto.
-- **Después**: partir de una **foto o PDF de un plano** (modelo con visión) y devolver el esqueleto de muros para
-  ajustarlo en el editor.
+- **Hecho**: partir de la imagen de un plano (`calcar_plano`, ver el punto 3).
 - **Complejidad**: más operaciones en `HouseEditor` y en el prompt; la validación sigue siendo la del motor.
 
 ### 9. Planos con cotas exportables (valor 4 · M)
@@ -170,6 +176,61 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 - **Por qué**: mucha gente abre el enlace desde el teléfono y hoy solo puede mirar.
 - **Complejidad**: interacción táctil (mover con el dedo, zoom) en un editor pensado para mouse.
 
+## Cálculo de mano de obra
+
+Hoy el presupuesto es **sólo de materiales**. En una obra chica la mano de obra pesa tanto como los materiales, y es
+la pregunta que sigue a «¿cuánto compro?»: «¿cuánto me sale levantarla y cuánto tarda?».
+
+- **Qué**: jornales y costo de mano de obra por rubro, calculados con lo que el cómputo ya sabe:
+  - **Mampostería**: m² de muro por espesor, con un rendimiento por cuadrilla (oficial + ayudante) distinto para la
+    primera hilada (nivelación con mortero), las hiladas corrientes y los cortes.
+  - **Dinteles, encadenados y pilares**: metros de bloque U y de pilar: armado, llenado y curado.
+  - **Losas y entrepisos**: m² de encofrado, armado y colado, o m² de tirantes y tablero (ver la sección siguiente).
+  - **Escaleras y techo**: por unidad y por m² de cubierta (estructura, clavaderas, cubierta).
+- **Cómo se carga**: una tabla de **rendimientos de referencia** (m² o metros por jornal) y un **valor del jornal**
+  por categoría, editables igual que los precios de materiales. Cada distribuidor o constructor pone los suyos.
+- **Qué muestra**: jornales por rubro y por nivel, **días de obra** para una cuadrilla elegida (1 oficial + 1
+  ayudante, 2 + 1…), costo de mano de obra y el total materiales + mano de obra en el Cómputo, el CSV y el PDF.
+- **Por qué**: completa el presupuesto, permite comparar alternativas por costo total y es el argumento del sistema
+  (el HCCA se levanta más rápido que el ladrillo: hoy ese ahorro no se ve en ningún número).
+- **Encadena con**: el pedido por etapas (6), que pasa a tener también su plazo; la comparación de alternativas (4)
+  y otros sistemas constructivos (15), para comparar jornales entre sistemas con la misma casa.
+- **Qué no hace**: no liquida sueldos ni cargas sociales, no arma un plan de obra con dependencias y no incluye
+  rubros que el cómputo no tiene (cimientos, revoques, instalaciones) hasta que existan.
+- **Riesgo**: los rendimientos varían mucho con la cuadrilla, la zona y el clima. Se presentan como referencia
+  editable, con el mismo aviso que los precios; hacen falta valores de partida de alguien que construya con el sistema.
+- **Complejidad** (M): una tabla de rendimientos en `Hcca`, un cálculo nuevo en `BomCalculator` con las cantidades
+  que ya existen y su bloque en Cómputo, CSV y PDF. Sin cambios en el editor.
+
+## Entrepisos y losas
+
+Hoy el piso del Nivel 2 es una **losa maciza de hormigón** (espesor, hormigón, malla y encofrado por m²) o un
+**entrepiso de madera** (tirantes, cenefa y OSB), rectangulares, con avisos de luz y de apoyo. Lo que falta:
+
+- **Losa de viguetas pretensadas y bloques** (cerámicos o de EPS): es la losa más usada en vivienda y hoy no existe.
+  Pide el sentido de las viguetas, su separación, la serie según la luz, la capa de compresión con su malla y los
+  puntales. Cómputo: viguetas por largo comercial, bloques, hormigón, malla y puntales.
+- **Losa de paneles de hormigón celular** (placas armadas del mismo sistema), donde el fabricante las ofrezca: largos,
+  apoyos mínimos y juntas. Hace falta la ficha técnica del fabricante.
+- **Hierro real de la losa maciza**: hoy se computa una malla por m². Falta armadura por dirección según la luz y el
+  espesor, refuerzos en apoyos y bordes de huecos, y puntales y encofrado por día de uso.
+- **Sentido de armado y apoyos**: marcar hacia dónde descarga cada paño y revisar que haya muro portante o viga en esos
+  bordes (hoy sólo se revisa que la losa quede dentro de la planta de abajo y su luz menor).
+- **Formas y huecos**: losas en L o recortadas, **hueco de doble altura** sin escalera, **balcones y voladizos** (una
+  losa sin muros debajo, con baranda) y su contrapeso.
+- **Cubierta plana**: una losa como techo (azotea) con pendiente mínima, aislación, membrana y parapetos; hoy el techo
+  es sólo de madera a una o dos aguas.
+- **Capas del piso**: contrapiso y carpeta sobre la losa, aislación acústica y cielorraso bajo el entrepiso de madera.
+- **Entrepiso de madera**: vigas principales cuando la luz no la cubre un tirante, arriostres, y elección de la
+  sección por carga de uso (dormitorio, depósito) además de la luz.
+- **Cargas a los muros**: lo que cada losa descarga sobre los muros y pilares de abajo, para avisar cuando un tabique
+  o un dintel recibe más de lo razonable. Se apoya en las vigas libres (11).
+- **Mano de obra**: encofrado, armado, colado y desencofrado por m² (ver la sección anterior).
+- **Riesgo**: es el rubro más cercano al cálculo estructural. Se predimensiona con tablas de referencia y se avisa;
+  no reemplaza el cálculo de un profesional.
+- **Orden sugerido**: viguetas (lo más pedido), sentido de armado y apoyos, hueco de doble altura y balcón, cubierta
+  plana, y después el resto.
+
 ## Deuda técnica y de producto menor
 
 Mejoras chicas que no justifican un ítem propio:
@@ -177,8 +238,6 @@ Mejoras chicas que no justifican un ítem propio:
 - Dibujar el giro de las **ventanas batientes** en la planta y agregar puerta plegadiza y paso sin hoja
   (ver [docs/DESIGN.md](docs/DESIGN.md) 9.3).
 - **Escaleras**: descanso intermedio en las rectas, escalones compensados en el giro y baranda lateral.
-- **Hueco de doble altura** en el piso de arriba, sin escalera.
-- **Balcón y voladizo**: una losa sin muros debajo, con baranda.
 - **Zonas con cómputo opcional**: una pileta de hormigón (m³, hierro, revoque) o un deck (m² y tirantes) hoy son solo
   dibujo; más adelante podrían sumar al presupuesto si la persona lo pide.
 - **Árboles con más carácter**: especie (hoja caduca o perenne: la sombra de invierno cambia), altura y copa a medida,

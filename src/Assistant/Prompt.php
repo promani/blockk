@@ -6,6 +6,7 @@ namespace App\Assistant;
 
 use App\Domain\Design\HouseEditor;
 use App\Domain\Design\HouseGenerator;
+use App\Domain\Design\PlanTracer;
 use App\Domain\Hcca;
 
 /** Instrucciones del asistente y definición de sus herramientas. */
@@ -51,6 +52,17 @@ final class Prompt
             - Cambios puntuales: `editar_casa`. Para ventanas usá `agregar_ventana` con el id del ambiente (N1-A2) y,
               si importa, la orientación (N, E, S, O); no hace falta `ver_casa`. Usá `ver_casa` sólo si necesitás ids de
               muros o vanos.
+            - Plano adjunto: si la persona adjunta la imagen de un plano, calcalo con `calcar_plano` (no con `generar_casa`;
+              también en el editor: adjuntar un plano es pedir esa casa). Pasá TODOS los ambientes como rectángulos en
+              metros, medidos a ejes de muro, con el origen arriba a la izquierda del plano (x hacia la derecha, y hacia
+              abajo); los ambientes vecinos comparten la coordenada del muro que los separa. Usá las cotas del plano; si
+              no tiene, estimá la escala con las puertas (unos 0,80 m) y avisá que las medidas son estimadas. No busques
+              precisión de centímetros: ubicá cada ambiente donde está en el dibujo, sin que se pisen ni queden huecos, y
+              después se ajusta en el editor. Un ambiente en L son dos rectángulos con el mismo nombre y el lado que
+              comparten en `abierto`; lo mismo los ambientes integrados (cocina abierta al estar) y los lados sin pared
+              de una galería. Con dos plantas, cada una se mide desde su propia esquina de arriba a la izquierda (el
+              sistema pone la alta sobre la baja). Cada abertura va con un punto sobre su muro. Para corregir un
+              calcado, volvé a llamar `calcar_plano` con todos los ambientes.
             - Si el coordinador te delegó instrucciones (herramienta `delegar`), ejecutalas: no vuelvas a preguntar lo que
               ya está respondido. No uses `delegar`.
             - Podés llamar varias herramientas en la misma respuesta. Si asumiste algo, decilo en una frase en ese mismo
@@ -95,6 +107,8 @@ final class Prompt
             Tipos de ambiente que el constructor sabe armar: estar, comedor, estar_comedor, estar_comedor_cocina, cocina,
             dormitorio, dormitorio_principal, escritorio, bano, toilette, lavadero, deposito, libre. Hasta 2 plantas.
             Puede agregar o quitar ventanas y puertas, muros, cambiar el techo (dos aguas o un agua) y renombrar.
+            También calca un plano: la persona adjunta su imagen con el botón del clip y el constructor arma esa casa; si
+            después pide corregir algo del plano, delegalo.
 
             {$context}
             TXT;
@@ -148,6 +162,26 @@ final class Prompt
                     'nombre' => ['type' => 'string', 'description' => 'renombrar'],
                 ], 'required' => ['accion']]],
             ], ['operaciones']),
+            self::fn('calcar_plano', 'Arma la casa calcando un plano (imagen adjunta o medidas dictadas) y la deja como casa actual. Ambientes como rectángulos en metros a ejes de muro; origen arriba a la izquierda del plano, x hacia la derecha, y hacia abajo.', [
+                'nombre' => ['type' => 'string', 'description' => 'Nombre corto (opcional).'],
+                'ambientes' => ['type' => 'array', 'minItems' => 1, 'items' => ['type' => 'object', 'properties' => [
+                    'nombre' => ['type' => 'string', 'description' => 'Como figura en el plano, en español.'],
+                    'nivel' => ['type' => 'integer', 'enum' => [1, 2], 'description' => 'Planta (1 = baja). Por defecto 1.'],
+                    'x' => ['type' => 'number', 'description' => 'Borde izquierdo (m).'],
+                    'y' => ['type' => 'number', 'description' => 'Borde de arriba (m).'],
+                    'ancho' => ['type' => 'number', 'description' => 'Medida en x (m).'],
+                    'fondo' => ['type' => 'number', 'description' => 'Medida en y (m).'],
+                    'abierto' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => PlanTracer::SIDES], 'description' => 'Lados sin muro: integrado a otro ambiente, forma en L, galería.'],
+                ], 'required' => ['nombre', 'x', 'y', 'ancho', 'fondo']]],
+                'aberturas' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
+                    'tipo' => ['type' => 'string', 'enum' => PlanTracer::OPENING_TYPES, 'description' => 'ventanal = ventana hasta el piso o puerta ventana.'],
+                    'nivel' => ['type' => 'integer', 'enum' => [1, 2]],
+                    'x' => ['type' => 'number', 'description' => 'Centro de la abertura, sobre su muro (m).'],
+                    'y' => ['type' => 'number'],
+                    'ancho' => ['type' => 'number', 'description' => 'Ancho en metros (opcional).'],
+                ], 'required' => ['tipo', 'x', 'y']]],
+                'techo' => ['type' => 'string', 'enum' => PlanTracer::ROOFS, 'description' => 'Por defecto dos_aguas.'],
+            ], ['ambientes']),
             self::fn('cargar_plantilla', 'Reemplaza la casa actual por una plantilla de la Galería.', [
                 'slug' => ['type' => 'string', 'enum' => $templateSlugs],
             ], ['slug']),

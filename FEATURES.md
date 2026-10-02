@@ -56,7 +56,8 @@ trabajo en equipo).
 - **Aberturas**: una sola herramienta con **tipo** (puerta, ventana, portón), **ancho**, **alto** y **apertura**
   (batiente con bisagra y lado, corrediza, fija, seccional); en las ventanas, el **antepecho** (distancia desde el suelo).
   Se colocan apuntando al muro (el verde marca lugar
-  válido) y se mueven arrastrándolas, también a otro muro.
+  válido) y se mueven arrastrándolas, también a otro muro. Se eligen por **medida comercial** de carpintería (puerta
+  80 × 200, ventana 120 × 110…), que fija el vano modular que la contiene, o **a medida**.
 - **Pilares** de hormigón armado (20 a 40 cm) y **nombres de ambiente** que se ven en la planta.
 - **Terreno**: **zonas** rectangulares (pileta, patio o deck, jardín, camino) y **árboles** simples (tronco, copa y
   sombra, en tres tamaños). Sirven para pensar la disposición del espacio; no entran al cómputo ni a la Revisión.
@@ -66,6 +67,11 @@ trabajo en equipo).
   (limahoya); alero, pendiente, cabios y hastiales de bloque despiezados.
 - **Imán y guías** al dibujar, mover muros arrastrando (el resto se estira), selección múltiple con rectángulo y
   movimiento en grupo, deshacer y rehacer ilimitado, guía «Próximo paso».
+- **Medidas exactas**: la cota se ve mientras se dibuja; en un muro se puede **escribir el largo** y Enter; el ancho y
+  el fondo de una habitación se escriben en el panel; la herramienta **Medir** da la distancia entre dos puntos,
+  también entre caras de muros (luz libre).
+- **Copiar y pegar** (`Ctrl+C` / `Ctrl+V`, `Ctrl+D` duplica): un elemento o un grupo, también de un nivel al otro para
+  repetir la planta arriba.
 - **Terreno** configurable (hasta 100 m por lado), norte que se orienta con una brújula, ciudad y huso horario.
 
 ### 3.2 Entender (vistas y revisión)
@@ -98,6 +104,9 @@ trabajo en equipo).
 - **Generador determinista**: mismo programa, misma casa; siempre sin errores o rechazado con un motivo claro.
 - **Ve lo que se cambió a mano**: con cada mensaje viaja el proyecto del editor. Se puede partir de una plantilla
   («✦ Modificar con IA»).
+- **Calca un plano**: se adjunta la imagen de un plano con el clip del chat (JPG, PNG o WebP) y arma esa casa con sus
+  ambientes, medidas y aberturas. Es un punto de partida: un plano simple sale casi exacto; uno complejo o de dos
+  plantas queda aproximado. No calca la escalera ni el techo de plantas que no son un rectángulo.
 - **Límites de uso** por IP y por día; sin la clave del modelo, el asistente directamente no aparece.
 
 ### 3.5 Guardar y compartir
@@ -130,7 +139,9 @@ trabajo en equipo).
 - Un **tipo** por ambiente (dormitorio, baño…) con revisiones propias; hoy el nombre es texto libre.
 - **Muebles simples** como gabarito (camas, mesa con sillas, mesadas, artefactos de baño).
 - Vigas libres, techo a cuatro aguas o de forma libre, balcones y voladizos, terreno en pendiente y retiros.
-- Planos exportables con cotas; importar un plano como fondo para calcarlo.
+- Planos exportables con cotas; el plano como fondo en la planta para corregir el calcado a mano; adjuntar un PDF.
+- **Mano de obra**: jornales, plazo y costo por rubro (hoy el presupuesto es sólo de materiales).
+- **Losas y entrepisos**: viguetas, paneles, voladizos, doble altura y cubierta plana (hoy, losa maciza o madera).
 - Guardado y enlace compartible; comparar alternativas de una misma casa.
 - Otros sistemas constructivos (ladrillo cerámico, steel frame) y otras marcas de bloque con datos reales.
 - Instalaciones y rubros de obra más allá de la mampostería, estructura y cubierta.

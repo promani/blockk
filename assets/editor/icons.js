@@ -18,5 +18,6 @@ export const ICONS = {
     label: svg('<path d="M4 7h16M4 12h10M4 17h13"/><path d="M18 12l2 2-2 2" stroke-width="1.4"/>'),
     zone: svg('<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M6 11c2-2 3 2 5 0s3 2 5 0" stroke-width="1.4"/>'),
     tree: svg('<circle cx="12" cy="9" r="6"/><path d="M12 15v6M9 21h6"/>'),
+    measure: svg('<path d="M3 16L16 3l5 5L8 21z"/><path d="M7 12l2 2M10 9l2 2M13 6l2 2" stroke-width="1.4"/>'),
     beam: svg('<rect x="3" y="9" width="18" height="6" rx="1"/><path d="M6 9v6M18 9v6" stroke-width="1.3"/>'),
 };

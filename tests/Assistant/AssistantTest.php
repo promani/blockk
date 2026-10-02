@@ -26,6 +26,12 @@ final class AssistantTest extends TestCase
     private Assistant $assistant;
     private string $dir;
     private const string CLIENT = 'abcdef0123456789abcdef01';
+    /** Imagen de 1 × 1 px: alcanza para probar el recorrido de un plano adjunto. */
+    private const array PLAN_IMAGE = ['mime' => 'image/png', 'data' => 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='];
+    private const array PLAN = ['ambientes' => [
+        ['nombre' => 'Estar', 'x' => 0, 'y' => 0, 'ancho' => 5, 'fondo' => 4],
+        ['nombre' => 'Dormitorio', 'x' => 5, 'y' => 0, 'ancho' => 3, 'fondo' => 4],
+    ], 'aberturas' => [['tipo' => 'puerta', 'x' => 2.5, 'y' => 4], ['tipo' => 'ventana', 'x' => 40, 'y' => 0]]];
 
     protected function setUp(): void
     {
@@ -302,5 +308,71 @@ final class AssistantTest extends TestCase
         $conv = $assistant->start(self::CLIENT, ['tipo' => 'nueva']);
         $assistant->reply($conv, '', ['plantas' => ['1'], 'dormitorios' => ['2'], 'banos' => ['1'], 'cocina' => ['integrada'], 'techo' => ['dos_aguas']]);
         self::assertSame([], $this->llm->tiers);
+    }
+
+    #[Test]
+    public function anAttachedPlanGoesStraightToTheBuilderAndIsTraced(): void
+    {
+        $assistant = $this->twoTier();
+        $this->llm->queue = [ScriptedLlm::call('calcar_plano', self::PLAN, 'p1', 'Tomé las cotas del plano.')];
+        $conv = $assistant->start(self::CLIENT, ['tipo' => 'nueva'], 'galeria', '', [], self::PLAN_IMAGE);
+
+        self::assertSame([LlmClient::HEAVY], $this->llm->tiers, 'con un plano no hay nada que coordinar');
+        $user = $this->llm->received[0][1];
+        self::assertSame(['text', 'image_url'], array_column($user['content'], 'type'));
+        self::assertSame('Calcá este plano.', $user['content'][0]['text']);
+        self::assertStringStartsWith('data:image/png;base64,', $user['content'][1]['image_url']['url']);
+
+        self::assertSame(['usuario', 'asistente', 'casa', 'asistente'], $this->types($conv));
+        self::assertTrue($conv['events'][0]['adjunto']);
+        self::assertSame(['Estar', 'Dormitorio'], array_column($conv['events'][2]['resumen']['ambientes'], 'nombre'));
+        self::assertStringContainsString('No pude ubicar 1 abertura', $conv['events'][3]['texto'], 'los avisos del calcado llegan a la persona');
+        self::assertNull($conv['draft']['program']);
+        self::assertStringNotContainsString('base64', json_encode($conv['events']), 'la imagen no vuelve al navegador');
+    }
+
+    #[Test]
+    public function theCoordinatorNeverGetsTheImageAndOnlyTheLastPlanIsKept(): void
+    {
+        $assistant = $this->twoTier();
+        $this->llm->queue = [ScriptedLlm::call('calcar_plano', self::PLAN, 'p1')];
+        $conv = $assistant->start(self::CLIENT, ['tipo' => 'nueva'], 'galeria', 'este es mi plano', [], self::PLAN_IMAGE);
+
+        // un pedido posterior sin adjunto arranca en el coordinador, que recibe una nota en lugar de la imagen
+        $this->llm->queue = [ScriptedLlm::call('delegar', ['instrucciones' => 'renombrar'], 'd1'), ScriptedLlm::call('editar_casa', ['operaciones' => [['accion' => 'renombrar', 'nombre' => 'Mi casa']]], 'e1')];
+        $conv = $assistant->reply($conv, 'llamala Mi casa', []);
+        self::assertSame([LlmClient::HEAVY, LlmClient::LIGHT, LlmClient::HEAVY], $this->llm->tiers);
+        self::assertStringNotContainsString('image_url', json_encode($this->llm->received[1]));
+        self::assertStringContainsString('adjuntó la imagen de un plano', json_encode($this->llm->received[1], JSON_UNESCAPED_UNICODE));
+        self::assertStringContainsString('image_url', json_encode($this->llm->received[2]), 'el constructor sigue viendo el plano para corregirlo');
+
+        // otro plano reemplaza al anterior en la historia
+        $this->llm->queue = [ScriptedLlm::call('calcar_plano', self::PLAN, 'p2')];
+        $conv = $assistant->reply($conv, '', [], null, self::PLAN_IMAGE);
+        self::assertSame(1, substr_count(json_encode($conv['messages']), 'base64,'));
+    }
+
+    #[Test]
+    public function aPlanThatCannotBeTracedGoesBackToTheModel(): void
+    {
+        $this->llm->queue = [
+            ScriptedLlm::call('calcar_plano', ['ambientes' => [['nombre' => 'Estar', 'x' => 0, 'y' => 0, 'ancho' => 4]]], 'p1'),
+            ScriptedLlm::call('calcar_plano', self::PLAN, 'p2'),
+        ];
+        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'nueva'], 'galeria', '', [], self::PLAN_IMAGE);
+
+        self::assertStringContainsString('No se pudo calcar', self::lastToolContent($this->llm->received[1]));
+        self::assertContains('casa', $this->types($conv));
+    }
+
+    #[Test]
+    public function aModelThatCannotReadTheImageDoesNotBreakTheConversation(): void
+    {
+        $this->llm->queue = [new LlmUnavailable('El modelo kimi-test respondió 400: image input is not supported')];
+        $conv = $this->assistant->start(self::CLIENT, ['tipo' => 'nueva'], 'galeria', '', [], self::PLAN_IMAGE);
+
+        self::assertSame(['usuario', 'error'], $this->types($conv));
+        self::assertStringContainsString('No pude leer el plano', $conv['events'][1]['texto']);
+        self::assertStringNotContainsString('image_url', json_encode($conv['messages']), 'la imagen sale de la historia: el próximo mensaje no falla igual');
     }
 }

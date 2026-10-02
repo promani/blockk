@@ -181,6 +181,50 @@ final class Hcca
     }
 
     /**
+     * Carpinterías en medidas comerciales (ancho × alto en cm) con el vano modular que las contiene: el menor múltiplo
+     * de 12,5 cm de ancho y de 25 cm de alto. Como todos los vanos rematan a 2,00 m, el antepecho sale del alto.
+     * Son medidas habituales de catálogo, de REFERENCIA: cada fabricante tiene las suyas; se editan acá.
+     *
+     * @return list<array{id: string, kind: OpeningKind, label: string, cw: int, ch: int, w: int, sill: int, mode: string}> w en unidades de 12,5 cm; sill en hiladas
+     */
+    public static function commercialOpenings(): array
+    {
+        $n = static fn (float $v): string => str_replace('.', ',', (string) $v);
+        $out = [];
+        foreach ([
+            ['P70', OpeningKind::Door, 'Puerta', 70, 200, 'swing'],
+            ['P80', OpeningKind::Door, 'Puerta', 80, 200, 'swing'],
+            ['P90', OpeningKind::Door, 'Puerta', 90, 200, 'swing'],
+            ['P160', OpeningKind::Door, 'Puerta doble', 160, 200, 'swing'],
+            ['VT60', OpeningKind::Window, 'Ventiluz', 60, 40, 'swing'],
+            ['VT80', OpeningKind::Window, 'Ventiluz', 80, 40, 'swing'],
+            ['V100x110', OpeningKind::Window, 'Ventana', 100, 110, 'slide'],
+            ['V120x110', OpeningKind::Window, 'Ventana', 120, 110, 'slide'],
+            ['V150x110', OpeningKind::Window, 'Ventana', 150, 110, 'slide'],
+            ['V180x110', OpeningKind::Window, 'Ventana', 180, 110, 'slide'],
+            ['V200x110', OpeningKind::Window, 'Ventana', 200, 110, 'slide'],
+            ['V120x150', OpeningKind::Window, 'Ventana', 120, 150, 'slide'],
+            ['V150x150', OpeningKind::Window, 'Ventana', 150, 150, 'slide'],
+            ['B150', OpeningKind::Window, 'Puerta ventana', 150, 200, 'slide'],
+            ['B180', OpeningKind::Window, 'Puerta ventana', 180, 200, 'slide'],
+            ['B200', OpeningKind::Window, 'Puerta ventana', 200, 200, 'slide'],
+            ['B240', OpeningKind::Window, 'Puerta ventana', 240, 200, 'slide'],
+            ['PG240', OpeningKind::Gate, 'Portón', 240, 200, 'overhead'],
+            ['PG300', OpeningKind::Gate, 'Portón', 300, 200, 'overhead'],
+        ] as [$id, $kind, $name, $cw, $ch, $mode]) {
+            $w = (int) ceil($cw / self::GRID_CM);
+            $h = (int) ceil($ch / 25);
+            $out[] = [
+                'id' => $id, 'kind' => $kind,
+                'label' => sprintf('%s %d × %d (vano %s × %d)', $name, $cw, $ch, $n($w * self::GRID_CM), $h * 25),
+                'cw' => $cw, 'ch' => $ch, 'w' => $w, 'sill' => self::OPENING_TOP_COURSE - $h, 'mode' => $mode,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Secciones de madera escuadrada. maxSpanCm: luz libre máxima referencial a 40 cm entre ejes.
      *
      * @return array<string, array{label: string, b: float, d: float, maxSpanCm: int}>
