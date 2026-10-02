@@ -34,6 +34,8 @@ final readonly class Project
         public array $zones = [],
         /** @var list<Tree> */
         public array $trees = [],
+        /** lado del terreno que da a la calle, como lado de la planta: N arriba, E derecha, S abajo, W izquierda */
+        public string $lotFront = 'S',
     ) {
         if (count($levels) > Hcca::MAX_LEVELS) {
             throw new \InvalidArgumentException('La mampostería autoportante HCCA admite como máximo 2 niveles (PB + PA).');
@@ -64,7 +66,7 @@ final readonly class Project
     /** @param list<Level> $levels */
     public function withLevels(array $levels): self
     {
-        return new self($this->name, $levels, $this->settings, $this->north, $this->latitude, $this->lotW, $this->lotD, $this->upper, $this->roofs, $this->longitude, $this->utcOffset, $this->zones, $this->trees);
+        return new self($this->name, $levels, $this->settings, $this->north, $this->latitude, $this->lotW, $this->lotD, $this->upper, $this->roofs, $this->longitude, $this->utcOffset, $this->zones, $this->trees, $this->lotFront);
     }
 
     public function withLevel(int $index, Level $level): self
@@ -85,7 +87,7 @@ final readonly class Project
             'lat' => $this->latitude,
             'lon' => $this->longitude,
             'tz' => $this->utcOffset,
-            'lot' => ['w' => $this->lotW, 'd' => $this->lotD],
+            'lot' => ['w' => $this->lotW, 'd' => $this->lotD, 'front' => $this->lotFront],
             'upper' => $this->upperEnabled(),
             'roofs' => array_map(static fn (RoofPart $r): array => $r->toArray(), $this->roofs),
             'zones' => array_map(static fn (Zone $z): array => $z->toArray(), $this->zones),

@@ -733,6 +733,7 @@ export function mountPanels(app) {
             h('div', { class: 'lot-row' },
                 h('label', {}, 'Ancho (m)', num(store.project.lot.w, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, w: v }; }))),
                 h('label', {}, 'Fondo (m)', num(store.project.lot.d, 6, 100, (v) => store.commit('Tamaño del terreno', (d) => { d.lot = { ...d.lot, d: v }; })))),
+            field('Frente (calle)', sel(store.project.lot.front ?? 'S', ['S', 'N', 'W', 'E'].map((d) => [d, sideLabel(d, store.project.north)]), (v) => store.commit('Frente del terreno', (d) => { d.lot = { ...d.lot, front: v }; }))),
             h('div', { class: 'check-row' },
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', checked: store.ui.showLot !== false, onchange: (e) => store.setUi({ showLot: e.target.checked }) }), 'Mostrar terreno'),
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', checked: store.ui.showGrid !== false, onchange: (e) => store.setUi({ showGrid: e.target.checked }) }), 'Mostrar cuadrícula')),

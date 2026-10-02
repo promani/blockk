@@ -56,4 +56,18 @@ final class SiteTest extends TestCase
         self::assertSame($plain['bom']['total'], $withSite['bom']['total']);
         self::assertSame($plain['issues'], $withSite['issues']);
     }
+
+    #[Test]
+    public function theStreetSideIsKeptAndDefaultsToTheBottomOfThePlan(): void
+    {
+        $data = Fixtures::room()->build();
+        unset($data['lot']['front']);
+        self::assertSame('S', ProjectFactory::fromArray($data)->toArray()['lot']['front']);
+
+        $data['lot'] = ['w' => 24, 'd' => 20, 'front' => 'E'];
+        self::assertSame('E', ProjectFactory::fromArray($data)->toArray()['lot']['front']);
+
+        $data['lot']['front'] = 'arriba';
+        self::assertSame('S', ProjectFactory::fromArray($data)->toArray()['lot']['front']);
+    }
 }

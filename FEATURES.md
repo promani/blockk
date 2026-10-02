@@ -62,6 +62,7 @@ trabajo en equipo).
   se le puede elegir un **tipo** (dormitorio, baño, cocina…); si no se elige, se deduce del nombre.
 - **Terreno**: **zonas** rectangulares (pileta, patio o deck, jardín, camino) y **árboles** simples (tronco, copa y
   sombra, en tres tamaños). Sirven para pensar la disposición del espacio; no entran al cómputo ni a la Revisión.
+  Sobre el **frente** del terreno (el lado se elige) se dibujan la vereda y la calle.
 - **Muebles simples** como gabarito de tamaño real (camas, placard, mesas con sillas, sillones, mesadas, artefactos de
   baño…): rectángulos con su nombre en la planta y cajas bajas en la isométrica. Sirven para ver si un ambiente
   alcanza; no entran al cómputo. Los muebles y los árboles se **apagan** con un interruptor: dejan de verse y sus

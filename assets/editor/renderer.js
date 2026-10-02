@@ -15,6 +15,9 @@ import { backEdge, furnitureOn, treesOn } from './furniture.js';
 
 const G = 12.5;
 
+/** Frente del terreno: ancho de la vereda y de la calzada (cm). */
+const STREET = { walk: 200, road: 700 };
+
 /** Opacidad del repaso de un árbol sobre lo que tapa: las ramas se insinúan y las hojas casi no tapan (se enciman muchas). */
 const BRANCH_OVER = 0.45;
 const LEAF_OVER = 0.12;
@@ -117,6 +120,7 @@ export class Renderer {
         ctx.fillStyle = showLot ? drawTheme().ground : drawTheme().sky;
         ctx.fillRect(0, 0, cam.w, cam.h);
         if (showLot) this.drawGrass(f);
+        if (showLot && f.project) this.drawStreet(f);
         this.drawGround(f);
         this.drawBackdrop(f);
         if (f.project) {
@@ -481,6 +485,71 @@ export class Renderer {
         ctx.stroke(paths[0]);
         ctx.strokeStyle = mix(ground, '#ffffff', 0.38);
         ctx.stroke(paths[1]);
+        ctx.restore();
+    }
+
+    /**
+     * Calle y vereda sobre el frente del terreno (`lot.front`, un lado de la planta): del lado de afuera, la vereda
+     * pegada a la línea del lote y después la calzada. Sólo indican hacia dónde da el frente: no entran al cómputo.
+     */
+    drawStreet(f) {
+        const { ctx } = this;
+        const { cam, project } = f;
+        const W = (project.lot?.w ?? 24) * 100;
+        const D = (project.lot?.d ?? 20) * 100;
+        const side = project.lot?.front ?? 'S';
+        const across = side === 'N' || side === 'S'; // la calle corre a lo ancho (eje x)
+        const len = across ? W : D;
+        const edge = side === 'S' ? D : side === 'E' ? W : 0;
+        const out = side === 'S' || side === 'E' ? 1 : -1;
+        const FAR = 8000; // la calle sigue más allá del lote
+        // (u a lo largo de la calle, v hacia afuera desde la línea del frente) → pantalla
+        const P = (u, v) => (across ? cam.project(u, edge + out * v, 0) : cam.project(edge + out * v, u, 0));
+        const band = (v0, v1, color) => {
+            ctx.beginPath();
+            [P(-FAR, v0), P(len + FAR, v0), P(len + FAR, v1), P(-FAR, v1)].forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+        };
+        const line = (u0, v0, u1, v1) => {
+            const [ax, ay] = P(u0, v0);
+            const [bx, by] = P(u1, v1);
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(bx, by);
+        };
+        const k = Math.hypot(P(100, 0)[0] - P(0, 0)[0], P(100, 0)[1] - P(0, 0)[1]) / 100; // px por cm a lo largo
+        ctx.save();
+        band(0, STREET.walk, '#d8d9dc');
+        band(STREET.walk, STREET.walk + STREET.road, '#7d828c');
+        // juntas de la vereda (cada 2 m) y cordón
+        if (200 * k >= 7) {
+            ctx.strokeStyle = 'rgba(30,41,59,.16)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let u = -FAR; u <= len + FAR; u += 200) line(u, 0, u, STREET.walk);
+            ctx.stroke();
+        }
+        ctx.strokeStyle = '#f3f4f6';
+        ctx.lineWidth = Math.max(1.5, 12 * k);
+        ctx.beginPath();
+        line(-FAR, STREET.walk, len + FAR, STREET.walk);
+        ctx.stroke();
+        // eje de la calzada, discontinuo
+        ctx.strokeStyle = 'rgba(255,255,255,.8)';
+        ctx.lineWidth = Math.max(1, 10 * k);
+        ctx.setLineDash([300 * k, 300 * k]);
+        ctx.beginPath();
+        line(-FAR, STREET.walk + STREET.road / 2, len + FAR, STREET.walk + STREET.road / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (cam.view === 'plan') {
+            const [sx, sy] = P(len / 2, STREET.walk + STREET.road / 2);
+            ctx.font = '600 12px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            this.tag(ctx, 'Calle', sx, sy);
+        }
         ctx.restore();
     }
 
