@@ -13,6 +13,8 @@ de build) · Canvas 2D · Redis (opcional) · PHPUnit 12.
 | Documento | Qué cuenta |
 | --- | --- |
 | [VISION.md](VISION.md) | Problema, solución, alcance y cómo medimos que funciona. |
+| [FEATURES.md](FEATURES.md) | Qué hace la aplicación y qué no (a propósito o todavía), pensado para compararla con otras herramientas. |
+| [BACKLOG.md](BACKLOG.md) | Lo que sumaría valor sustantivo a futuro, priorizado, con valor y costo de cada ítem. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes, flujos, API, datos y decisiones técnicas. |
 | [EDITOR.md](EDITOR.md) | Funcionalidades y controles del editor, la Galería, el Cómputo y el Catálogo. |
 | [LLM.md](LLM.md) | El asistente de IA: asistente por pasos, botón del editor, modelos, herramientas y cómo diagnosticarlo. |
