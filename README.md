@@ -17,6 +17,7 @@ de build) · Canvas 2D · Redis (opcional) · PHPUnit 12.
 | [EDITOR.md](EDITOR.md) | Funcionalidades y controles del editor, la Galería, el Cómputo y el Catálogo. |
 | [LLM.md](LLM.md) | El asistente de IA: asistente por pasos, botón del editor, modelos, herramientas y cómo diagnosticarlo. |
 | [HCCA.md](HCCA.md) | La tecnología constructiva, el catálogo de piezas y cómo se calculan los materiales. |
+| [docs/DESIGN.md](docs/DESIGN.md) | Lineamientos de diseño de casas (zonas, circulación, sentido de puertas, orientación) y brechas del diseñador. |
 | [CLAUDE.md](CLAUDE.md) | Guía rápida para sesiones de Claude Code (convenciones, skills, verificación). |
 | [docs/](docs/) | Material de referencia (manual técnico del fabricante). |
 

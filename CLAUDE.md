@@ -2,7 +2,8 @@
 
 Diseñador de casas de bloques HCCA con cómputo de materiales y un asistente de IA. Antes de tocar algo, leé el
 documento del área: [VISION.md](VISION.md), [ARCHITECTURE.md](ARCHITECTURE.md), [EDITOR.md](EDITOR.md),
-[LLM.md](LLM.md), [HCCA.md](HCCA.md).
+[LLM.md](LLM.md), [HCCA.md](HCCA.md) y, para diseñar casas (circulación, sentido de las puertas, brechas del
+diseñador), [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Convenciones
 

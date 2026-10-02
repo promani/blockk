@@ -44,8 +44,11 @@ final class TemplateBuilder
         return $this;
     }
 
-    /** @param string $axis 'x' (muro horizontal en y=$line) o 'y' (muro vertical en x=$line); $start = coordenada inicial del vano */
-    public function opening(int $level, string $preset, string $axis, int $line, int $start): self
+    /**
+     * @param string $axis 'x' (muro horizontal en y=$line) o 'y' (muro vertical en x=$line); $start = coordenada inicial del vano
+     * @param bool   $flip la puerta abre hacia el lado negativo (arriba o a la izquierda) en vez del positivo (abajo o a la derecha)
+     */
+    public function opening(int $level, string $preset, string $axis, int $line, int $start, bool $flip = false): self
     {
         $spec = Hcca::openingPresets()[$preset] ?? throw new \InvalidArgumentException("Preset desconocido: $preset");
         foreach ($this->levels[$level]['walls'] as $w) {
@@ -56,7 +59,7 @@ final class TemplateBuilder
             $from = min($horizontal ? [$w['x1'], $w['x2']] : [$w['y1'], $w['y2']]);
             $to = max($horizontal ? [$w['x1'], $w['x2']] : [$w['y1'], $w['y2']]);
             if ($start >= $from && $start + $spec['w'] <= $to) {
-                $this->levels[$level]['openings'][] = ['id' => 'o'.(++$this->seq), 'wall' => $w['id'], 'pos' => $start - $from, 'preset' => $preset];
+                $this->levels[$level]['openings'][] = ['id' => 'o'.(++$this->seq), 'wall' => $w['id'], 'pos' => $start - $from, 'preset' => $preset] + ($flip ? ['flip' => true] : []);
 
                 return $this;
             }

@@ -8,6 +8,9 @@ description: Diseña una casa nueva para Blockk Studio y la agrega a la Galería
 Las plantillas viven en `src/Domain/Templates/TemplateCatalog.php` (método `definitions()`) y se arman con
 `TemplateBuilder`. Aparecen solas en `/galeria` y en `GET /api/templates`.
 
+Antes de dibujar, leé `docs/DESIGN.md` (zonas, circulación, orientación y **sentido de las puertas**: abren hacia adentro
+del ambiente que sirven).
+
 ## Unidades y grilla
 
 - **1 unidad = 12,5 cm.** Todas las coordenadas del builder son enteros en unidades: 8 u = 1 m, 40 u = 5 m.
@@ -26,7 +29,7 @@ Las plantillas viven en `src/Domain/Templates/TemplateCatalog.php` (método `def
 (new TemplateBuilder('Nombre'))
     ->room($level, $x, $y, $w, $h, $t = 20)      // 4 muros perimetrales (nivel 0 = Nivel 1)
     ->wall($level, $x1, $y1, $x2, $y2, $t)        // muro suelto; tabiques de 10, portantes de 15 o 20
-    ->opening($level, 'P87', 'x'|'y', $line, $start)  // 'x' = muro horizontal en y=$line; $start = coordenada inicial
+    ->opening($level, 'P87', 'x'|'y', $line, $start, flip: false)  // 'x' = muro horizontal en y=$line; $start = coordenada inicial; flip: la puerta abre hacia arriba/izquierda
     ->roofPart($level, $x, $y, $w, $h, 'gable'|'shed', 'x'|'y'|'N'|'S'|'E'|'W')
     ->joists($x, $y, $w, $h, 'x'|'y')             // entrepiso de madera sobre el Nivel 1
     ->slab($level, $x, $y, $w, $h) / ->stair($level, $x, $y, 'N')

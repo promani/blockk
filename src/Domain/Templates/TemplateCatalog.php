@@ -236,6 +236,78 @@ final class TemplateCatalog
                     ->roofPart(0, 32, 0, 32, 40, 'shed', 'E', 30, '3x10')
                     ->build(),
             ],
+            'casa-doble-planta-garaje' => [
+                'name' => 'Casa de dos plantas con garaje (~234 m²)',
+                'description' => 'Planta baja de 9,00 × 14,00 m: cocina, estar y comedor abiertos al norte, sala de cine, despensa, garaje cerrado de 5,5 m, hall de entrada con escalera en U, lavabo, lavadero y escritorio. Arriba, tres dormitorios (el principal con vestidor y baño en suite), baño, placards y un estar de distribución. Las puertas abren hacia adentro de cada ambiente.',
+                'tags' => ['2 plantas', 'Vivienda familiar', '3 dormitorios', 'Garaje'],
+                'build' => fn (): array => (new TemplateBuilder('Casa de dos plantas con garaje'))
+                    ->room(0, 0, 0, 72, 112, 20)
+                    ->wall(0, 32, 32, 32, 112, 20)
+                    ->wall(0, 0, 32, 32, 32, 10)
+                    ->wall(0, 0, 44, 32, 44, 10)
+                    ->wall(0, 18, 32, 18, 44, 10)
+                    ->wall(0, 0, 68, 32, 68, 20)
+                    ->wall(0, 62, 58, 62, 84, 10)
+                    ->wall(0, 62, 58, 72, 58, 10)
+                    ->wall(0, 62, 70, 72, 70, 10)
+                    ->wall(0, 46, 84, 72, 84, 10)
+                    ->wall(0, 46, 84, 46, 112, 10)
+                    ->opening(0, 'V150', 'x', 0, 8)
+                    ->opening(0, 'VG150', 'x', 0, 40)
+                    ->opening(0, 'VG150', 'x', 0, 56)
+                    ->opening(0, 'V100', 'y', 0, 12)
+                    ->opening(0, 'VT62', 'y', 0, 35)
+                    ->opening(0, 'V100', 'y', 0, 52)
+                    ->opening(0, 'V125', 'y', 72, 8)
+                    ->opening(0, 'V100', 'y', 72, 40)
+                    ->opening(0, 'VT62', 'y', 72, 61)
+                    ->opening(0, 'VT62', 'y', 72, 74)
+                    ->opening(0, 'V125', 'y', 72, 90)
+                    ->opening(0, 'V125', 'x', 112, 56)
+                    ->opening(0, 'P87', 'x', 112, 36, flip: true)   // entrada: abre hacia adentro
+                    ->opening(0, 'P150', 'x', 112, 8, flip: true)   // portón del garaje
+                    ->opening(0, 'P75', 'x', 32, 6)                 // despensa
+                    ->opening(0, 'P75', 'y', 32, 35, flip: true)    // depósito
+                    ->opening(0, 'P87', 'y', 32, 47, flip: true)    // sala de cine
+                    ->opening(0, 'P87', 'y', 32, 96)                // garaje → hall
+                    ->opening(0, 'P75', 'y', 62, 61)                // lavabo
+                    ->opening(0, 'P75', 'y', 62, 74)                // lavadero
+                    ->opening(0, 'P75', 'y', 46, 90)                // escritorio
+                    ->stair(0, 46, 58, 'N', 'U')
+                    ->upper()
+                    ->room(1, 0, 0, 72, 112, 20)
+                    ->wall(1, 0, 26, 72, 26, 10)
+                    ->wall(1, 28, 0, 28, 26, 10)
+                    ->wall(1, 36, 0, 36, 26, 10)
+                    ->wall(1, 44, 0, 44, 26, 10)
+                    ->wall(1, 0, 36, 28, 36, 10)
+                    ->wall(1, 0, 54, 28, 54, 10)
+                    ->wall(1, 0, 70, 28, 70, 10)
+                    ->wall(1, 0, 88, 28, 88, 10)
+                    ->wall(1, 28, 36, 28, 112, 10)
+                    ->opening(1, 'V125', 'x', 0, 8)
+                    ->opening(1, 'V125', 'x', 0, 52)
+                    ->opening(1, 'V100', 'y', 72, 8)
+                    ->opening(1, 'VT62', 'y', 0, 39)
+                    ->opening(1, 'VT62', 'y', 0, 75)
+                    ->opening(1, 'V100', 'y', 0, 92)
+                    ->opening(1, 'V150', 'x', 112, 8)
+                    ->opening(1, 'V150', 'y', 72, 40)
+                    ->opening(1, 'V187', 'x', 112, 44)
+                    ->opening(1, 'P75', 'x', 26, 8, flip: true)    // dormitorio 2
+                    ->opening(1, 'P75', 'x', 26, 58, flip: true)   // dormitorio 3
+                    ->opening(1, 'P75', 'y', 28, 8, flip: true)    // placard del dormitorio 2
+                    ->opening(1, 'P75', 'y', 44, 8)                // placard del dormitorio 3
+                    ->opening(1, 'P75', 'x', 36, 8)                // baño
+                    ->opening(1, 'P75', 'x', 70, 8, flip: true)    // vestidor
+                    ->opening(1, 'P75', 'x', 88, 8)                // baño en suite → dormitorio principal
+                    ->opening(1, 'P87', 'y', 28, 94, flip: true)   // dormitorio principal
+                    ->slab(1, 0, 0, 32, 112)
+                    ->slab(1, 32, 0, 20, 112)
+                    ->slab(1, 52, 0, 20, 112)
+                    ->roofPart(1, 0, 0, 72, 112, 'gable', 'y', 30, '3x12')
+                    ->build(),
+            ],
         ];
     }
 }
