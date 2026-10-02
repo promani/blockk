@@ -13,7 +13,7 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
   detrás de la parte recortada de un muro se elige con un clic, como se ve.
 - **Terreno y pasto**: fuera del lote el suelo sigue del mismo color que el terreno, con matas de pasto; adentro queda
   liso con la retícula. Con «Mostrar terreno» apagado, el fondo es liso.
-- **Frente del terreno**: del lado de la calle se dibujan una **vereda** y una **calle** (por fuera del lote), para ver
+- **Frente del terreno**: del lado de la calle se dibujan (por fuera del lote) una **vereda** de baldosas, una franja de pasto y una **calle** que sigue de borde a borde, para ver
   hacia dónde da el frente. El lado se elige en *Configuraciones generales* → «Frente (calle)»: abajo (por defecto),
   arriba, izquierda o derecha de la planta. Se guarda con el proyecto (`lot.front`); no entra al cómputo ni a la Revisión.
 - **Muebles y árboles se pueden apagar**: en *Configuraciones generales*, las casillas «Muebles» y «Árboles». Apagadas,

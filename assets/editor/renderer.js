@@ -15,8 +15,8 @@ import { backEdge, furnitureOn, treesOn } from './furniture.js';
 
 const G = 12.5;
 
-/** Frente del terreno: ancho de la vereda y de la calzada (cm). */
-const STREET = { walk: 200, road: 700 };
+/** Frente del terreno, desde la línea del lote hacia afuera: vereda de baldosas, franja de pasto y calzada (cm). */
+const STREET = { walk: 125, verge: 325, road: 700 };
 
 /** Opacidad del repaso de un árbol sobre lo que tapa: las ramas se insinúan y las hojas casi no tapan (se enciman muchas). */
 const BRANCH_OVER = 0.45;
@@ -490,7 +490,7 @@ export class Renderer {
 
     /**
      * Calle y vereda sobre el frente del terreno (`lot.front`, un lado de la planta): del lado de afuera, la vereda
-     * pegada a la línea del lote y después la calzada. Sólo indican hacia dónde da el frente: no entran al cómputo.
+     * pegada a la línea del lote, una franja de pasto y la calzada, que sigue hasta donde alcanza la vista. Sólo indican hacia dónde da el frente: no entran al cómputo.
      */
     drawStreet(f) {
         const { ctx } = this;
@@ -502,12 +502,16 @@ export class Renderer {
         const len = across ? W : D;
         const edge = side === 'S' ? D : side === 'E' ? W : 0;
         const out = side === 'S' || side === 'E' ? 1 : -1;
-        const FAR = 8000; // la calle sigue más allá del lote
+        // la calle no termina: va de borde a borde de la pantalla (arranca en un múltiplo del paso de las rayas, así no bailan al mover la vista)
+        const us = [[0, 0], [cam.w, 0], [cam.w, cam.h], [0, cam.h]].map(([x, y]) => cam.unproject(x, y, 0)[across ? 0 : 1]);
+        const u0 = Math.floor(Math.min(...us) / 600) * 600 - 600;
+        const u1 = Math.max(...us) + 600;
+        const road = STREET.walk + STREET.verge;
         // (u a lo largo de la calle, v hacia afuera desde la línea del frente) → pantalla
         const P = (u, v) => (across ? cam.project(u, edge + out * v, 0) : cam.project(edge + out * v, u, 0));
         const band = (v0, v1, color) => {
             ctx.beginPath();
-            [P(-FAR, v0), P(len + FAR, v0), P(len + FAR, v1), P(-FAR, v1)].forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            [P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)].forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
             ctx.closePath();
             ctx.fillStyle = color;
             ctx.fill();
@@ -521,30 +525,31 @@ export class Renderer {
         const k = Math.hypot(P(100, 0)[0] - P(0, 0)[0], P(100, 0)[1] - P(0, 0)[1]) / 100; // px por cm a lo largo
         ctx.save();
         band(0, STREET.walk, '#d8d9dc');
-        band(STREET.walk, STREET.walk + STREET.road, '#7d828c');
-        // juntas de la vereda (cada 2 m) y cordón
-        if (200 * k >= 7) {
+        band(road, road + STREET.road, '#7d828c');
+        // baldosas de la vereda (juntas cada 62,5 cm) y cordón
+        if (62.5 * k >= 5) {
             ctx.strokeStyle = 'rgba(30,41,59,.16)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            for (let u = -FAR; u <= len + FAR; u += 200) line(u, 0, u, STREET.walk);
+            for (let u = u0; u <= u1; u += 62.5) line(u, 0, u, STREET.walk);
+            line(u0, STREET.walk / 2, u1, STREET.walk / 2);
             ctx.stroke();
         }
         ctx.strokeStyle = '#f3f4f6';
         ctx.lineWidth = Math.max(1.5, 12 * k);
         ctx.beginPath();
-        line(-FAR, STREET.walk, len + FAR, STREET.walk);
+        line(u0, road, u1, road);
         ctx.stroke();
         // eje de la calzada, discontinuo
         ctx.strokeStyle = 'rgba(255,255,255,.8)';
         ctx.lineWidth = Math.max(1, 10 * k);
         ctx.setLineDash([300 * k, 300 * k]);
         ctx.beginPath();
-        line(-FAR, STREET.walk + STREET.road / 2, len + FAR, STREET.walk + STREET.road / 2);
+        line(u0, road + STREET.road / 2, u1, road + STREET.road / 2);
         ctx.stroke();
         ctx.setLineDash([]);
         if (cam.view === 'plan') {
-            const [sx, sy] = P(len / 2, STREET.walk + STREET.road / 2);
+            const [sx, sy] = P(len / 2, road + STREET.road / 2);
             ctx.font = '600 12px system-ui, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
