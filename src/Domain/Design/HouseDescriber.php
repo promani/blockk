@@ -117,6 +117,7 @@ final class HouseDescriber
                     'nivel' => $li + 1,
                     'nombre' => ($room['labels'] ?? 0) > 0 ? $room['name'] : ([] !== $label ? implode(' + ', array_unique($label)) : null),
                     'm2' => $room['netM2'],
+                    'tipo' => $room['type'] ?? null,
                     'caja' => [$this->m($b['x']), $this->m($b['y']), $this->m($b['w']), $this->m($b['h'])],
                 ];
             }

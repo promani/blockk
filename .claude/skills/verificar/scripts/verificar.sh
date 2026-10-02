@@ -38,6 +38,9 @@ if [ "${1:-}" != "--rapido" ]; then
     "$ROOT/.claude/skills/capturas/scripts/servidor.sh" || fail=1
     node "$HERE/humo.cjs" || fail=1
 
+    step "Navegador: Mis casas y enlace compartido"
+    node "$HERE/casas.cjs" || fail=1
+
     step "Navegador: chat de diseño (Kimi falso)"
     "$HERE/servidor-ia.sh" || fail=1
     node "$HERE/asistente.cjs" || fail=1

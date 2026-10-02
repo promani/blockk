@@ -4,6 +4,8 @@ import { saveProject, blankProject, loadProject } from '../lib/storage.js';
 import { mountAssistant } from './assistant.js';
 import { carousel } from '../lib/carousel.js';
 import { renderThumbs } from '../editor/snapshot.js';
+import { mountHouses } from './houses.js';
+import { linkHouse } from '../lib/houses.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
 
@@ -34,7 +36,7 @@ export function confirmReplace() {
     const current = loadProject();
     if (!current?.levels?.some((l) => l.walls?.length)) return Promise.resolve(true);
     const dlg = $('#confirm-replace');
-    $('#confirm-text').textContent = `Vas a reemplazar «${current.name || 'Proyecto sin título'}», el proyecto que tenés en el editor. Si lo querés conservar, cancelá y descargalo con «Guardar» en el editor.`;
+    $('#confirm-text').textContent = `Vas a reemplazar «${current.name || 'Proyecto sin título'}», el proyecto que tenés en el editor. Si lo querés conservar, cancelá y guardalo con «Guardar» en el editor.`;
     dlg.returnValue = '';
     dlg.showModal();
     return new Promise((resolve) => dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok'), { once: true }));
@@ -47,6 +49,7 @@ for (const btn of $$('[data-use]')) {
         btn.disabled = true;
         try {
             saveProject(await template(btn.dataset.use));
+            linkHouse(null); // proyecto nuevo: ya no es ninguna de las casas guardadas
             location.href = '/';
         } catch (err) {
             btn.disabled = false;
@@ -61,8 +64,12 @@ $('#blank-form').addEventListener('submit', async (e) => {
     if (!(await confirmReplace())) return;
     const f = Object.fromEntries(new FormData(e.target));
     saveProject(blankProject({ name: String(f.name).trim() || 'Proyecto sin título', lotW: Number(f.lotW), lotD: Number(f.lotD), t: Number(f.t), north: Number(f.north) }));
+    linkHouse(null);
     location.href = '/';
 });
+
+/* Mis casas: las que este navegador guardó desde el editor. */
+mountHouses({ section: $('#my-houses'), confirmReplace });
 
 /* Asistente de diseño por chat (sólo si el servidor lo tiene configurado). */
 if ($('#ai')) mountAssistant({ card: $('#ai'), dialog: $('#ai-dialog'), confirmReplace });

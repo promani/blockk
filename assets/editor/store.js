@@ -32,6 +32,8 @@ export class Store extends EventTarget {
             thickness: 20,
             showLot: true, // terreno pintado
             showGrid: true, // retícula de 1 m / 5 m sobre el terreno
+            showFurniture: true, // muebles simples: se ven y se pueden agregar
+            showTrees: true, // árboles: ídem
             solar: { show: true, hour: 12, season: 'winter', path: null, pathKey: '' },
         };
     }

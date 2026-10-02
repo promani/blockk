@@ -10,10 +10,13 @@ import { createTools, openingBox } from './tools.js';
 import { mountPanels } from './panels.js';
 import { wireBox, snapDots, magnetHit } from './overlay.js';
 import { TREE_SIZES } from './site.js';
+import { furnitureRect, footprint, furnitureOn, treesOn } from './furniture.js';
 import { magnet } from './snap.js';
 import { mountGuide } from './guide.js';
 import { wallRect, G } from './pick.js';
 import { mountAssistant } from './ai.js';
+import { mountShare } from './share.js';
+import { linkHouse } from '../lib/houses.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
 const store = new Store(config);
@@ -29,10 +32,12 @@ const ROOF_LEVEL = 2;
  * desde un nivel lleva a la pestaña Techo.
  */
 const TOOLSETS = {
-    0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['measure', 'block', 'ubeam', 'zone', 'tree'] },
-    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['measure', 'block', 'ubeam', 'beam', 'zone', 'tree'] },
+    0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['measure', 'furniture', 'block', 'ubeam', 'zone', 'tree'] },
+    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['measure', 'furniture', 'block', 'ubeam', 'beam', 'zone', 'tree'] },
     2: { main: ['select', 'roof', 'measure'], more: [] },
 };
+/** Muebles y árboles se pueden apagar («Configuraciones generales»): su herramienta sale de la barra y su atajo no hace nada. */
+const toolHidden = (id) => (id === 'furniture' && !furnitureOn(store.ui)) || (id === 'tree' && !treesOn(store.ui));
 let showMore = false;
 
 let dirty = true;
@@ -63,6 +68,7 @@ app.tools = createTools(app);
 const panels = mountPanels(app);
 app.setTool = (id) => setTool(id);
 mountAssistant(app);
+const share = mountShare(app);
 const guide = mountGuide(app, {
     go: (level, tool) => {
         if (level === 1 && !store.project.upper) return;
@@ -93,7 +99,7 @@ const levelLabel = () => config.levelShort[store.ui.level] ?? 'Techo';
 
 function persistUi() {
     try {
-        localStorage.setItem(UI_KEY, JSON.stringify({ view: store.ui.view, showLot: store.ui.showLot, showGrid: store.ui.showGrid }));
+        localStorage.setItem(UI_KEY, JSON.stringify({ view: store.ui.view, showLot: store.ui.showLot, showGrid: store.ui.showGrid, showFurniture: store.ui.showFurniture, showTrees: store.ui.showTrees }));
     } catch { /* sin persistencia */ }
 }
 
@@ -379,7 +385,7 @@ function setTool(id) {
         id = 'opening';
     }
     const tool = app.tools[id];
-    if (!tool) return;
+    if (!tool || toolHidden(id)) return;
     if (id === 'roof' && store.ui.level !== ROOF_LEVEL) {
         setLevel(ROOF_LEVEL);
         return;
@@ -448,10 +454,11 @@ function renderToolbar() {
     const bar = clear($('#toolbar'));
     const set = TOOLSETS[store.ui.level] ?? TOOLSETS[0];
     for (const id of set.main) bar.append(toolButton(id));
-    if (set.more.length) {
-        const open = showMore || set.more.includes(store.ui.tool);
+    const more = set.more.filter((id) => !toolHidden(id));
+    if (more.length) {
+        const open = showMore || more.includes(store.ui.tool);
         bar.append(h('button', { type: 'button', class: 'tool-more', 'aria-expanded': String(open), onclick: () => { showMore = !open; renderToolbar(); } }, open ? 'Menos ▴' : 'Más ▾'));
-        if (open) for (const id of set.more) bar.append(toolButton(id));
+        if (open) for (const id of more) bar.append(toolButton(id));
     }
 }
 
@@ -616,6 +623,11 @@ function selectionBox(sel) {
         const z = (store.project.zones ?? []).find((x) => x.id === sel.id);
         return z ? { x0: z.x * G, y0: z.y * G, x1: (z.x + z.w) * G, y1: (z.y + z.h) * G, z0: 0, z1: 4 } : null;
     }
+    if (sel.type === 'furniture') {
+        const m = (lv.furniture ?? []).find((x) => x.id === sel.id);
+        const r = m && furnitureRect(config, m);
+        return r ? { x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: base, z1: base + footprint(config, m).h } : null;
+    }
     if (sel.type === 'column') {
         const c = (lv.columns ?? []).find((x) => x.id === sel.id);
         return c ? { x0: c.x * G - c.size / 2, y0: c.y * G - c.size / 2, x1: c.x * G + c.size / 2, y1: c.y * G + c.size / 2, z0: base, z1: base + config.levelHeight } : null;
@@ -708,7 +720,7 @@ function sceneKey() {
     const { level, cut, snap, solar } = store.ui;
     const s = store.ui.solar.show ? store.sun() : null;
     const p = store.project;
-    return [sceneVersion, level, cut, snap, solar.show, store.ui.showLot, store.ui.showGrid, s ? `${s.alt.toFixed(2)}:${s.az.toFixed(2)}` : '-', p.north, p.lot.w, p.lot.d].join(',');
+    return [sceneVersion, level, cut, snap, solar.show, store.ui.showLot, store.ui.showGrid, store.ui.showFurniture, store.ui.showTrees, s ? `${s.alt.toFixed(2)}:${s.az.toFixed(2)}` : '-', p.north, p.lot.w, p.lot.d].join(',');
 }
 
 function draw() {
@@ -751,6 +763,17 @@ store.addEventListener('ui', (e) => {
     // La hora y la época del sol sólo cambian el dibujo: no se redibujan los paneles (cortaría el arrastre del deslizador).
     const keys = Object.keys(e.detail ?? {});
     if (keys.some((k) => k === 'showLot' || k === 'showGrid')) persistUi();
+    if (keys.some((k) => k === 'showFurniture' || k === 'showTrees')) {
+        // Al apagar muebles o árboles se suelta lo que estuviera elegido de eso y se deja su herramienta.
+        persistUi();
+        const type = store.ui.selection?.type;
+        if ((type === 'furniture' && !furnitureOn(store.ui)) || (type === 'tree' && !treesOn(store.ui))) store.ui.selection = null;
+        if (toolHidden(store.ui.tool)) {
+            activeTool().reset?.();
+            store.ui.tool = 'select';
+            refreshOptions();
+        }
+    }
     if (keys.length && keys.every((k) => k === 'solar' || k === 'showLot' || k === 'showGrid')) {
         app.render();
         return;
@@ -809,6 +832,7 @@ $('#file-open').addEventListener('change', async (e) => {
         const data = JSON.parse(await file.text());
         if (!Array.isArray(data.levels)) throw new Error('el archivo no es un proyecto de Blockk');
         await store.load(data);
+        linkHouse(null); // es otro proyecto: al guardarlo queda como una casa nueva
         fitView();
         toast(`Proyecto «${store.project.name}» abierto.`);
     } catch (err) {
@@ -828,6 +852,7 @@ $('#form-new').addEventListener('submit', async (e) => {
     const f = Object.fromEntries(new FormData(e.target));
     dlg.close();
     await store.load(blankProject({ name: String(f.name).trim() || 'Proyecto sin título', lotW: Number(f.lotW), lotD: Number(f.lotD), t: Number(f.t), lat: Number(f.lat) }));
+    linkHouse(null);
     fitView();
     store.ensureSolar();
 });
@@ -839,6 +864,8 @@ $('#form-new').addEventListener('submit', async (e) => {
         if (ui.view) store.setUi({ view: ui.view }, { silent: true });
         if (ui.showLot === false) store.setUi({ showLot: false }, { silent: true });
         if (ui.showGrid === false) store.setUi({ showGrid: false }, { silent: true });
+        if (ui.showFurniture === false) store.setUi({ showFurniture: false }, { silent: true });
+        if (ui.showTrees === false) store.setUi({ showTrees: false }, { silent: true });
     } catch { /* ok */ }
     cam.view = store.ui.view;
     for (const b of $$('#view-toggle button')) b.setAttribute('aria-pressed', String(b.dataset.view === store.ui.view));
@@ -851,6 +878,8 @@ $('#form-new').addEventListener('submit', async (e) => {
 
     const saved = loadProject() ?? blankProject();
     await store.load(saved);
+    // Enlace compartido o «Abrir» de Mis casas: /?casa={id}
+    await share.openFromUrl();
     // En sólo lectura se muestra la casa completa, con techo.
     if (readOnly() && store.project.levels.some((l) => l.walls.length)) setLevel(ROOF_LEVEL);
     fitView();

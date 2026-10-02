@@ -58,9 +58,14 @@ trabajo en equipo).
   Se colocan apuntando al muro (el verde marca lugar
   válido) y se mueven arrastrándolas, también a otro muro. Se eligen por **medida comercial** de carpintería (puerta
   80 × 200, ventana 120 × 110…), que fija el vano modular que la contiene, o **a medida**.
-- **Pilares** de hormigón armado (20 a 40 cm) y **nombres de ambiente** que se ven en la planta.
+- **Pilares** de hormigón armado (20 a 40 cm) y **nombres de ambiente** que se ven en la planta. El nombre es libre y
+  se le puede elegir un **tipo** (dormitorio, baño, cocina…); si no se elige, se deduce del nombre.
 - **Terreno**: **zonas** rectangulares (pileta, patio o deck, jardín, camino) y **árboles** simples (tronco, copa y
   sombra, en tres tamaños). Sirven para pensar la disposición del espacio; no entran al cómputo ni a la Revisión.
+- **Muebles simples** como gabarito de tamaño real (camas, placard, mesas con sillas, sillones, mesadas, artefactos de
+  baño…): rectángulos con su nombre en la planta y cajas bajas en la isométrica. Sirven para ver si un ambiente
+  alcanza; no entran al cómputo. Los muebles y los árboles se **apagan** con un interruptor: dejan de verse y sus
+  herramientas salen de la barra.
 - **Dos niveles + techo**: Nivel 1, Nivel 2 (con piso: losa de hormigón o entrepiso de madera) y pestaña Techo.
 - **Escaleras**: recta, en L y en U, con ancho, huella y giro; abren el hueco en el piso de arriba.
 - **Techos** rectangulares a dos aguas o a un agua, que se apoyan solos en los muros, se cruzan y se cortan entre sí
@@ -82,7 +87,10 @@ trabajo en equipo).
 - **Revisión constructiva** en vivo, con errores, advertencias e información, cada una vinculada al elemento que la
   causa: jambas de 25 cm, 60 % de vanos en muros portantes, luces de dintel, esbeltez, apoyos del Nivel 2 y de
   pilares, luces de losa y de madera. Los techos se dibujan para ver la casa completa y computar la madera: no generan observaciones.
-- **Resumen y panel contextual**: lo que se muestra cambia según la herramienta o el elemento elegido.
+- **Recomendaciones por tipo de ambiente**: estar, comedor, dormitorio o escritorio sin ventana (advertencia); baño,
+  cocina o lavadero sin ventilación y superficie por debajo de la referencia (nota). Son recomendaciones, no normativa.
+- **Resumen y panel contextual**: lo que se muestra cambia según la herramienta o el elemento elegido; incluye los
+  **m² útiles por tipo de ambiente**.
 
 ### 3.3 Calcular (cómputo)
 
@@ -112,6 +120,9 @@ trabajo en equipo).
 ### 3.5 Guardar y compartir
 
 - El proyecto vive en el **navegador** y se **descarga y abre como `.json`**; sin cuenta ni instalación.
+- **Mis casas**: «Guardar» en el editor deja la casa en el servidor (hasta 30 por navegador, 1 año desde el último
+  uso), sin cuenta: se reconoce al navegador por un id aleatorio y sólo él las ve en la Galería. **Compartir** da un
+  enlace (`/c/{id}`); quien lo abre ve la casa y trabaja sobre una copia.
 - **Galería** con 3 plantillas calculadas por el mismo motor (casa en L, vivienda evolutiva, dos plantas con garaje y
   alfresco) más los modelos que se agreguen por la API, con miniaturas de planta e isométrica.
 - **API de administración** con token para que otra herramienta (por ejemplo Claude Code) cree, edite y borre modelos
@@ -124,25 +135,25 @@ trabajo en equipo).
 
 | No hay | Por qué |
 | --- | --- |
-| Texturas, materiales de terminación y muebles de catálogo | No cambian el cómputo de mampostería; agregan peso y distraen. Los **muebles simples como gabarito** (camas, mesas, mesadas, artefactos de baño) están en el [BACKLOG.md](BACKLOG.md): sirven para validar medidas, no para decorar. |
+| Texturas, materiales de terminación y muebles de catálogo | No cambian el cómputo de mampostería; agregan peso y distraen. Los **muebles simples como gabarito** (camas, mesas, mesadas, artefactos de baño) sí existen: sirven para validar medidas, no para decorar. |
 | Render fotorrealista y recorrido virtual | El dibujo es esquemático para entender la casa, no para venderla. |
 | Cotas, cortes y planos de taller | La herramienta calcula materiales; no documenta una obra. |
 | Muros curvos o diagonales, retículas libres | Todo el motor (trabas, cortes, jambas) depende de muros a 90° sobre la retícula del bloque. |
 | Más de 2 plantas con muros portantes | Es el límite autoportante del sistema (PB + PA ≤ 6 m). |
 | Cálculo estructural, sísmico y térmico detallado | Se predimensiona y se avisa; el cálculo es de un profesional. |
 | Instalaciones (agua, gas, electricidad) | Fuera del foco de mampostería; ver backlog para un cómputo grueso. |
-| Cuentas, nube y trabajo en equipo | Cero fricción de entrada; el archivo `.json` es el medio de intercambio. |
+| Cuentas y trabajo en equipo | Cero fricción de entrada: las casas guardadas se reconocen por el navegador y se comparten por enlace o como `.json`. |
 | Precios reales, stock y flete de distribuidores | Los precios son de referencia y editables; cada distribuidor cotiza lo suyo. |
 
 ### 4.2 Todavía no (ver [BACKLOG.md](BACKLOG.md))
 
-- Un **tipo** por ambiente (dormitorio, baño…) con revisiones propias; hoy el nombre es texto libre.
-- **Muebles simples** como gabarito (camas, mesa con sillas, mesadas, artefactos de baño).
+- Reglas de circulación por tipo de ambiente (dormitorio de paso, baño que abre a la cocina).
+- Que la Revisión use los muebles (paso libre, puertas que los pisan) y que el asistente los coloque.
 - Vigas libres, techo a cuatro aguas o de forma libre, balcones y voladizos, terreno en pendiente y retiros.
 - Planos exportables con cotas; el plano como fondo en la planta para corregir el calcado a mano; adjuntar un PDF.
 - **Mano de obra**: jornales, plazo y costo por rubro (hoy el presupuesto es sólo de materiales).
 - **Losas y entrepisos**: viguetas, paneles, voladizos, doble altura y cubierta plana (hoy, losa maciza o madera).
-- Guardado y enlace compartible; comparar alternativas de una misma casa.
+- Comparar dos casas guardadas lado a lado.
 - Otros sistemas constructivos (ladrillo cerámico, steel frame) y otras marcas de bloque con datos reales.
 - Instalaciones y rubros de obra más allá de la mampostería, estructura y cubierta.
 - Edición desde el celular; el asistente con todas las operaciones del editor (pilares, nombres, aberturas).

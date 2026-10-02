@@ -70,6 +70,8 @@ export function issueMatches(issue, ctx, store) {
         case 'room': {
             const room = store.analysis?.levels?.[level]?.rooms?.find((r) => r.id === ctx.id);
             if (!room) return false;
+            // recomendaciones del tipo de ambiente: apuntan a un punto de adentro
+            if (String(issue.code).startsWith('room.')) return issue.level === level && (room.fill ?? []).some(([x, y, w, h]) => issue.x >= x && issue.x < x + w && issue.y >= y && issue.y < y + h);
             const lv = p.levels[level];
             const walls = roomWalls(room, lv.walls).map((w) => w.id);
             const refs = new Set([...walls, ...lv.openings.filter((o) => walls.includes(o.wall)).map((o) => o.id)]);

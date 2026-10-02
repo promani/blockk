@@ -480,3 +480,12 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 .nd-hub { fill: var(--graphite); }
 .nd-label { font: 700 12px system-ui, sans-serif; fill: #d92d20; }
 .north-info { display: flex; flex-direction: column; gap: 4px; }
+
+/* ---------- mis casas y compartir ---------- */
+.my-houses { margin-bottom: 22px; }
+.my-houses h2 { margin-bottom: 2px; }
+.my-houses .cards { margin-top: 10px; }
+.my-houses h3 { margin: 0; font-size: 1.05rem; }
+.house-thumb { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: contain; }
+.share-row { display: flex; gap: 8px; margin: 10px 0 6px; }
+.share-link { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }

@@ -14,7 +14,7 @@ Un ítem entra al backlog si cumple **las tres**:
 3. **Pierde detalle a propósito**: si pide más detalle del que cambia el cómputo o la coherencia constructiva, se
    descarta o se achica.
 
-Lo que queda **fuera** aunque pidan: texturas y muebles de catálogo con marcas y colores (los **gabaritos** simples de tamaño real sí están en el backlog), render fotorrealista, curvas y diagonales, cálculo estructural
+Lo que queda **fuera** aunque pidan: texturas y muebles de catálogo con marcas y colores (los **gabaritos** simples de tamaño real ya existen), render fotorrealista, curvas y diagonales, cálculo estructural
 detallado, instalaciones completas, edición colaborativa en tiempo real.
 
 Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–2 semanas) / L (más de dos semanas o con riesgo).
@@ -23,11 +23,11 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 
 | # | Ítem | Valor | Costo | Por qué ahora |
 | --- | --- | :---: | :---: | --- |
-| 1 | Tipo de ambiente y revisión por tipo | 5 | M | Los nombres ya están; el tipo habilita avisos útiles y un cómputo por ambiente. |
-| 2 | Guardar y compartir por enlace | 5 | M | Hoy un proyecto muere en un navegador; el cómputo se comparte con el distribuidor. |
+| 1 | Tipo de ambiente: lo que falta (más reglas por tipo) | 3 | S–M | El tipo y las primeras recomendaciones ya están; faltan las de circulación y el cómputo por ambiente. |
+| 2 | Guardar y compartir: lo que falta (sólo lectura, renombrar) | 2 | S | «Mis casas» y el enlace ya están; quedan detalles. |
 | 3 | Calcar un plano: lo que falta (fondo a escala, PDF, escalera) | 4 | M | El asistente ya calca la imagen de un plano; falta corregirlo a mano contra el original. |
-| 4 | Comparar alternativas de una casa | 4 | M | Responde «¿2 o 3 dormitorios?» con números lado a lado. |
-| 5 | Muebles simples como gabarito | 4 | M | Con camas, mesas, mesadas y artefactos a escala se ve si una habitación alcanza y si la puerta abre. |
+| 4 | Comparar dos casas guardadas | 4 | S–M | Responde «¿2 o 3 dormitorios?» con números lado a lado, sobre lo que ya está en «Mis casas». |
+| 5 | Muebles: lo que falta (revisión de paso, asistente) | 3 | S–M | Los gabaritos ya se colocan; falta que la Revisión avise cuando no hay paso o una puerta los pisa. |
 | 6 | Pedido por etapas y lista de compra | 4 | S–M | Nadie compra todo junto: cimientos, paredes, techo. |
 | 7 | Precios por distribuidor (listas importables) | 4 | M | Pasa de «referencia» a «presupuesto que se puede llevar al corralón». |
 | 8 | El asistente con todas las operaciones | 4 | M | La conversación pierde sentido si no puede hacer lo que hace el editor. |
@@ -45,23 +45,24 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 
 ## Detalle
 
-### 1. Tipo de ambiente y revisión por tipo (valor 5 · M)
-- **Qué**: cada nombre de ambiente lleva un tipo (estar, dormitorio, baño, cocina, garaje…), que se elige al nombrar
-  y que el generador y las plantillas ya conocen.
-- **Qué habilita**: avisos de uso (dormitorio sin ventana, baño o cocina sin ventilación, superficie mínima, escalera
-  que llega a un dormitorio), m² por tipo en el cómputo y el resumen, y ambientes «de servicio» que no cuentan como
-  superficie habitable.
-- **Complejidad**: baja en el modelo, media en las reglas; son reglas nuevas en el validador, no un editor nuevo.
+### 1. Tipo de ambiente: lo que falta (valor 3 · S–M)
+- **Hecho**: el nombre de un ambiente es libre y, además, se le puede elegir un **tipo** (estar, dormitorio, baño,
+  cocina, garaje…); si no se elige, se deduce del nombre. La Revisión da recomendaciones por tipo (ambiente principal
+  sin ventana, baño, cocina o lavadero sin ventilación, superficie por debajo de la referencia) y el Resumen muestra
+  los m² útiles por tipo.
+- **Qué falta**: reglas de circulación (escalera que llega a un dormitorio, baño que abre a la cocina, dormitorio
+  de paso), ambientes «de servicio» que no cuenten como superficie habitable, m² por tipo en la página de Cómputo y
+  el PDF, y que el asistente elija el tipo al generar y al calcar.
 - **Riesgo**: que las reglas parezcan normativa; se presentan como recomendaciones, igual que hoy.
 
-### 2. Guardar y compartir por enlace (valor 5 · M)
-- **Qué**: un botón «Compartir» que guarda el proyecto en el servidor (con un identificador largo e impredecible, como ya
-  hace la API de modelos) y devuelve un enlace de solo lectura que abre el editor con esa casa; opcionalmente editable
-  por quien lo tenga.
-- **Por qué**: hoy el `.json` viaja por mail y el cómputo no se puede mirar desde otro lado. Un enlace sirve para el
-  distribuidor, el constructor y la pareja que opina.
-- **Sin cuentas**: el enlace es la credencial; vence a los 60 días como los diseños del asistente.
-- **Complejidad**: persistencia (ya hay Redis), límites de uso y tamaño, y decidir qué pasa con el borrado.
+### 2. Guardar y compartir: lo que falta (valor 2 · S)
+- **Hecho**: «Guardar» deja la casa en «Mis casas» (Redis, hasta 30 por navegador, 1 año desde el último uso) y
+  «Compartir» da un enlace (`/c/{id}`). Sin cuentas: al navegador se lo reconoce por un id aleatorio y sólo él ve sus
+  casas en la Galería. Quien abre un enlace ajeno trabaja sobre una copia; la original no cambia.
+- **Qué falta**: un enlace que muestre una **versión fija** (hoy muestra siempre lo último que guardó el dueño),
+  renombrar una casa guardada sin abrirla, abrir el Cómputo directo desde el enlace y llevar «Mis casas» a otro
+  navegador (hoy, compartiéndose el enlace a uno mismo).
+- **Abierto**: si hacen falta cuentas. Mientras alcance con el navegador y el enlace, no.
 
 ### 3. Calcar un plano: lo que falta (valor 4 · M)
 - **Hecho**: el asistente calca la **imagen de un plano adjunta** (clip del chat): lee los ambientes y sus cotas y arma
@@ -75,31 +76,27 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
   - Sentido de las puertas, pilares y medidas de carpintería leídas del plano.
 - **Complejidad**: cámara, escala y opacidad en el renderer para el fondo; sin cambios en el motor.
 
-### 4. Comparar alternativas (valor 4 · M)
-- **Qué**: guardar variantes de una casa («2 dormitorios», «3 dormitorios») y ver lado a lado superficie, bloques,
-  pallets y costo, con la diferencia de cada una contra la base.
-- **Por qué**: es el uso típico de evaluación y encaja con el asistente («probá con un dormitorio más»).
-- **Complejidad**: varias versiones por proyecto y una vista de comparación; el motor ya calcula cualquier proyecto.
+### 4. Comparar dos casas guardadas (valor 4 · S–M)
+- **Qué**: en «Mis casas» se eligen **dos casas guardadas** y se ven lado a lado: superficie útil y cubierta, m² por
+  tipo de ambiente, bloques por espesor, pallets, adhesivo, madera, costo de referencia y observaciones de la
+  Revisión, con la diferencia de la segunda contra la primera.
+- **Alcance**: sólo entre dos casas, y sólo entre las guardadas por ese navegador. No hay «variantes» ni versiones
+  de un proyecto: quien quiere comparar alternativas guarda cada una como una casa (por ejemplo, la original y la
+  que devolvió el asistente con un dormitorio más) y las compara.
+- **Por qué**: es el uso típico de evaluación («¿2 o 3 dormitorios?», «¿1 o 2 plantas?») y no agrega conceptos nuevos:
+  se apoya en el guardado que ya existe.
+- **Complejidad**: una vista de comparación sobre el resumen y el cómputo de dos casas; el motor ya calcula cualquier
+  proyecto y las casas guardadas ya tienen su resumen. Sin cambios en el editor ni en el almacenamiento.
 
-### 5. Muebles simples como gabarito (valor 4 · M)
-- **Qué**: un **catálogo corto de piezas de tamaño real**, dibujadas como símbolos planos en la planta (y como cajas
-  simples en la isométrica), que se colocan, se arrastran y se giran de a 90°:
-  - **Camas**: una plaza (90 × 190 cm), una plaza y media (105 × 190), dos plazas (140 × 190) y king size (180 × 200).
-  - **Mesa con sillas**: para 2, 4, 6 y 8 sillas; una sola pieza con un selector de cantidad (la mesa crece con las
-    sillas: 80 × 80, 120 × 80, 180 × 90, 240 × 100 cm aproximadamente).
-  - **Mesadas**: lineal, en L, en U e isla, de 60 cm de profundidad, con símbolos de bacha y de anafe.
-  - **Elementos de baño**: inodoro, bidet, lavatorio, ducha (80 × 80 o 90 × 90), bañera (170 × 70) y pileta de lavadero.
-  - Después, si hace falta: placard (60 cm de fondo), sillón, escritorio.
-- **Por qué**: son **gabaritos, no decoración**. Responden preguntas de diseño que hoy se hacen a ojo: ¿entra una cama
-  de dos plazas con mesas de luz?, ¿la puerta del baño abre sin pegar en el inodoro?, ¿queda 70 cm entre la mesa y la
-  pared? Es la forma más barata de validar los lineamientos de circulación de [docs/DESIGN.md](docs/DESIGN.md).
-- **Qué no hace**: no entra al cómputo, no tiene materiales ni marcas ni colores, no se renderiza fotorrealista. Es el
-  mínimo detalle que mejora la decisión; encaja con el principio de perder detalle a propósito.
-- **Encadena con**: el tipo de ambiente (1) puede proponer los muebles de cada uno, y las revisiones de uso (arcos de
-  puerta que pisan un mueble, paso libre ≥ 70 cm) usan sus huellas. El asistente podría pedirlos («poné una cama de
-  dos plazas en el dormitorio 2»).
-- **Complejidad**: un elemento nuevo con rotación y huella, sus símbolos y la interacción de colocar y girar; las
-  reglas de revisión vienen después.
+### 5. Muebles: lo que falta (valor 3 · S–M)
+- **Hecho**: herramienta «Mueble» con un catálogo corto de **gabaritos de tamaño real** (camas, mesa de luz, placard,
+  mesas con sillas, sillones, mesadas, isla, heladera, cocina, lavarropas, artefactos de baño, escritorio), dibujados
+  como rectángulos con su nombre en la planta y cajas bajas en la isométrica. Se colocan, se giran de a 90°, se
+  arrastran, se copian y se apagan con un interruptor (igual que los árboles). No entran al cómputo ni a la Revisión.
+- **Qué falta**: revisiones de uso con sus huellas (arco de una puerta que pisa un mueble, paso libre menor a 70 cm,
+  mueble que tapa una ventana), que el tipo de ambiente (1) proponga los muebles habituales, y que el asistente los
+  pueda pedir («poné una cama de dos plazas en el dormitorio 2»).
+- **Qué no hace**: sin materiales, marcas ni colores, y sin render. Es el mínimo detalle que mejora la decisión.
 
 ### 6. Pedido por etapas y lista de compra (valor 4 · S–M)
 - **Qué**: dividir el cómputo en etapas (cimientos y primera hilada, mampostería de Nivel 1, entrepiso, Nivel 2,

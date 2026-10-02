@@ -10,8 +10,10 @@
  */
 import { h, add, clear, svgEl } from './dom.js';
 import { fmt, int } from './format.js';
+import { clientId } from './client.js';
 
-const CLIENT_KEY = 'blockk.client';
+export { clientId };
+
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const IMAGE_SIDE = 1600; // px del lado mayor: alcanza para leer las cotas de un plano
 const IMAGE_MAX = 900000; // caracteres en base64 (el servidor admite hasta 1 000 000)
@@ -46,20 +48,6 @@ async function shrinkImage(file) {
         const datos = url.slice(url.indexOf(',') + 1);
         if (datos.length <= IMAGE_MAX || side <= 600) return { tipo: 'image/jpeg', datos, url };
         side = Math.round(side * 0.8);
-    }
-}
-
-export function clientId() {
-    try {
-        let id = localStorage.getItem(CLIENT_KEY);
-        if (!id || !/^[a-f0-9]{24}$/.test(id)) {
-            const bytes = window.crypto.getRandomValues(new Uint8Array(12));
-            id = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-            localStorage.setItem(CLIENT_KEY, id);
-        }
-        return id;
-    } catch {
-        return 'f'.repeat(24);
     }
 }
 

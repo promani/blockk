@@ -16,6 +16,7 @@ final readonly class Level
      * @param list<Stair>         $stairs   escaleras que suben desde este nivel
      * @param list<Column>        $columns  pilares de hormigón
      * @param list<Label>         $labels   nombres de los ambientes
+     * @param list<Furniture>     $furniture muebles simples (gabaritos; no entran al cómputo)
      */
     public function __construct(
         public array $walls = [],
@@ -26,6 +27,7 @@ final readonly class Level
         public array $stairs = [],
         public array $columns = [],
         public array $labels = [],
+        public array $furniture = [],
     ) {
     }
 
@@ -58,13 +60,13 @@ final readonly class Level
      */
     public function withStructure(array $walls, array $openings, array $ubeams): self
     {
-        return new self($walls, $openings, $ubeams, $this->timber, $this->slabs, $this->stairs, $this->columns, $this->labels);
+        return new self($walls, $openings, $ubeams, $this->timber, $this->slabs, $this->stairs, $this->columns, $this->labels, $this->furniture);
     }
 
     /** @param list<TimberElement> $timber */
     public function withTimber(array $timber): self
     {
-        return new self($this->walls, $this->openings, $this->ubeams, $timber, $this->slabs, $this->stairs, $this->columns, $this->labels);
+        return new self($this->walls, $this->openings, $this->ubeams, $timber, $this->slabs, $this->stairs, $this->columns, $this->labels, $this->furniture);
     }
 
     /** @return array<string, mixed> */
@@ -79,6 +81,8 @@ final readonly class Level
             'stairs' => array_map(static fn (Stair $t): array => $t->toArray(), $this->stairs),
             'columns' => array_map(static fn (Column $c): array => $c->toArray(), $this->columns),
             'labels' => array_map(static fn (Label $l): array => $l->toArray(), $this->labels),
+            // sin muebles no se agrega la clave: los proyectos que no los usan quedan como antes
+            ...([] === $this->furniture ? [] : ['furniture' => array_map(static fn (Furniture $f): array => $f->toArray(), $this->furniture)]),
         ];
     }
 }

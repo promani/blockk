@@ -7,8 +7,9 @@ import { anchorLines } from './snap.js';
 import { sideLabel } from '../lib/orient.js';
 import { collinearChain } from './wallmove.js';
 import { OPENING_TYPES, openingTitle, defaultMode, turnOptions, turnValue, applyTurn, commercialFor, commercialOf } from './openings.js';
-import { roomNamesList, roomAnchor } from './names.js';
+import { roomNamesList, roomAnchor, roomTypeItems, nameForType, setLabelType } from './names.js';
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
+import { footprint, furnitureGroups, turnFurniture } from './furniture.js';
 import { contextOf, CONTEXT_TITLE, roomWalls, facing, openingM2, issueMatches } from './context.js';
 
 const G = 12.5;
@@ -199,6 +200,10 @@ export function mountPanels(app) {
                     h('dt', {}, 'Habitaciones'), h('dd', {}, int(lv.rooms)),
                     h('dt', {}, 'Bloques del nivel'), h('dd', {}, int(lv.blocks))),
                 t.slabM2 > 0 || t.stairs > 0 ? h('dl', { class: 'dl' }, t.slabM2 > 0 ? [h('dt', {}, 'Losa de piso'), h('dd', {}, m2(t.slabM2))] : null, t.stairs > 0 ? [h('dt', {}, 'Escaleras'), h('dd', {}, int(t.stairs))] : null) : null,
+                t.byType?.some((x) => x.type) ? [
+                    h('div', { class: 'kv-title' }, 'Superficie útil por tipo de ambiente'),
+                    h('dl', { class: 'dl' }, t.byType.map((x) => [h('dt', {}, `${x.label}${x.rooms > 1 ? ` (${x.rooms})` : ''}`), h('dd', {}, m2(x.m2))])),
+                ] : null,
                 h('div', { class: 'kv-title' }, 'Obra completa'),
                 h('div', { class: `meter${full ? ' full' : ''}`, title: 'Altura autoportante' }, h('i', { style: `width:${Math.min(100, (tot.heightM / tot.maxHeightM) * 100)}%` })),
                 h('dl', { class: 'dl' },
@@ -245,6 +250,7 @@ export function mountPanels(app) {
             else if (sel_.type === 'tree') d.trees = (d.trees ?? []).filter((x) => x.id !== sel_.id);
             else if (sel_.type === 'zone') d.zones = (d.zones ?? []).filter((x) => x.id !== sel_.id);
             else if (sel_.type === 'column') lv.columns = (lv.columns ?? []).filter((x) => x.id !== sel_.id);
+            else if (sel_.type === 'furniture') lv.furniture = (lv.furniture ?? []).filter((x) => x.id !== sel_.id);
             else if (sel_.type === 'label') lv.labels = (lv.labels ?? []).filter((x) => x.id !== sel_.id);
         });
     }
@@ -517,6 +523,24 @@ export function mountPanels(app) {
             return;
         }
 
+        if (s?.type === 'furniture') {
+            const m = (lv.furniture ?? []).find((x) => x.id === s.id);
+            const size = m && footprint(cfg, m);
+            if (!size) return void (store.ui.selection = null);
+            const upd = (fn) => modify('Editar mueble', (l) => fn(l.furniture.find((x) => x.id === m.id)));
+            add(el.props,
+                h('div', { class: 'kv-title' }, 'Mueble'),
+                field('Mueble', h('select', { onchange: (e) => upd((x) => { x.kind = e.target.value; }) },
+                    furnitureGroups(cfg).map(([group, items]) => h('optgroup', { label: group }, items.map(([id, def]) => h('option', { value: id, selected: id === m.kind }, def.name)))))),
+                h('dl', { class: 'dl' }, h('dt', {}, 'Ocupa'), h('dd', {}, `${cm(size.w)} × ${cm(size.d)} cm`), h('dt', {}, 'Alto'), h('dd', {}, `${cm(size.def.h)} cm`)),
+                h('div', { class: 'actions-row' },
+                    h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => upd((x) => Object.assign(x, turnFurniture(cfg, x))) }, 'Girar 90°'),
+                    delBtn),
+                h('p', { class: 'muted small' }, 'Es un gabarito para ver si el ambiente alcanza: no entra al cómputo. Para moverlo, arrastralo.'),
+            );
+            return;
+        }
+
         if (s?.type === 'column') {
             const c = (lv.columns ?? []).find((x) => x.id === s.id);
             if (!c) return void (store.ui.selection = null);
@@ -536,6 +560,7 @@ export function mountPanels(app) {
             if (!lb) return void (store.ui.selection = null);
             add(el.props,
                 h('div', { class: 'kv-title' }, 'Nombre de ambiente'),
+                field('Tipo', sel(lb.type ?? '', roomTypeItems(cfg, (store.analysis?.levels?.[store.ui.level]?.rooms ?? []).find((r) => r.id === (store.analysis?.levels?.[store.ui.level]?.labels ?? []).find((x) => x.id === lb.id)?.room)?.type), (v) => modify('Tipo de ambiente', (l) => setLabelType(cfg, l.labels.find((x) => x.id === lb.id), v)))),
                 field('Nombre', h('input', { type: 'text', list: 'room-names', maxlength: 40, value: lb.name, onchange: (e) => modify('Renombrar ambiente', (l) => { l.labels.find((x) => x.id === lb.id).name = e.target.value.trim(); }) })),
                 roomNamesList(),
                 h('div', { class: 'actions-row' }, delBtn),
@@ -574,7 +599,16 @@ export function mountPanels(app) {
                         else if (cur) cur.name = name;
                         else if (name !== '') l.labels.push({ id: nextId(d, 'n'), ...roomAnchor(room), name });
                     });
+                    // El tipo se elige acá o se deduce del nombre; con sólo elegirlo, el ambiente queda nombrado.
+                    const setType = (type) => store.commit('Tipo de ambiente', (d) => {
+                        const l = d.levels[store.ui.level];
+                        l.labels ??= [];
+                        const cur = named[0] && l.labels.find((x) => x.id === named[0].id);
+                        if (cur) setLabelType(cfg, cur, type);
+                        else if (type) l.labels.push({ id: nextId(d, 'n'), ...roomAnchor(room), name: nameForType(cfg, type, ''), type });
+                    });
                     return h('div', {},
+                        field('Tipo', sel(named[0]?.type ?? '', roomTypeItems(cfg, named[0]?.type ? null : room.type), setType)),
                         field('Nombre', h('input', { type: 'text', list: 'room-names', maxlength: 40, value: named[0]?.name ?? '', placeholder: 'Ej.: Dormitorio', onchange: (e) => setName(e.target.value.trim()) })),
                         roomNamesList(),
                         named.length > 1 ? h('p', { class: 'muted small' }, 'Este espacio tiene varios nombres: elegí cada uno en la planta.') : null);
@@ -706,6 +740,10 @@ export function mountPanels(app) {
             h('div', { class: 'check-row' },
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', checked: store.ui.showLot !== false, onchange: (e) => store.setUi({ showLot: e.target.checked }) }), 'Mostrar terreno'),
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', checked: store.ui.showGrid !== false, onchange: (e) => store.setUi({ showGrid: e.target.checked }) }), 'Mostrar cuadrícula')),
+            // Muebles y árboles se pueden apagar: no se dibujan, no se eligen y su herramienta sale de la barra.
+            h('div', { class: 'check-row' },
+                h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', id: 'opt-furniture', checked: store.ui.showFurniture !== false, onchange: (e) => store.setUi({ showFurniture: e.target.checked }) }), 'Muebles'),
+                h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', id: 'opt-trees', checked: store.ui.showTrees !== false, onchange: (e) => store.setUi({ showTrees: e.target.checked }) }), 'Árboles')),
             h('div', { class: 'kv-title' }, 'Norte'),
             northDial(),
             h('div', { class: 'kv-title' }, 'Sol y orientación'),

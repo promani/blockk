@@ -19,6 +19,7 @@ use App\Domain\Roof\RoofPlanner;
 use App\Domain\Timber\TimberPlanner;
 use App\Domain\Validation\Issue;
 use App\Domain\Validation\ProjectValidator;
+use App\Domain\Validation\RoomReview;
 
 /**
  * Orquesta todo el pipeline de un proyecto: normalización → topología → regiones → despiece por hiladas →
@@ -37,6 +38,7 @@ final class ProjectAnalyzer
         private readonly BomCalculator $bom = new BomCalculator(),
         private readonly ProjectValidator $validator = new ProjectValidator(),
         private readonly OpeningPlacement $placement = new OpeningPlacement(),
+        private readonly RoomReview $roomReview = new RoomReview(),
     ) {
     }
 
@@ -111,6 +113,9 @@ final class ProjectAnalyzer
             $extras,
         );
         $issues = $this->validator->validate($normalized, $levels, $timber);
+        foreach ($levels as $i => $l) {
+            array_push($issues, ...$this->roomReview->review($i, $l));
+        }
         foreach ([...$stairPlan->issues, ...$slabPlan->issues, ...$roofPlan->issues] as $i) {
             $issues[] = Issue::fromArray($i);
         }
@@ -125,7 +130,7 @@ final class ProjectAnalyzer
                 'roof' => $roofPlan->toArray(),
                 'bom' => $bom,
                 'issues' => array_map(static fn (Issue $i): array => $i->toArray(), $issues),
-                'telemetry' => $this->telemetry($normalized, $levels, $bom) + ['roof' => ['count' => count($roofPlan->parts), 'coverM2' => $roofPlan->bom()['coverM2']], 'slabM2' => $slabPlan->bom['areaM2'], 'stairs' => $stairPlan->bom['count']],
+                'telemetry' => $this->telemetry($normalized, $levels, $bom) + ['byType' => $this->roomReview->areas($levels)] + ['roof' => ['count' => count($roofPlan->parts), 'coverM2' => $roofPlan->bom()['coverM2']], 'slabM2' => $slabPlan->bom['areaM2'], 'stairs' => $stairPlan->bom['count']],
             ],
         ];
     }
@@ -151,6 +156,10 @@ final class ProjectAnalyzer
         $rooms = array_map(static fn ($r): array => $r->toArray() + ['fill' => $shapes[$r->id]['fill'] ?? [], 'corners' => $shapes[$r->id]['corners'] ?? []], $l->regions->rooms);
 
         [$rooms, $labels] = $this->nameRooms($rooms, $l->level->labels);
+        $types = $this->roomReview->types($l);
+        foreach ($rooms as $i => $r) {
+            $rooms[$i]['type'] = $types[$r['id']] ?? null;
+        }
 
         return [
             'used' => !$l->level->isEmpty(),

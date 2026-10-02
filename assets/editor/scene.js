@@ -7,8 +7,9 @@
  */
 
 import { TREE_SIZES } from './site.js';
+import { furnitureRect, footprint } from './furniture.js';
 
-export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8, STEP: 9, SLAB: 10, ROOF: 11, FRAME: 12, COLUMN: 13, TREE: 14 };
+export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8, STEP: 9, SLAB: 10, ROOF: 11, FRAME: 12, COLUMN: 13, TREE: 14, FURNITURE: 15 };
 
 const G = 12.5;
 const COURSE_H = 25;
@@ -23,6 +24,7 @@ export function buildScene(project, analysis, config) {
         addMasonry(boxes, courses, base, li);
         addOpenings(boxes, project.levels[li], base, li);
         addColumns(boxes, project.levels[li], base, li, config);
+        addFurniture(boxes, project.levels[li], base, li, config);
         levels.push({ index: li, boxes, base, used: (analysis.levels[li]?.used ?? false) });
     }
     const timber = buildTimber(analysis.timber, config);
@@ -30,7 +32,12 @@ export function buildScene(project, analysis, config) {
     const roofs = buildRoofs(analysis.roof);
     const trees = (project.trees ?? []).map(treeBox);
     const all = [...levels.flatMap((l) => l.boxes), ...timber.boxes, ...floors, ...roofs, ...trees];
-    return { levels, timber, all, sorted: new Map() };
+    // Muebles para la planta: la huella ya resuelta con el catálogo (el renderer no conoce la configuración).
+    const furniture = project.levels.map((level) => (level.furniture ?? []).flatMap((f) => {
+        const rect = furnitureRect(config, f);
+        return rect ? [{ id: f.id, rect, rot: f.rot, short: config.furniture[f.kind].short, back: Boolean(config.furniture[f.kind].back) }] : [];
+    }));
+    return { levels, timber, all, furniture, sorted: new Map() };
 }
 
 function addMasonry(boxes, courses, base, li) {
@@ -127,6 +134,31 @@ function addColumns(boxes, level, base, li, config) {
             flat: true,
             level: li,
             column: c.id,
+        });
+    }
+}
+
+/** Muebles simples: una caja lisa de un solo color, de la altura del mueble. */
+function addFurniture(boxes, level, base, li, config) {
+    for (const f of level.furniture ?? []) {
+        const rect = furnitureRect(config, f);
+        if (!rect) continue;
+        boxes.push({
+            x0: rect[0],
+            x1: rect[2],
+            y0: rect[1],
+            y1: rect[3],
+            z0: base,
+            z1: base + footprint(config, f).h,
+            zs: base,
+            kind: KIND.FURNITURE,
+            axis: 'x',
+            adjA: false,
+            adjB: false,
+            top: true,
+            flat: true,
+            level: li,
+            furniture: f.id,
         });
     }
 }

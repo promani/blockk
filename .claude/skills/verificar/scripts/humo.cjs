@@ -230,6 +230,51 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     await focusCanvas();
     await page.keyboard.press('Escape');
 
+    // Muebles simples: colocar girado, mover arrastrando, girar desde el panel; y apagar muebles y árboles
+    const furniture = () => page.evaluate(() => window.blockk.store.project.levels[0].furniture ?? []);
+    await page.keyboard.press('g');
+    await page.selectOption('#tooloptions label:has-text("Mueble") select', 'cama2');
+    await focusCanvas();
+    await page.keyboard.press('x');
+    await at(300, 250);
+    await ready();
+    let bed = (await furniture())[0];
+    log(bed?.kind === 'cama2' && bed.rot === 1 && bed.x === 16 && bed.y === 14, `mueble colocado y girado (${bed ? `${bed.kind}, giro ${bed.rot}, en ${bed.x},${bed.y}` : 'ninguno'})`);
+    await page.click('.tool:has-text("Elegir")');
+    await drag([360, 300], [460, 350]); // lejos del nombre del ambiente, que está en el centro
+    await page.waitForTimeout(200);
+    await ready();
+    bed = (await furniture())[0];
+    log(bed.x === 24 && bed.y === 18 && await page.evaluate(() => window.blockk.store.ui.selection?.type) === 'furniture', `el mueble se mueve arrastrándolo (a ${bed.x},${bed.y})`);
+    await page.click('#props button:has-text("Girar 90°")');
+    await page.waitForTimeout(200);
+    await ready();
+    bed = (await furniture())[0];
+    const bom = await page.evaluate(() => window.blockk.store.analysis.bom.total.stock);
+    log(bed.rot === 2, `«Girar 90°» en el panel (giro ${bed.rot}; el cómputo sigue en ${bom} bloques)`);
+    await page.keyboard.press('Escape');
+    const pickOf = (x, y) => page.evaluate(([x, y]) => {
+        const [sx, sy] = window.blockk.cam.project(x, y, 0);
+        return window.blockk.pickAt(sx, sy)?.type ?? null;
+    }, [x, y]);
+    const hasTool = (name) => page.evaluate((n) => [...document.querySelectorAll('.tool .tool-name')].some((e) => e.textContent === n), name);
+    await page.click('.tool-more[aria-expanded="false"]', { timeout: 1000 }).catch(() => {});
+    const before = [await pickOf(450, 350), await hasTool('Mueble'), await pickOf(1000, 450), await hasTool('Árbol')];
+    await page.uncheck('#opt-furniture');
+    await page.uncheck('#opt-trees');
+    await focusCanvas();
+    await page.keyboard.press('g');
+    await page.keyboard.press('o');
+    const off = [await pickOf(450, 350), await hasTool('Mueble'), await pickOf(1000, 450), await hasTool('Árbol'), await page.evaluate(() => window.blockk.store.ui.tool)];
+    log(before.join() === 'furniture,true,tree,true' && off[0] !== 'furniture' && !off[1] && off[2] !== 'tree' && !off[3] && off[4] === 'select' && (await furniture()).length === 1,
+        `muebles y árboles apagados: no se eligen ni tienen herramienta, y siguen en el proyecto (${off.join(', ')})`);
+    await page.check('#opt-furniture');
+    await page.check('#opt-trees');
+    log(await hasTool('Mueble') && await hasTool('Árbol'), 'al encenderlos vuelven sus herramientas');
+    await undo();
+    await undo();
+    await undo();
+
     await page.click('[data-view="iso"]');
     for (const tool of await page.$$eval('.tool .tool-name', (els) => els.map((e) => e.textContent))) {
         if (tool !== 'Techo') await page.click(`.tool:has-text("${tool}")`).catch(() => {});

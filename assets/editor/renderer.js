@@ -10,6 +10,7 @@ import { fmt } from '../lib/format.js';
 import { drawTheme, mix } from '../lib/theme.js';
 import { planeEq, planeHoles, gableHoles, withHoles } from './roofclip.js';
 import { ZONE_KINDS, TREE_SIZES, zoneLabel } from './site.js';
+import { backEdge, furnitureOn, treesOn } from './furniture.js';
 
 const G = 12.5;
 
@@ -45,6 +46,7 @@ function PAL() {
         [KIND.STEP]: mix(t.slab, '#ffffff', 0.5),
         [KIND.SLAB]: t.slab,
         [KIND.COLUMN]: mix(t.slab, '#000000', 0.18),
+        [KIND.FURNITURE]: '#b9c4d4', // neutro y distinto del bloque: un mueble es un gabarito, no decoración
     };
     palette = Object.fromEntries(Object.entries(base).map(([k, hex]) => [k, { top: shade(hex, 1.03), yp: shade(hex, 0.88), xp: shade(hex, 0.74) }]));
     paletteFor = t;
@@ -210,6 +212,7 @@ export class Renderer {
     drawPlanTrees(f) {
         const { ctx } = this;
         const { cam, project, ui } = f;
+        if (!treesOn(ui)) return;
         for (const t of project.trees ?? []) {
             const d = TREE_SIZES[t.size] ?? TREE_SIZES.M;
             const [cx, cy] = cam.project(t.x * G, t.y * G, 0);
@@ -355,6 +358,7 @@ export class Renderer {
         for (const it of list) {
             const b = it.b;
             if (b.level > activeLevel) continue;
+            if ((b.kind === KIND.TREE && !treesOn(ui)) || (b.kind === KIND.FURNITURE && !furnitureOn(ui))) continue;
             if (upperFloors && b.zs >= 300) {
                 upperFloors = false;
                 this.drawRoomFloors(f, 1, 300);
@@ -752,7 +756,7 @@ export class Renderer {
                 }
             }
         }
-        for (const t of project.trees ?? []) {
+        for (const t of treesOn(f.ui) ? project.trees ?? [] : []) {
             const d = TREE_SIZES[t.size] ?? TREE_SIZES.M;
             const cx = t.x * G;
             const cy = t.y * G;
@@ -807,6 +811,7 @@ export class Renderer {
             ctx.fillStyle = fill;
             for (const [x0, y0, x1, y1] of rects.values()) this.fillRectPlan(cam, x0, y0, x1, y1);
             ctx.globalAlpha = 1;
+            if (!ghost) this.drawPlanFurniture(f, li); // antes que los nombres de los ambientes, que quedan arriba
             if (!ghost && ui.level !== 2) this.drawPlanRooms(f, li);
             this.drawPlanOpenings(f, project.levels[li], ghost);
             this.drawPlanColumns(f, project.levels[li], ghost);
@@ -1045,6 +1050,46 @@ export class Renderer {
         ctx.fillText(line1, sx, sy - 6);
         ctx.fillStyle = '#3f6212';
         ctx.fillText(line2, sx, sy + 8);
+    }
+
+    /**
+     * Muebles en planta: un rectángulo claro con borde fino, su nombre corto si entra y una línea gruesa en la cabecera
+     * o el respaldo. Nada más: son gabaritos para medir el ambiente.
+     */
+    drawPlanFurniture(f, li) {
+        const { ctx } = this;
+        const { cam, ui, scene } = f;
+        if (!furnitureOn(ui)) return;
+        ctx.save();
+        ctx.font = '500 10px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const m of scene?.furniture?.[li] ?? []) {
+            const { rect } = m;
+            const [ax, ay] = cam.project(rect[0], rect[1], 0);
+            const [bx, by] = cam.project(rect[2], rect[3], 0);
+            const [x, y, w, h] = [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)];
+            ctx.fillStyle = 'rgba(255,255,255,.82)';
+            ctx.strokeStyle = '#64748b';
+            ctx.lineWidth = 1;
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+            if (m.back) {
+                const [ex0, ey0, ex1, ey1] = backEdge(rect, m.rot);
+                const [px, py] = cam.project(ex0, ey0, 0);
+                const [qx, qy] = cam.project(ex1, ey1, 0);
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(qx, qy);
+                ctx.stroke();
+            }
+            if (h >= 14 && ctx.measureText(m.short).width <= w - 6) {
+                ctx.fillStyle = '#475569';
+                ctx.fillText(m.short, x + w / 2, y + h / 2);
+            }
+        }
+        ctx.restore();
     }
 
     /** Pilares en planta: cuadrado oscuro con una cruz (símbolo del hormigón armado). */

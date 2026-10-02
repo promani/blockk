@@ -12,6 +12,9 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
 - **Ver adentro**: un deslizador baja la altura visible de los muros del nivel (no cambia el proyecto).
 - **Terreno y pasto**: fuera del lote el suelo sigue del mismo color que el terreno, con matas de pasto; adentro queda
   liso con la retícula. Con «Mostrar terreno» apagado, el fondo es liso.
+- **Muebles y árboles se pueden apagar**: en *Configuraciones generales*, las casillas «Muebles» y «Árboles». Apagadas,
+  no se dibujan ni se pueden elegir, y su herramienta sale de la barra (el atajo no hace nada). Es una preferencia del
+  navegador, como «Mostrar terreno»: el proyecto no cambia y los muebles y árboles siguen guardados.
 - **Brújula con el sol** (arriba a la derecha) y sombras según época, latitud y hora.
 - **Panel derecho**: *Selección* o *Configuraciones generales* (terreno —con «Mostrar terreno» y «Mostrar cuadrícula»—,
   **norte** con una brújula que se arrastra (de a 5°, Mayús de a 1°, o escribiendo el ángulo), sol y ajustes del
@@ -40,8 +43,9 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 | Medir | `M` | Bajo «Más» (y en la pestaña Techo): clic en un punto y clic en otro muestra la distancia (y Δx / Δy si es diagonal). Los puntos se ajustan a la retícula de 12,5 cm y, cerca de un muro, a su **cara**: así se mide la luz libre entre paredes. No cambia el proyecto; `Esc` borra la medida. |
 | Zona | `Z` | Bajo «Más»: arrastrar un rectángulo sobre el terreno y elegir su tipo: pileta, patio o deck, jardín o camino. Marca cómo se usa el espacio; **no es parte de la casa ni entra al cómputo**. Se arrastra para moverla; el panel cambia tipo, nombre y medidas. |
 | Árbol | `O` | Bajo «Más»: clic para plantar un árbol chico, mediano o grande, con tronco, copa y sombra (con el sol activado, la sombra sigue su posición). Se arrastra para moverlo. No entra al cómputo. |
+| Mueble | `G` | Bajo «Más»: elegir un mueble del catálogo (camas, mesa de luz, placard, mesas con sillas, sillones, mesada, isla, heladera, cocina, lavarropas, inodoro, bidet, lavatorio, ducha, bañera, escritorio) y hacer clic para colocarlo; `X` lo gira de a 90°. Son **gabaritos de tamaño real** para ver si el ambiente alcanza: un rectángulo con su nombre en la planta y una caja lisa en la isométrica. Se arrastra para moverlo (de a 12,5 cm). **No entra al cómputo ni a la Revisión.** |
 | Pilar | `C` | Clic en un punto de la retícula: pilar de hormigón armado (20, 25, 30 o 40 cm) de piso a techo. Se arrastra para moverlo; sostiene techos o losas donde no hay muro (alfresco, galería). |
-| Nombre | `A` | Escribir o elegir un nombre y hacer clic dentro de un ambiente: se ve en la planta. En un espacio abierto se pueden poner varios; se arrastran. También desde el campo «Nombre» al elegir una habitación. |
+| Nombre | `A` | Elegir un **tipo** de ambiente o escribir un nombre libre (o las dos cosas) y hacer clic dentro de un ambiente: se ve en la planta. El tipo da las recomendaciones de la Revisión y agrupa los m² del Resumen; sin tipo elegido se deduce del nombre. En un espacio abierto se pueden poner varios; se arrastran. También desde el campo «Nombre» al elegir una habitación. |
 | Escalera | `S` | Clic dentro de una habitación del Nivel 1: recta, en L o en U. Sigue al cursor, se acomoda dentro de la habitación y, si no entra, se gira sola. `X` gira. |
 | Piso | `L` | En el Nivel 2: clic dentro de una habitación de abajo; losa de hormigón o entrepiso de madera, con el hueco de la escalera recortado. |
 | Techo | `H` | Siempre en la barra; desde un nivel lleva a la pestaña Techo. Ahí: clic sobre una habitación (alta o baja: se elige la que se ve bajo el cursor) o un rectángulo sobre los muros. El techo apoya en los muros que lo rodean (el nivel sale solo), el alero va sólo donde cae el agua y, pegado a la planta alta, se propone a un agua bajando desde esa pared. Los cabios se eligen solos según la luz y los techos no generan observaciones: son para ver la casa completa y computar la madera. |
@@ -60,7 +64,7 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 ## Copiar y pegar
 
 - `Ctrl+C` copia lo elegido: el grupo del rectángulo o un elemento suelto (un muro lleva sus vanos y vigas U; también
-  pilares, nombres, techos, losas, escaleras, madera, zonas y árboles). El portapapeles vive en la página (no pasa a
+  pilares, nombres, muebles, techos, losas, escaleras, madera, zonas y árboles). El portapapeles vive en la página (no pasa a
   otra pestaña).
 - `Ctrl+V` deja el grupo como un fantasma azul que sigue al cursor, de a bloques enteros y dentro del terreno; un clic
   lo pega (un solo paso de deshacer, «Pegar») y queda elegido para seguir moviéndolo. `Esc` cancela.
@@ -83,6 +87,9 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 - **Habitación** (rectangular): **ancho y fondo exactos** en metros, a ejes de muro (paso de 12,5 cm): corren el muro
   derecho o el de abajo, igual que arrastrar su manija.
 - **Pilar**: lado (20 a 40 cm). **Nombre**: el texto.
+- **Mueble**: cuál es (se puede cambiar por otro del catálogo), «Girar 90°», lo que ocupa y su alto. El catálogo está en
+  `Hcca::furniture()` (medidas de referencia en cm; las mesas incluyen las sillas). En la isométrica ninguna caja pasa
+  de 1 m de alto, para no tapar el ambiente.
 - **Techo**: tipo, sentido de la cumbrera o de la caída, pendiente, alero, sección y separación de cabios. Si dos techos
   se superponen sólo queda el más alto (dos techos a dos aguas cruzados forman una cruz). Los **hastiales** de bloque se
   despiezan hilada por hilada y se pueden quitar o cambiar de espesor.
@@ -101,7 +108,7 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 | Acción | Control |
 | --- | --- |
-| Herramientas | `V R W P N S L H B U T M` (`C` pilar, `A` nombre, `Z` zona, `O` árbol) |
+| Herramientas | `V R W P N S L H B U T M` (`C` pilar, `A` nombre, `G` mueble, `Z` zona, `O` árbol) |
 | Deshacer / rehacer | `Ctrl+Z` / `Ctrl+Y` (también los botones de la barra superior) |
 | Eliminar lo elegido | `Supr` o `Retroceso` |
 | Cancelar | `Esc` |
@@ -118,7 +125,11 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 ## Archivo
 
-*Nuevo*, *Guardar* (descarga el `.json`) y *Abrir*. El proyecto se guarda solo en el navegador (`localStorage`). El cómputo está en la pestaña «Cómputo» de la barra superior.
+*Nuevo*, *Guardar* (en «Mis casas», en el servidor), *Compartir* (guarda y muestra el enlace para copiar), *Descargar*
+(el `.json`) y *Abrir* (un `.json`). El proyecto en curso se guarda solo en el navegador (`localStorage`). `/?casa={id}`
+(o `/c/{id}`) abre una casa guardada o compartida: si es de otro navegador se trabaja sobre una copia. Las casas
+guardadas se ven en la Galería, en «Mis casas», con Abrir, Copiar enlace y Eliminar. El cómputo está en la pestaña
+«Cómputo» de la barra superior.
 
 ## Otras pantallas
 

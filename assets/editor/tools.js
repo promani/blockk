@@ -12,8 +12,9 @@ import { ICONS } from './icons.js';
 import { moveWallLine, collinearChain, mirrorMove } from './wallmove.js';
 import { wallLines, nearestLine, anchorLines, nearestAnchor, snapWalls, ANCHOR_LABEL } from './snap.js';
 import { OPENING_TYPES, defaultMode, newOpening, commercialFor, commercialOf } from './openings.js';
-import { roomNamesList } from './names.js';
+import { roomNamesList, roomTypeItems, nameForType } from './names.js';
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
+import { footprint, furnitureRect, furnitureGroups, furnitureOn } from './furniture.js';
 
 const DRAG_PX = 6;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -301,12 +302,27 @@ export function createTools(app) {
         ctx.restore();
     };
 
+    // ---------------- muebles: lugar y fantasma (los usan Elegir y la herramienta Mueble) ----------------
+    /** Esquina (unidades) para un mueble cuya esquina se quiere en (ux, uy): en la retícula de 12,5 cm y dentro del lote. */
+    const furnitureSpot = (m, ux, uy) => {
+        const s = footprint(cfg, m);
+        return [clamp(Math.round(ux), 0, Math.max(0, Math.floor(lot().w - s.w / G))), clamp(Math.round(uy), 0, Math.max(0, Math.floor(lot().d - s.d / G)))];
+    };
+    const furnitureGhost = (ctx, cam, m, style) => {
+        const r = furnitureRect(cfg, m);
+        if (r) ghostBox(ctx, cam, { x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: base(), z1: base() + footprint(cfg, m).h }, style);
+    };
+
     // ---------------- elegir varios elementos y moverlos juntos ----------------
     /** Elementos cuya planta cae dentro del rectángulo (unidades), en todos los niveles: se mueven juntos, de arriba abajo. */
     const collectIn = (x0, y0, x1, y1) => {
         const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
-        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [] };
+        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [], furniture: [] };
         store.project.levels.forEach((lv, li) => {
+            for (const m of furnitureOn(store.ui) ? lv.furniture ?? [] : []) {
+                const r = furnitureRect(cfg, m);
+                if (r && inside(r[0] / G, r[1] / G) && inside(r[2] / G, r[3] / G)) sel.furniture.push([li, m.id]);
+            }
             for (const w of lv.walls) if (inside(w.x1, w.y1) && inside(w.x2, w.y2)) sel.walls.push([li, w.id]);
             for (const sl of lv.slabs ?? []) if (inside(sl.x, sl.y) && inside(sl.x + sl.w, sl.y + sl.h)) sel.slabs.push([li, sl.id]);
             for (const st of lv.stairs ?? []) {
@@ -334,6 +350,7 @@ export function createTools(app) {
         for (const [li, id] of sel.timber) { const t = p.levels[li].timber.find((z) => z.id === id); if (t) { if (t.kind === 'beam') { xs.push(t.x1, t.x2); ys.push(t.y1, t.y2); } else { xs.push(t.x, t.x + t.w); ys.push(t.y, t.y + t.h); } } }
         for (const [li, id] of sel.columns) { const c = p.levels[li].columns.find((z) => z.id === id); if (c) { xs.push(c.x); ys.push(c.y); } }
         for (const [li, id] of sel.labels) { const lb = p.levels[li].labels.find((z) => z.id === id); if (lb) { xs.push(lb.x); ys.push(lb.y); } }
+        for (const [li, id] of sel.furniture ?? []) { const r = furnitureRect(cfg, p.levels[li].furniture?.find((z) => z.id === id) ?? {}); if (r) { xs.push(r[0] / G, r[2] / G); ys.push(r[1] / G, r[3] / G); } }
         for (const [, id] of sel.roofs) { const r = p.roofs.find((z) => z.id === id); if (r) { xs.push(r.x, r.x + r.w); ys.push(r.y, r.y + r.h); } }
         for (const [, id] of sel.stairs) { const b = store.analysis?.floors?.stairs?.find((q) => q.id === id)?.bbox; if (b) { xs.push(b.x / G, (b.x + b.w) / G); ys.push(b.y / G, (b.y + b.h) / G); } }
         return xs.length ? { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } : null;
@@ -351,6 +368,7 @@ export function createTools(app) {
             for (const [li, id] of sel.stairs) { const q = d.levels[li].stairs.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
             for (const [li, id] of sel.columns) { const q = d.levels[li].columns.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
             for (const [li, id] of sel.labels) { const q = d.levels[li].labels.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
+            for (const [li, id] of sel.furniture ?? []) { const q = d.levels[li].furniture?.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
             for (const [li, id] of sel.timber) {
                 const t = d.levels[li].timber.find((z) => z.id === id);
                 if (!t) continue;
@@ -423,15 +441,15 @@ export function createTools(app) {
     // ---------------- copiar y pegar ----------------
     /** Portapapeles en memoria: copias de los objetos (no ids), con su nivel y la caja (unidades) que ocupan. */
     let clip = null;
-    const CLIP_KINDS = ['walls', 'slabs', 'stairs', 'timber', 'columns', 'labels', 'roofs', 'zones', 'trees'];
+    const CLIP_KINDS = ['walls', 'slabs', 'stairs', 'timber', 'columns', 'labels', 'furniture', 'roofs', 'zones', 'trees'];
     const clipCount = (c) => CLIP_KINDS.reduce((n, k) => n + c[k].length, 0);
     /** Lo elegido como grupo: el del rectángulo o el elemento suelto (una abertura sola se trata aparte). */
     const selectionGroup = () => {
         if (multi.sel) return multi.sel;
         const s = store.ui.selection;
         if (!s) return null;
-        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [], zones: [], trees: [] };
-        const key = { wall: 'walls', stair: 'stairs', slab: 'slabs', timber: 'timber', column: 'columns', label: 'labels' }[s.type];
+        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [], furniture: [], zones: [], trees: [] };
+        const key = { wall: 'walls', stair: 'stairs', slab: 'slabs', timber: 'timber', column: 'columns', label: 'labels', furniture: 'furniture' }[s.type];
         if (key) {
             const li = store.project.levels.findIndex((lv) => (lv[key] ?? []).some((q) => q.id === s.id));
             if (li >= 0) sel[key].push([li, s.id]);
@@ -485,13 +503,18 @@ export function createTools(app) {
         }
         for (const [li, id] of sel.columns) { const q = p.levels[li].columns.find((z) => z.id === id); if (q) { c.columns.push({ li, o: structuredClone(q) }); grab(q.x, q.y); } }
         for (const [li, id] of sel.labels) { const q = p.levels[li].labels.find((z) => z.id === id); if (q) { c.labels.push({ li, o: structuredClone(q) }); grab(q.x, q.y); } }
+        for (const [li, id] of sel.furniture ?? []) {
+            const q = p.levels[li].furniture?.find((z) => z.id === id);
+            const r = q && furnitureRect(cfg, q);
+            if (r) { c.furniture.push({ li, o: structuredClone(q) }); grab(r[0] / G, r[1] / G); grab(r[2] / G, r[3] / G); }
+        }
         for (const [, id] of sel.roofs) { const r = p.roofs.find((z) => z.id === id); if (r) { c.roofs.push({ o: structuredClone(r) }); grab(r.x, r.y); grab(r.x + r.w, r.y + r.h); } }
         for (const [, id] of sel.zones ?? []) { const z = p.zones?.find((q) => q.id === id); if (z) { c.zones.push({ o: structuredClone(z) }); grab(z.x, z.y); grab(z.x + z.w, z.y + z.h); } }
         for (const [, id] of sel.trees ?? []) { const t = p.trees?.find((q) => q.id === id); if (t) { c.trees.push({ o: structuredClone(t) }); grab(t.x, t.y); } }
         const n = clipCount(c);
         if (!n) return false;
         // Si los muros, pilares y nombres son de un solo nivel, se pueden pegar en el otro (repetir la planta arriba).
-        const levels = new Set([...c.walls, ...c.columns, ...c.labels].map((it) => it.li));
+        const levels = new Set([...c.walls, ...c.columns, ...c.labels, ...c.furniture].map((it) => it.li));
         clip = { ...c, single: levels.size === 1 ? [...levels][0] : null, box: { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } };
         app.toast(`${n} elemento${n > 1 ? 's' : ''} copiado${n > 1 ? 's' : ''}: Ctrl+V para pegar.`);
         return true;
@@ -567,6 +590,7 @@ export function createTools(app) {
             }
             for (const it of c.columns) (d.levels[lvl(it.li)].columns ??= []).push({ ...it.o, id: nextId(d, 'c'), x: it.o.x + dx, y: it.o.y + dy });
             for (const it of c.labels) (d.levels[lvl(it.li)].labels ??= []).push({ ...it.o, id: nextId(d, 'n'), x: it.o.x + dx, y: it.o.y + dy });
+            for (const it of c.furniture) { single = { type: 'furniture', id: nextId(d, 'm') }; (d.levels[lvl(it.li)].furniture ??= []).push({ ...it.o, id: single.id, x: it.o.x + dx, y: it.o.y + dy }); }
             if (target !== null) return;
             for (const it of c.slabs) d.levels[it.li].slabs.push({ ...it.o, id: nextId(d, 'l'), x: it.o.x + dx, y: it.o.y + dy });
             for (const it of c.stairs) d.levels[it.li].stairs.push({ ...it.o, id: nextId(d, 'e'), x: it.o.x + dx, y: it.o.y + dy });
@@ -589,6 +613,7 @@ export function createTools(app) {
     };
     const duplicateSelection = () => { if (copySelection()) startPaste(); };
     app.copySelection = copySelection;
+    app.pickAt = (sx, sy) => pickAt(app, sx, sy); // para las pruebas de punta a punta
     app.pasteClipboard = startPaste;
     app.duplicateSelection = duplicateSelection;
 
@@ -613,6 +638,11 @@ export function createTools(app) {
             const zb = (target ?? it.li) * cfg.levelHeight;
             const s = it.o.size / 2;
             ghostBox(ctx, cam, { x0: (it.o.x + dx) * G - s, x1: (it.o.x + dx) * G + s, y0: (it.o.y + dy) * G - s, y1: (it.o.y + dy) * G + s, z0: zb, z1: zb + cfg.levelHeight }, style);
+        }
+        for (const it of clip.furniture) {
+            const r = furnitureRect(cfg, it.o);
+            const zb = (target ?? it.li) * cfg.levelHeight;
+            if (r) ghostBox(ctx, cam, { x0: r[0] + dx * G, x1: r[2] + dx * G, y0: r[1] + dy * G, y1: r[3] + dy * G, z0: zb, z1: zb + footprint(cfg, it.o).h }, style);
         }
         if (target === null) {
             for (const it of clip.roofs) outlineRect(ctx, cam, (it.o.x + dx) * G, (it.o.y + dy) * G, (it.o.x + it.o.w + dx) * G, (it.o.y + it.o.h + dy) * G, (it.o.level + 1) * cfg.levelHeight, flat);
@@ -685,6 +715,9 @@ export function createTools(app) {
                 } else if (type === 'column') {
                     const c = lv.columns?.find((q) => q.id === id);
                     if (c) drag = { kind: 'column', c: { ...c }, nx: c.x, ny: c.y };
+                } else if (type === 'furniture') {
+                    const m = lv.furniture?.find((q) => q.id === id);
+                    if (m) drag = { kind: 'furniture', m: { ...m }, off: [press.wx / G - m.x, press.wy / G - m.y], nx: m.x, ny: m.y };
                 } else if (type === 'label') {
                     const lb = lv.labels?.find((q) => q.id === id);
                     if (lb) drag = { kind: 'label', lb: { ...lb }, nx: lb.x, ny: lb.y };
@@ -715,6 +748,8 @@ export function createTools(app) {
                 else if (drag.kind === 'column') {
                     drag.nx = Math.round(p.wx / G);
                     drag.ny = Math.round(p.wy / G);
+                } else if (drag.kind === 'furniture') {
+                    [drag.nx, drag.ny] = furnitureSpot(drag.m, p.wx / G - drag.off[0], p.wy / G - drag.off[1]);
                 } else if (drag.kind === 'tree') {
                     drag.nx = Math.round(p.wx / G);
                     drag.ny = Math.round(p.wy / G);
@@ -783,7 +818,7 @@ export function createTools(app) {
             }
             // Se decide al soltar: sin moverse es un clic (elige lo de abajo); arrastrando, un rectángulo.
             const under = pickAt(app, p.sx, p.sy);
-            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: ['opening', 'column', 'label', 'tree', 'zone'].includes(under?.type) ? under : null };
+            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: ['opening', 'column', 'label', 'tree', 'zone', 'furniture'].includes(under?.type) ? under : null };
         },
         up(p) {
             if (multi.paste) return;
@@ -826,6 +861,8 @@ export function createTools(app) {
                 }
             } else if (d.kind === 'column') {
                 if ((d.nx !== d.c.x || d.ny !== d.c.y) && inLot(d.nx, d.ny)) store.commit('Mover pilar', (dr) => Object.assign(dr.levels[store.ui.level].columns.find((q) => q.id === d.c.id), { x: d.nx, y: d.ny }));
+            } else if (d.kind === 'furniture') {
+                if (d.nx !== d.m.x || d.ny !== d.m.y) store.commit('Mover mueble', (dr) => Object.assign(dr.levels[store.ui.level].furniture.find((q) => q.id === d.m.id), { x: d.nx, y: d.ny }));
             } else if (d.kind === 'tree') {
                 if ((d.nx !== d.t.x || d.ny !== d.t.y) && inLot(d.nx, d.ny)) store.commit('Mover árbol', (dr) => Object.assign(dr.trees.find((q) => q.id === d.t.id), { x: d.nx, y: d.ny }));
             } else if (d.kind === 'zone') {
@@ -910,6 +947,10 @@ export function createTools(app) {
                 if (drag.kind === 'column') {
                     const half = drag.c.size / 2;
                     ghostBox(ctx, cam, { x0: drag.nx * G - half, x1: drag.nx * G + half, y0: drag.ny * G - half, y1: drag.ny * G + half, z0: z, z1: z + cfg.levelHeight }, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
+                    return;
+                }
+                if (drag.kind === 'furniture') {
+                    furnitureGhost(ctx, cam, { ...drag.m, x: drag.nx, y: drag.ny }, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
                     return;
                 }
                 if (drag.kind === 'tree') {
@@ -1892,6 +1933,53 @@ export function createTools(app) {
         },
     };
 
+    // ---------------- muebles simples ----------------
+    const furnitureState = { kind: Object.keys(cfg.furniture ?? {})[0] ?? '', rot: 0 };
+    /** El mueble a colocar, centrado bajo el cursor. */
+    const furnitureAt = (p) => {
+        const m = { kind: furnitureState.kind, rot: furnitureState.rot, x: 0, y: 0 };
+        const s = footprint(cfg, m);
+        if (!s) return null;
+        [m.x, m.y] = furnitureSpot(m, (p.wx - s.w / 2) / G, (p.wy - s.d / 2) / G);
+        return m;
+    };
+    const turnTool = () => { furnitureState.rot = (furnitureState.rot + 1) % 4; app.refreshOptions(); app.render(); };
+    T.furniture = {
+        snap: 1,
+        hotkey: 'g',
+        label: 'Mueble',
+        hint: 'Elegí un mueble y hacé clic para colocarlo; X lo gira. Son gabaritos de tamaño real para ver si el ambiente alcanza: no entran al cómputo. Después se mueve arrastrándolo.',
+        disabled: () => (store.ui.level === 2 ? 'Elegí «Nivel 1» o «Nivel 2».' : null),
+        options: () => h('span', { class: 'row' },
+            h('label', { class: 'field-inline' }, 'Mueble',
+                h('select', { onchange: (e) => { furnitureState.kind = e.target.value; app.render(); } },
+                    furnitureGroups(cfg).map(([group, items]) => h('optgroup', { label: group }, items.map(([id, def]) => h('option', { value: id, selected: id === furnitureState.kind }, def.name)))))),
+            h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: turnTool }, `Girar (X) · ${furnitureState.rot * 90}°`)),
+        down(p) {
+            const m = furnitureAt(p);
+            if (!m) return;
+            store.commit('Agregar mueble', (d) => {
+                (d.levels[store.ui.level].furniture ??= []).push({ id: nextId(d, 'm'), ...m });
+            });
+        },
+        keyDown(e) {
+            if (e.key === 'x' || e.key === 'X') {
+                turnTool();
+                return true;
+            }
+            return false;
+        },
+        draw(ctx, cam) {
+            const p = app.pointer;
+            const m = p && furnitureAt(p);
+            if (!m) return;
+            furnitureGhost(ctx, cam, m, { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' });
+            const s = footprint(cfg, m);
+            const [sx, sy] = cam.project(m.x * G + s.w / 2, m.y * G + s.d / 2, base() + s.h);
+            label(ctx, `${s.def.short} · ${fmt(s.w, 0)} × ${fmt(s.d, 0)} cm`, sx, sy - 18);
+        },
+    };
+
     // ---------------- pilares ----------------
     const columnState = { size: cfg.columnSizes?.[0] ?? 20 };
     const levelOnly = () => (store.ui.level === 2 ? 'Elegí «Nivel 1» o «Nivel 2».' : null);
@@ -1923,13 +2011,19 @@ export function createTools(app) {
     };
 
     // ---------------- nombres de ambientes ----------------
-    const labelState = { name: 'Estar' };
+    const labelState = { name: 'Estar', type: '' };
     T.label = {
         hotkey: 'a',
         label: 'Nombre',
-        hint: 'Escribí o elegí un nombre y hacé clic dentro de un ambiente: se ve en la planta. En un espacio abierto (cocina + estar) podés poner varios.',
+        hint: 'Elegí un tipo o escribí un nombre libre y hacé clic dentro de un ambiente: se ve en la planta. El tipo da las recomendaciones de la Revisión y agrupa los m². En un espacio abierto (cocina + estar) podés poner varios.',
         disabled: levelOnly,
         options: () => h('span', { class: 'row' },
+            selectT('Tipo', labelState.type, roomTypeItems(cfg), (v) => {
+                labelState.type = v;
+                labelState.name = nameForType(cfg, v, labelState.name.trim());
+                app.refreshOptions();
+                app.render();
+            }),
             h('label', { class: 'field-inline' }, 'Nombre',
                 h('input', { type: 'text', list: 'room-names', maxlength: 40, value: labelState.name, oninput: (e) => { labelState.name = e.target.value; } })),
             roomNamesList()),
@@ -1945,7 +2039,7 @@ export function createTools(app) {
             let id = null;
             store.commit('Nombrar ambiente', (d) => {
                 id = nextId(d, 'n');
-                (d.levels[store.ui.level].labels ??= []).push({ id, x, y, name });
+                (d.levels[store.ui.level].labels ??= []).push({ id, x, y, name, ...(labelState.type ? { type: labelState.type } : {}) });
             });
             app.setTool('select');
             store.setUi({ selection: { type: 'label', id } });
@@ -2128,7 +2222,7 @@ export function createTools(app) {
     app.measurement = () => measure;
 
     // metadatos para la barra de herramientas
-    const SHORT = { measure: 'Medir', select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', opening: 'Abertura', column: 'Pilar', label: 'Nombre', zone: 'Zona', tree: 'Árbol', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
+    const SHORT = { measure: 'Medir', furniture: 'Mueble', select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', opening: 'Abertura', column: 'Pilar', label: 'Nombre', zone: 'Zona', tree: 'Árbol', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
     for (const [id, t] of Object.entries(T)) {
         t.id = id;
         t.short = SHORT[id] ?? t.label;
