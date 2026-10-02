@@ -10,6 +10,8 @@ El editor (`/`) es donde se dibuja la casa. Todo se apoya en la grilla del bloqu
 - **Vista**: *Isométrica* o *Planta* (`Tab`). Abajo a la izquierda, el **selector de vistas**: un cuadrado en cuatro
   cuartos con una flecha diagonal en cada uno (las cuatro vistas isométricas) y un ojo al centro; también `[` `]`.
 - **Ver adentro**: un deslizador baja la altura visible de los muros del nivel (no cambia el proyecto).
+- **Terreno y pasto**: fuera del lote el suelo sigue del mismo color que el terreno, con matas de pasto; adentro queda
+  liso con la retícula. Con «Mostrar terreno» apagado, el fondo es liso.
 - **Brújula con el sol** (arriba a la derecha) y sombras según época, latitud y hora.
 - **Panel derecho**: *Selección* o *Configuraciones generales* (terreno —con «Mostrar terreno» y «Mostrar cuadrícula»—,
   **norte** con una brújula que se arrastra (de a 5°, Mayús de a 1°, o escribiendo el ángulo), sol y ajustes del

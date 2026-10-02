@@ -105,8 +105,11 @@ export class Renderer {
         const { cam } = f;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, cam.w, cam.h);
-        ctx.fillStyle = drawTheme().sky;
+        // Con el terreno a la vista, lo de afuera del lote es del mismo color, con pasto; sin terreno, el fondo liso.
+        const showLot = f.ui?.showLot !== false;
+        ctx.fillStyle = showLot ? drawTheme().ground : drawTheme().sky;
         ctx.fillRect(0, 0, cam.w, cam.h);
+        if (showLot) this.drawGrass(f);
         this.drawGround(f);
         if (f.project) {
             this.drawZones(f);
@@ -258,6 +261,51 @@ export class Renderer {
         corners.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
         ctx.closePath();
         ctx.stroke();
+    }
+
+    /**
+     * Pasto alrededor del lote: matas de tres briznas repartidas sobre el suelo. Van ancladas al mundo (se mueven con la
+     * vista) y siempre en el mismo lugar: la posición sale de un hash de la celda. Al alejar la vista las celdas se
+     * agrandan, así hay una mata cada ~36 px y no una mancha. Las que caen dentro del lote las tapa el terreno.
+     */
+    drawGrass(f) {
+        const { ctx } = this;
+        const { cam } = f;
+        const ground = drawTheme().ground;
+        let cell = 120;
+        while (cell * cam.zoom < 36) cell *= 2;
+        const corners = [[0, 0], [cam.w, 0], [cam.w, cam.h], [0, cam.h]].map(([x, y]) => cam.unproject(x, y, 0));
+        const i0 = Math.floor(Math.min(...corners.map((c) => c[0])) / cell);
+        const i1 = Math.ceil(Math.max(...corners.map((c) => c[0])) / cell);
+        const j0 = Math.floor(Math.min(...corners.map((c) => c[1])) / cell);
+        const j1 = Math.ceil(Math.max(...corners.map((c) => c[1])) / cell);
+        // dos tonos: las matas oscuras dan el dibujo y las claras, algo de variación
+        const paths = [new window.Path2D(), new window.Path2D()];
+        for (let i = i0; i <= i1; i++) {
+            for (let j = j0; j <= j1; j++) {
+                let h = (Math.imul(i, 73856093) ^ Math.imul(j, 19349663) ^ Math.imul(cell, 83492791)) >>> 0;
+                const rnd = () => {
+                    h = (Math.imul(h ^ (h >>> 15), 2246822519) + 0x9e3779b9) >>> 0;
+                    return (h >>> 8) / 16777216;
+                };
+                const [sx, sy] = cam.project((i + rnd()) * cell, (j + rnd()) * cell, 0);
+                if (sx < -12 || sy < -12 || sx > cam.w + 12 || sy > cam.h + 12) continue;
+                const size = 5 + rnd() * 4;
+                const path = paths[rnd() < 0.3 ? 1 : 0];
+                for (const k of [-1, 0, 1]) {
+                    path.moveTo(sx + k * 1.2, sy);
+                    path.lineTo(sx + k * size * 0.55, sy - size * (1 - Math.abs(k) * 0.3));
+                }
+            }
+        }
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = mix(ground, '#1f5a1c', 0.42);
+        ctx.stroke(paths[0]);
+        ctx.strokeStyle = mix(ground, '#ffffff', 0.38);
+        ctx.stroke(paths[1]);
+        ctx.restore();
     }
 
     drawGrid(cam, W, D, z) {

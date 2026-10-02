@@ -10,7 +10,7 @@ export const PRESETS = {
     vivo: {
         name: 'Vivo',
         accent: '#78c23a', dark: '#1b2a41', surface: '#f4f8ff', panel: '#ffffff',
-        sky: '#dcebfb', ground: '#cde7b0', block: '#f3f1ec', cut: '#ffcb5c', u: '#7fc93c', roof: '#d9552c',
+        sky: '#dcebfb', ground: '#a4d279', block: '#f3f1ec', cut: '#ffcb5c', u: '#7fc93c', roof: '#d9552c',
         glass: '#62bdf0', door: '#b8692e', wood: '#e3a04c', slab: '#a3b1c5',
         floors: ['#ffd49a', '#9fd8f5', '#d3bdff', '#b6e699', '#ffb3b3', '#ffec8f', '#93e0cc', '#ffc2e2'],
     },
@@ -41,7 +41,7 @@ export const DEFAULT_PRESET = 'vivo';
 /** Campos editables en /estilos. */
 export const FIELDS = [
     ['Interfaz', [['accent', 'Acento (botones, pestañas)'], ['dark', 'Barra superior y texto'], ['surface', 'Fondo de las páginas'], ['panel', 'Paneles y tarjetas']]],
-    ['Dibujo', [['sky', 'Fondo del lienzo'], ['ground', 'Terreno'], ['block', 'Bloque'], ['cut', 'Bloque cortado'], ['u', 'Bloque U (dinteles y corona)'], ['roof', 'Techo'], ['glass', 'Vidrio'], ['door', 'Puertas'], ['wood', 'Madera'], ['slab', 'Losas y escalera']]],
+    ['Dibujo', [['sky', 'Fondo del lienzo (sin terreno)'], ['ground', 'Terreno y pasto'], ['block', 'Bloque'], ['cut', 'Bloque cortado'], ['u', 'Bloque U (dinteles y corona)'], ['roof', 'Techo'], ['glass', 'Vidrio'], ['door', 'Puertas'], ['wood', 'Madera'], ['slab', 'Losas y escalera']]],
 ];
 
 const HEX = /^#[0-9a-f]{6}$/i;
