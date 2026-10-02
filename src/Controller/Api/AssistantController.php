@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Api;
 
 use App\Assistant\Assistant;
+use App\Assistant\Attachment;
 use App\Assistant\Conversations;
 use App\Domain\Model\InvalidProjectException;
 use App\Http\JsonBody;
@@ -46,7 +47,7 @@ final class AssistantController extends AbstractController
         }
         set_time_limit(300);
         try {
-            $conv = $this->assistant->start($client, (array) ($body['inicio'] ?? []), (string) ($body['modo'] ?? 'galeria'), (string) ($body['texto'] ?? ''), $this->answers($body));
+            $conv = $this->assistant->start($client, (array) ($body['inicio'] ?? []), (string) ($body['modo'] ?? 'galeria'), (string) ($body['texto'] ?? ''), $this->answers($body), Attachment::fromRequest($body['adjunto'] ?? null));
         } catch (InvalidProjectException $e) {
             return $this->json(['error' => 'invalid_project', 'details' => $e->errors], Response::HTTP_UNPROCESSABLE_ENTITY);
         } catch (\InvalidArgumentException $e) {
@@ -80,7 +81,7 @@ final class AssistantController extends AbstractController
         set_time_limit(300);
         $before = count($conv['events']);
         try {
-            $conv = $this->assistant->reply($conv, (string) ($body['texto'] ?? ''), $this->answers($body), is_array($body['project'] ?? null) ? $body['project'] : null);
+            $conv = $this->assistant->reply($conv, (string) ($body['texto'] ?? ''), $this->answers($body), is_array($body['project'] ?? null) ? $body['project'] : null, Attachment::fromRequest($body['adjunto'] ?? null));
         } catch (InvalidProjectException $e) {
             return $this->json(['error' => 'invalid_project', 'details' => $e->errors], Response::HTTP_UNPROCESSABLE_ENTITY);
         } catch (\InvalidArgumentException $e) {

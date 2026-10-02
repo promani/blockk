@@ -5,19 +5,22 @@
 import { h } from '../lib/dom.js';
 import { fmt } from '../lib/format.js';
 import { sideLabel } from '../lib/orient.js';
-import { pickAt, pickWall, alongPosition, G } from './pick.js';
+import { pickAt, pickWall, alongPosition, wallRect, G } from './pick.js';
 import { outlineRect, ghostBox, label, nodeMarker } from './overlay.js';
 import { nextId } from '../lib/storage.js';
 import { ICONS } from './icons.js';
 import { moveWallLine, collinearChain, mirrorMove } from './wallmove.js';
-import { wallLines, nearestLine, anchorLines, nearestAnchor, ANCHOR_LABEL } from './snap.js';
-import { OPENING_TYPES, defaultMode, newOpening } from './openings.js';
-import { roomNamesList } from './names.js';
+import { wallLines, nearestLine, anchorLines, nearestAnchor, snapWalls, ANCHOR_LABEL } from './snap.js';
+import { OPENING_TYPES, defaultMode, newOpening, commercialFor, commercialOf } from './openings.js';
+import { roomNamesList, roomTypeItems, nameForType } from './names.js';
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
+import { footprint, furnitureRect, furnitureGroups, furnitureOn } from './furniture.js';
 
 const DRAG_PX = 6;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const wallLen = (w) => Math.abs(w.x2 - w.x1) + Math.abs(w.y2 - w.y1);
+/** Metros con hasta 3 decimales sin ceros de más (las medidas van de a 12,5 cm): 3,125 · 3,5 · 4. */
+const meters = (cmv) => fmt(cmv / 100, 3).replace(/0+$/, '').replace(/,$/, '');
 
 export function createTools(app) {
     const { store } = app;
@@ -131,6 +134,26 @@ export function createTools(app) {
         const w = store.level().walls.find((x) => x.id === wallId);
         if (!w) return;
         wallMoveCommit(wallId, (w.y1 === w.y2 ? w.y1 : w.x1) + delta);
+    };
+
+    /**
+     * Medida exacta de una habitación rectangular: corre su muro derecho (`w`, ancho) o el de abajo (`h`, fondo) hasta
+     * que mida `units` (12,5 cm) a ejes. Es el mismo movimiento que arrastrar la manija del muro.
+     */
+    app.setRoomSize = (roomId, dim, units) => {
+        const room = store.analysis?.levels?.[store.ui.level]?.rooms?.find((r) => r.id === roomId);
+        if (!room?.rect) return;
+        const b = room.bbox;
+        const wall = dim === 'w'
+            ? store.level().walls.find((w) => w.x1 === w.x2 && w.x1 === b.x + b.w && w.y1 < b.y + b.h && w.y2 > b.y)
+            : store.level().walls.find((w) => w.y1 === w.y2 && w.y1 === b.y + b.h && w.x1 < b.x + b.w && w.x2 > b.x);
+        if (!wall) return;
+        if (!wallMoveCommit(wall.id, (dim === 'w' ? b.x : b.y) + Math.max(4, units))) return;
+        // El servidor renumera los ambientes: al volver, se elige de nuevo el que quedó en ese lugar.
+        store.addEventListener('change', () => {
+            const again = store.analysis?.levels?.[store.ui.level]?.rooms?.find((r) => r.fill?.some(([x, y, w, hh]) => b.x + 1 >= x && b.x + 1 < x + w && b.y + 1 >= y && b.y + 1 < y + hh));
+            if (again) store.setUi({ selection: { type: 'room', id: again.id } });
+        }, { once: true });
     };
 
     /** Rectángulo de un techo (con su cota de apoyo) o null. */
@@ -279,12 +302,27 @@ export function createTools(app) {
         ctx.restore();
     };
 
+    // ---------------- muebles: lugar y fantasma (los usan Elegir y la herramienta Mueble) ----------------
+    /** Esquina (unidades) para un mueble cuya esquina se quiere en (ux, uy): en la retícula de 12,5 cm y dentro del lote. */
+    const furnitureSpot = (m, ux, uy) => {
+        const s = footprint(cfg, m);
+        return [clamp(Math.round(ux), 0, Math.max(0, Math.floor(lot().w - s.w / G))), clamp(Math.round(uy), 0, Math.max(0, Math.floor(lot().d - s.d / G)))];
+    };
+    const furnitureGhost = (ctx, cam, m, style) => {
+        const r = furnitureRect(cfg, m);
+        if (r) ghostBox(ctx, cam, { x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: base(), z1: base() + footprint(cfg, m).h }, style);
+    };
+
     // ---------------- elegir varios elementos y moverlos juntos ----------------
     /** Elementos cuya planta cae dentro del rectángulo (unidades), en todos los niveles: se mueven juntos, de arriba abajo. */
     const collectIn = (x0, y0, x1, y1) => {
         const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
-        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [] };
+        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [], furniture: [] };
         store.project.levels.forEach((lv, li) => {
+            for (const m of furnitureOn(store.ui) ? lv.furniture ?? [] : []) {
+                const r = furnitureRect(cfg, m);
+                if (r && inside(r[0] / G, r[1] / G) && inside(r[2] / G, r[3] / G)) sel.furniture.push([li, m.id]);
+            }
             for (const w of lv.walls) if (inside(w.x1, w.y1) && inside(w.x2, w.y2)) sel.walls.push([li, w.id]);
             for (const sl of lv.slabs ?? []) if (inside(sl.x, sl.y) && inside(sl.x + sl.w, sl.y + sl.h)) sel.slabs.push([li, sl.id]);
             for (const st of lv.stairs ?? []) {
@@ -312,12 +350,13 @@ export function createTools(app) {
         for (const [li, id] of sel.timber) { const t = p.levels[li].timber.find((z) => z.id === id); if (t) { if (t.kind === 'beam') { xs.push(t.x1, t.x2); ys.push(t.y1, t.y2); } else { xs.push(t.x, t.x + t.w); ys.push(t.y, t.y + t.h); } } }
         for (const [li, id] of sel.columns) { const c = p.levels[li].columns.find((z) => z.id === id); if (c) { xs.push(c.x); ys.push(c.y); } }
         for (const [li, id] of sel.labels) { const lb = p.levels[li].labels.find((z) => z.id === id); if (lb) { xs.push(lb.x); ys.push(lb.y); } }
+        for (const [li, id] of sel.furniture ?? []) { const r = furnitureRect(cfg, p.levels[li].furniture?.find((z) => z.id === id) ?? {}); if (r) { xs.push(r[0] / G, r[2] / G); ys.push(r[1] / G, r[3] / G); } }
         for (const [, id] of sel.roofs) { const r = p.roofs.find((z) => z.id === id); if (r) { xs.push(r.x, r.x + r.w); ys.push(r.y, r.y + r.h); } }
         for (const [, id] of sel.stairs) { const b = store.analysis?.floors?.stairs?.find((q) => q.id === id)?.bbox; if (b) { xs.push(b.x / G, (b.x + b.w) / G); ys.push(b.y / G, (b.y + b.h) / G); } }
         return xs.length ? { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } : null;
     };
     /** Grupo elegido con un rectángulo (`sel`), rectángulo en curso (`band`), arrastre del grupo (`drag`) y clic pendiente (`press`). */
-    const multi = { sel: null, band: null, drag: null, press: null };
+    const multi = { sel: null, band: null, drag: null, press: null, paste: null };
     const clampOffset = (box, dx, dy) => ({
         dx: Math.max(-box.x0, Math.min(lot().w - box.x1, dx)),
         dy: Math.max(-box.y0, Math.min(lot().d - box.y1, dy)),
@@ -329,6 +368,7 @@ export function createTools(app) {
             for (const [li, id] of sel.stairs) { const q = d.levels[li].stairs.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
             for (const [li, id] of sel.columns) { const q = d.levels[li].columns.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
             for (const [li, id] of sel.labels) { const q = d.levels[li].labels.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
+            for (const [li, id] of sel.furniture ?? []) { const q = d.levels[li].furniture?.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
             for (const [li, id] of sel.timber) {
                 const t = d.levels[li].timber.find((z) => z.id === id);
                 if (!t) continue;
@@ -398,6 +438,226 @@ export function createTools(app) {
         label(ctx, dx || dy ? `→ ${fmt((dx * G) / 100)} m · ↓ ${fmt((dy * G) / 100)} m` : `${countSel(sel)} elemento${countSel(sel) > 1 ? 's' : ''} · arrastrá para mover`, sx, sy, { bg: 'rgba(37,99,235,.92)' });
     };
 
+    // ---------------- copiar y pegar ----------------
+    /** Portapapeles en memoria: copias de los objetos (no ids), con su nivel y la caja (unidades) que ocupan. */
+    let clip = null;
+    const CLIP_KINDS = ['walls', 'slabs', 'stairs', 'timber', 'columns', 'labels', 'furniture', 'roofs', 'zones', 'trees'];
+    const clipCount = (c) => CLIP_KINDS.reduce((n, k) => n + c[k].length, 0);
+    /** Lo elegido como grupo: el del rectángulo o el elemento suelto (una abertura sola se trata aparte). */
+    const selectionGroup = () => {
+        if (multi.sel) return multi.sel;
+        const s = store.ui.selection;
+        if (!s) return null;
+        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [], furniture: [], zones: [], trees: [] };
+        const key = { wall: 'walls', stair: 'stairs', slab: 'slabs', timber: 'timber', column: 'columns', label: 'labels', furniture: 'furniture' }[s.type];
+        if (key) {
+            const li = store.project.levels.findIndex((lv) => (lv[key] ?? []).some((q) => q.id === s.id));
+            if (li >= 0) sel[key].push([li, s.id]);
+        } else if (s.type === 'roof' || s.type === 'gable') sel.roofs.push([0, s.type === 'roof' ? s.id : String(s.id).split(':')[0]]);
+        else if (s.type === 'zone') sel.zones.push([0, s.id]);
+        else if (s.type === 'tree') sel.trees.push([0, s.id]);
+        return countSel(sel) ? sel : null;
+    };
+    const copySelection = () => {
+        const p = store.project;
+        const s = store.ui.selection;
+        if (!multi.sel && s?.type === 'opening') {
+            const o = store.level().openings.find((q) => q.id === s.id);
+            if (!o) return false;
+            clip = { opening: structuredClone(o), level: store.ui.level };
+            app.toast('Abertura copiada: Ctrl+V la repite en el mismo muro.');
+            return true;
+        }
+        const sel = selectionGroup();
+        if (!sel) {
+            app.toast('Elegí algo para copiar (un elemento, o varios con un rectángulo).');
+            return false;
+        }
+        const c = Object.fromEntries(CLIP_KINDS.map((k) => [k, []]));
+        const xs = [];
+        const ys = [];
+        const grab = (x, y) => { xs.push(x); ys.push(y); };
+        for (const [li, id] of sel.walls) {
+            const lv = p.levels[li];
+            const w = lv.walls.find((q) => q.id === id);
+            if (!w) continue;
+            c.walls.push({ li, o: structuredClone(w), openings: structuredClone(lv.openings.filter((q) => q.wall === id)), ubeams: structuredClone((lv.ubeams ?? []).filter((q) => q.wall === id)) });
+            grab(w.x1, w.y1);
+            grab(w.x2, w.y2);
+        }
+        for (const [li, id] of sel.slabs) { const q = p.levels[li].slabs.find((z) => z.id === id); if (q) { c.slabs.push({ li, o: structuredClone(q) }); grab(q.x, q.y); grab(q.x + q.w, q.y + q.h); } }
+        for (const [li, id] of sel.stairs) {
+            const q = p.levels[li].stairs.find((z) => z.id === id);
+            const b = store.analysis?.floors?.stairs?.find((z) => z.id === id)?.bbox;
+            if (!q) continue;
+            const box = b ? [b.x / G, b.y / G, (b.x + b.w) / G, (b.y + b.h) / G] : [q.x, q.y, q.x, q.y];
+            c.stairs.push({ li, o: structuredClone(q), box });
+            grab(box[0], box[1]);
+            grab(box[2], box[3]);
+        }
+        for (const [li, id] of sel.timber) {
+            const t = p.levels[li].timber.find((z) => z.id === id);
+            if (!t) continue;
+            c.timber.push({ li, o: structuredClone(t) });
+            if (t.kind === 'beam') { grab(t.x1, t.y1); grab(t.x2, t.y2); } else { grab(t.x, t.y); grab(t.x + t.w, t.y + t.h); }
+        }
+        for (const [li, id] of sel.columns) { const q = p.levels[li].columns.find((z) => z.id === id); if (q) { c.columns.push({ li, o: structuredClone(q) }); grab(q.x, q.y); } }
+        for (const [li, id] of sel.labels) { const q = p.levels[li].labels.find((z) => z.id === id); if (q) { c.labels.push({ li, o: structuredClone(q) }); grab(q.x, q.y); } }
+        for (const [li, id] of sel.furniture ?? []) {
+            const q = p.levels[li].furniture?.find((z) => z.id === id);
+            const r = q && furnitureRect(cfg, q);
+            if (r) { c.furniture.push({ li, o: structuredClone(q) }); grab(r[0] / G, r[1] / G); grab(r[2] / G, r[3] / G); }
+        }
+        for (const [, id] of sel.roofs) { const r = p.roofs.find((z) => z.id === id); if (r) { c.roofs.push({ o: structuredClone(r) }); grab(r.x, r.y); grab(r.x + r.w, r.y + r.h); } }
+        for (const [, id] of sel.zones ?? []) { const z = p.zones?.find((q) => q.id === id); if (z) { c.zones.push({ o: structuredClone(z) }); grab(z.x, z.y); grab(z.x + z.w, z.y + z.h); } }
+        for (const [, id] of sel.trees ?? []) { const t = p.trees?.find((q) => q.id === id); if (t) { c.trees.push({ o: structuredClone(t) }); grab(t.x, t.y); } }
+        const n = clipCount(c);
+        if (!n) return false;
+        // Si los muros, pilares y nombres son de un solo nivel, se pueden pegar en el otro (repetir la planta arriba).
+        const levels = new Set([...c.walls, ...c.columns, ...c.labels, ...c.furniture].map((it) => it.li));
+        clip = { ...c, single: levels.size === 1 ? [...levels][0] : null, box: { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } };
+        app.toast(`${n} elemento${n > 1 ? 's' : ''} copiado${n > 1 ? 's' : ''}: Ctrl+V para pegar.`);
+        return true;
+    };
+    /** Repite la abertura copiada en el tramo libre más cercano del mismo muro (jambas ≥ 25 cm, las del servidor). */
+    const pasteOpening = () => {
+        const li = store.ui.level;
+        const o = clip.opening;
+        const info = li === clip.level ? store.analysis?.levels?.[li]?.walls?.[o.wall] : null;
+        if (!info || !store.level().walls.some((w) => w.id === o.wall)) {
+            app.toast('El muro de la abertura copiada ya no está: copiala de nuevo.', 'error');
+            return;
+        }
+        let best = null;
+        for (const [from, to] of info.slots) {
+            if (to - from < o.w) continue;
+            const pos = clamp(o.pos, from, to - o.w);
+            if (best === null || Math.abs(pos - o.pos) < Math.abs(best - o.pos)) best = pos;
+        }
+        if (best === null) {
+            app.toast(`No hay otro lugar libre de ${fmt(o.w * G, 1)} cm en ese muro.`, 'error');
+            return;
+        }
+        let id = null;
+        store.commit('Duplicar abertura', (d) => {
+            id = nextId(d, 'o');
+            d.levels[li].openings.push({ ...structuredClone(o), id, pos: best });
+        }).then(() => store.setUi({ selection: { type: 'opening', id, wall: o.wall } }));
+    };
+    /** Nivel donde se pegan muros, pilares y nombres si lo copiado es de un solo nivel y el activo es otro; si no, null. */
+    const pasteTarget = () => (clip.single !== null && store.ui.level <= 1 && store.ui.level !== clip.single ? store.ui.level : null);
+    const pasteOffset = (p) => {
+        const b = clip.box;
+        return clampOffset(b, Math.round((p.wx / G - (b.x0 + b.x1) / 2) / BU) * BU, Math.round((p.wy / G - (b.y0 + b.y1) / 2) / BU) * BU);
+    };
+    /** Ctrl+V: el grupo copiado sigue al cursor (de a bloques enteros) hasta que un clic lo coloca. */
+    const startPaste = () => {
+        if (!clip) {
+            app.toast('No hay nada copiado (Ctrl+C).');
+            return;
+        }
+        if (store.ui.tool !== 'select') app.setTool('select');
+        if (clip.opening) {
+            pasteOpening();
+            return;
+        }
+        multi.band = null;
+        multi.drag = null;
+        multi.press = null;
+        multi.paste = { ...(app.pointer ? pasteOffset(app.pointer) : clampOffset(clip.box, 2 * BU, 2 * BU)), target: pasteTarget() };
+        app.setHint('Mové el grupo copiado y hacé clic para pegarlo. Esc cancela.');
+        app.render();
+    };
+    const commitPaste = () => {
+        const { dx, dy, target } = multi.paste;
+        if (target === null && !dx && !dy) {
+            app.toast('Mové la copia a otro lugar antes de pegarla.', 'error');
+            return;
+        }
+        multi.paste = null;
+        const c = clip;
+        const b = c.box;
+        const lvl = (li) => target ?? li;
+        const skipped = target === null ? 0 : c.slabs.length + c.stairs.length + c.timber.length + c.roofs.length + c.zones.length + c.trees.length;
+        let single = null;
+        store.commit('Pegar', (d) => {
+            for (const it of c.walls) {
+                const lv = d.levels[lvl(it.li)];
+                const id = nextId(d, 'w');
+                lv.walls.push({ ...it.o, id, x1: it.o.x1 + dx, x2: it.o.x2 + dx, y1: it.o.y1 + dy, y2: it.o.y2 + dy });
+                for (const o of it.openings) lv.openings.push({ ...o, id: nextId(d, 'o'), wall: id });
+                for (const u of it.ubeams) (lv.ubeams ??= []).push({ ...u, id: nextId(d, 'u'), wall: id });
+            }
+            for (const it of c.columns) (d.levels[lvl(it.li)].columns ??= []).push({ ...it.o, id: nextId(d, 'c'), x: it.o.x + dx, y: it.o.y + dy });
+            for (const it of c.labels) (d.levels[lvl(it.li)].labels ??= []).push({ ...it.o, id: nextId(d, 'n'), x: it.o.x + dx, y: it.o.y + dy });
+            for (const it of c.furniture) { single = { type: 'furniture', id: nextId(d, 'm') }; (d.levels[lvl(it.li)].furniture ??= []).push({ ...it.o, id: single.id, x: it.o.x + dx, y: it.o.y + dy }); }
+            if (target !== null) return;
+            for (const it of c.slabs) d.levels[it.li].slabs.push({ ...it.o, id: nextId(d, 'l'), x: it.o.x + dx, y: it.o.y + dy });
+            for (const it of c.stairs) d.levels[it.li].stairs.push({ ...it.o, id: nextId(d, 'e'), x: it.o.x + dx, y: it.o.y + dy });
+            for (const it of c.timber) {
+                const t = { ...it.o, id: nextId(d, 't') };
+                if (t.kind === 'beam') Object.assign(t, { x1: t.x1 + dx, x2: t.x2 + dx, y1: t.y1 + dy, y2: t.y2 + dy });
+                else Object.assign(t, { x: t.x + dx, y: t.y + dy });
+                d.levels[it.li].timber.push(t);
+            }
+            for (const it of c.roofs) (d.roofs ??= []).push({ ...it.o, id: nextId(d, 'r'), x: it.o.x + dx, y: it.o.y + dy });
+            for (const it of c.zones) { single = { type: 'zone', id: nextId(d, 'z') }; (d.zones ??= []).push({ ...it.o, id: single.id, x: it.o.x + dx, y: it.o.y + dy }); }
+            for (const it of c.trees) { single = { type: 'tree', id: nextId(d, 'a') }; (d.trees ??= []).push({ ...it.o, id: single.id, x: it.o.x + dx, y: it.o.y + dy }); }
+        }).then(() => {
+            // Queda elegido lo pegado, para seguir moviéndolo (zonas y árboles no entran en un grupo: se elige el suelto).
+            setMulti(collectIn(b.x0 + dx, b.y0 + dy, b.x1 + dx, b.y1 + dy));
+            if (!multi.sel && single) store.setUi({ selection: single });
+        });
+        if (skipped) app.toast(`Se pegaron muros, pilares y nombres en el ${cfg.levelShort?.[target] ?? 'nivel'}; ${skipped} elemento(s) de otro tipo no se copian entre niveles.`);
+        app.refreshOptions();
+    };
+    const duplicateSelection = () => { if (copySelection()) startPaste(); };
+    app.copySelection = copySelection;
+    app.pickAt = (sx, sy) => pickAt(app, sx, sy); // para las pruebas de punta a punta
+    app.pasteClipboard = startPaste;
+    app.duplicateSelection = duplicateSelection;
+
+    /** Fantasma del grupo que se está por pegar, corrido por el cursor. */
+    const drawPaste = (ctx, cam) => {
+        const ps = multi.paste;
+        if (!ps) return;
+        const { dx, dy, target } = ps;
+        const style = { fill: 'rgba(37,99,235,.18)', stroke: 'rgba(37,99,235,.7)', width: 1 };
+        const flat = { stroke: '#2563eb', fill: 'rgba(37,99,235,.12)', width: 1.5, dash: [6, 4] };
+        for (const it of clip.walls) {
+            const w = it.o;
+            const zb = (target ?? it.li) * cfg.levelHeight;
+            const t = w.t / 2;
+            const x0 = (w.x1 + dx) * G;
+            const x1 = (w.x2 + dx) * G;
+            const y0 = (w.y1 + dy) * G;
+            const y1 = (w.y2 + dy) * G;
+            ghostBox(ctx, cam, w.y1 === w.y2 ? { x0, x1, y0: y0 - t, y1: y1 + t, z0: zb, z1: zb + (w.h ?? 12) * 25 } : { x0: x0 - t, x1: x1 + t, y0, y1, z0: zb, z1: zb + (w.h ?? 12) * 25 }, style);
+        }
+        for (const it of clip.columns) {
+            const zb = (target ?? it.li) * cfg.levelHeight;
+            const s = it.o.size / 2;
+            ghostBox(ctx, cam, { x0: (it.o.x + dx) * G - s, x1: (it.o.x + dx) * G + s, y0: (it.o.y + dy) * G - s, y1: (it.o.y + dy) * G + s, z0: zb, z1: zb + cfg.levelHeight }, style);
+        }
+        for (const it of clip.furniture) {
+            const r = furnitureRect(cfg, it.o);
+            const zb = (target ?? it.li) * cfg.levelHeight;
+            if (r) ghostBox(ctx, cam, { x0: r[0] + dx * G, x1: r[2] + dx * G, y0: r[1] + dy * G, y1: r[3] + dy * G, z0: zb, z1: zb + footprint(cfg, it.o).h }, style);
+        }
+        if (target === null) {
+            for (const it of clip.roofs) outlineRect(ctx, cam, (it.o.x + dx) * G, (it.o.y + dy) * G, (it.o.x + it.o.w + dx) * G, (it.o.y + it.o.h + dy) * G, (it.o.level + 1) * cfg.levelHeight, flat);
+            for (const it of clip.slabs) outlineRect(ctx, cam, (it.o.x + dx) * G, (it.o.y + dy) * G, (it.o.x + it.o.w + dx) * G, (it.o.y + it.o.h + dy) * G, cfg.levelHeight, flat);
+            for (const it of clip.zones) outlineRect(ctx, cam, (it.o.x + dx) * G, (it.o.y + dy) * G, (it.o.x + it.o.w + dx) * G, (it.o.y + it.o.h + dy) * G, 0.5, flat);
+            for (const it of clip.stairs) outlineRect(ctx, cam, (it.box[0] + dx) * G, (it.box[1] + dy) * G, (it.box[2] + dx) * G, (it.box[3] + dy) * G, 0.5, flat);
+            for (const it of clip.trees) treeRing(ctx, cam, it.o.x + dx, it.o.y + dy, it.o.size, '#2563eb');
+        }
+        const b = clip.box;
+        const z = (target ?? 0) * cfg.levelHeight;
+        outlineRect(ctx, cam, (b.x0 + dx) * G, (b.y0 + dy) * G, (b.x1 + dx) * G, (b.y1 + dy) * G, z, { stroke: '#2563eb', width: 2, dash: [8, 5] });
+        const [sx, sy] = cam.project(((b.x0 + b.x1) / 2 + dx) * G, ((b.y0 + b.y1) / 2 + dy) * G, z);
+        label(ctx, `Clic para pegar${target === null ? ` · → ${fmt((dx * G) / 100)} m · ↓ ${fmt((dy * G) / 100)} m` : ` en el ${cfg.levelShort?.[target] ?? 'nivel'}`}`, sx, sy, { bg: 'rgba(37,99,235,.92)' });
+    };
+
     /** Clic sin arrastre: elige lo que hay bajo el puntero (doble clic, la habitación). */
     const pickClick = (p, detail) => {
         app.hover = pickAt(app, p.sx, p.sy);
@@ -414,11 +674,12 @@ export function createTools(app) {
     T.select = {
         hotkey: 'v',
         label: 'Elegir',
-        hint: `Clic en un muro, vano, losa, escalera o techo; doble clic elige la habitación. Arrastrá un rectángulo para elegir varios elementos y después movelos juntos (flechas: ${fmt(BL, 1)} cm).`,
+        hint: `Clic en un muro, vano, losa, escalera o techo; doble clic elige la habitación. Arrastrá un rectángulo para elegir varios elementos y después movelos juntos (flechas: ${fmt(BL, 1)} cm). Ctrl+C / Ctrl+V copian y pegan lo elegido.`,
         options: () => {
             const n = countSel(multi.sel);
             return h('span', { class: 'row' },
                 h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: selectAll }, 'Toda la casa (Ctrl+A)'),
+                n || store.ui.selection ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: 'Copia lo elegido y lo deja listo para colocar (Ctrl+C y Ctrl+V hacen lo mismo en dos pasos)', onclick: duplicateSelection }, 'Duplicar (Ctrl+D)') : null,
                 n ? h('span', { class: 'tag' }, `${n} elemento${n > 1 ? 's' : ''} elegido${n > 1 ? 's' : ''}`) : null,
                 n ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => setMulti(null) }, 'Soltar') : null);
         },
@@ -427,8 +688,14 @@ export function createTools(app) {
             multi.band = null;
             multi.drag = null;
             multi.press = null;
+            multi.paste = null;
         },
         move(p) {
+            if (multi.paste) {
+                Object.assign(multi.paste, pasteOffset(p));
+                app.render();
+                return;
+            }
             if (multi.drag) {
                 const d = multi.drag;
                 const raw = { dx: Math.round((p.wx - d.x0) / G / BU) * BU, dy: Math.round((p.wy - d.y0) / G / BU) * BU };
@@ -448,6 +715,9 @@ export function createTools(app) {
                 } else if (type === 'column') {
                     const c = lv.columns?.find((q) => q.id === id);
                     if (c) drag = { kind: 'column', c: { ...c }, nx: c.x, ny: c.y };
+                } else if (type === 'furniture') {
+                    const m = lv.furniture?.find((q) => q.id === id);
+                    if (m) drag = { kind: 'furniture', m: { ...m }, off: [press.wx / G - m.x, press.wy / G - m.y], nx: m.x, ny: m.y };
                 } else if (type === 'label') {
                     const lb = lv.labels?.find((q) => q.id === id);
                     if (lb) drag = { kind: 'label', lb: { ...lb }, nx: lb.x, ny: lb.y };
@@ -478,6 +748,8 @@ export function createTools(app) {
                 else if (drag.kind === 'column') {
                     drag.nx = Math.round(p.wx / G);
                     drag.ny = Math.round(p.wy / G);
+                } else if (drag.kind === 'furniture') {
+                    [drag.nx, drag.ny] = furnitureSpot(drag.m, p.wx / G - drag.off[0], p.wy / G - drag.off[1]);
                 } else if (drag.kind === 'tree') {
                     drag.nx = Math.round(p.wx / G);
                     drag.ny = Math.round(p.wy / G);
@@ -509,6 +781,11 @@ export function createTools(app) {
             }
         },
         down(p, e) {
+            if (multi.paste) {
+                Object.assign(multi.paste, pasteOffset(p));
+                commitPaste();
+                return;
+            }
             const hd = handleHit(p);
             if (hd) {
                 app.canvas.style.cursor = 'grabbing';
@@ -541,9 +818,10 @@ export function createTools(app) {
             }
             // Se decide al soltar: sin moverse es un clic (elige lo de abajo); arrastrando, un rectángulo.
             const under = pickAt(app, p.sx, p.sy);
-            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: ['opening', 'column', 'label', 'tree', 'zone'].includes(under?.type) ? under : null };
+            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: ['opening', 'column', 'label', 'tree', 'zone', 'furniture'].includes(under?.type) ? under : null };
         },
         up(p) {
+            if (multi.paste) return;
             if (multi.drag) {
                 const { dx, dy } = multi.drag;
                 multi.drag = null;
@@ -583,6 +861,8 @@ export function createTools(app) {
                 }
             } else if (d.kind === 'column') {
                 if ((d.nx !== d.c.x || d.ny !== d.c.y) && inLot(d.nx, d.ny)) store.commit('Mover pilar', (dr) => Object.assign(dr.levels[store.ui.level].columns.find((q) => q.id === d.c.id), { x: d.nx, y: d.ny }));
+            } else if (d.kind === 'furniture') {
+                if (d.nx !== d.m.x || d.ny !== d.m.y) store.commit('Mover mueble', (dr) => Object.assign(dr.levels[store.ui.level].furniture.find((q) => q.id === d.m.id), { x: d.nx, y: d.ny }));
             } else if (d.kind === 'tree') {
                 if ((d.nx !== d.t.x || d.ny !== d.t.y) && inLot(d.nx, d.ny)) store.commit('Mover árbol', (dr) => Object.assign(dr.trees.find((q) => q.id === d.t.id), { x: d.nx, y: d.ny }));
             } else if (d.kind === 'zone') {
@@ -624,6 +904,12 @@ export function createTools(app) {
             }
         },
         keyDown(e) {
+            if (e.key === 'Escape' && multi.paste) {
+                multi.paste = null;
+                app.refreshOptions();
+                app.render();
+                return true;
+            }
             if (e.key === 'Escape' && drag) {
                 drag = null;
                 app.canvas.style.cursor = '';
@@ -646,6 +932,10 @@ export function createTools(app) {
             return false;
         },
         draw(ctx, cam) {
+            if (multi.paste) {
+                drawPaste(ctx, cam);
+                return;
+            }
             drawMulti(ctx, cam);
             if (drag) {
                 const z = base();
@@ -657,6 +947,10 @@ export function createTools(app) {
                 if (drag.kind === 'column') {
                     const half = drag.c.size / 2;
                     ghostBox(ctx, cam, { x0: drag.nx * G - half, x1: drag.nx * G + half, y0: drag.ny * G - half, y1: drag.ny * G + half, z0: z, z1: z + cfg.levelHeight }, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
+                    return;
+                }
+                if (drag.kind === 'furniture') {
+                    furnitureGhost(ctx, cam, { ...drag.m, x: drag.nx, y: drag.ny }, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
                     return;
                 }
                 if (drag.kind === 'tree') {
@@ -791,9 +1085,22 @@ export function createTools(app) {
         let axis = 'x';
 
         let chainStart = null;
+        // Largo escrito con el teclado (metros) mientras hay un tramo en curso, y último puntero para saber hacia dónde va.
+        let typed = '';
+        let lastP = null;
+        const typedUnits = () => {
+            const m = Number.parseFloat(typed.replace(',', '.'));
+            return Number.isFinite(m) && m > 0 ? Math.max(2, Math.round((m * 100) / G)) : 0;
+        };
         const compute = (p) => {
             if (!start) return null;
             const e = ortho(start, p);
+            if (!opts.module && typedUnits()) {
+                // Largo exacto (de a 12,5 cm) en la dirección del cursor.
+                const u = typedUnits();
+                if (e.gy !== start.gy) return { gx: start.gx, gy: start.gy + Math.sign(e.gy - start.gy) * u };
+                return { gx: start.gx + (Math.sign(e.gx - start.gx) || 1) * u, gy: start.gy };
+            }
             if (!opts.module) {
                 // Mismo ajuste que Habitación: se pega al inicio de la cadena o a paredes cercanas; si no, largo en bloques.
                 if (chainStart && Math.abs(p.gx - chainStart.gx) <= 1 && Math.abs(p.gy - chainStart.gy) <= 1 && (chainStart.gx === start.gx || chainStart.gy === start.gy)) return { ...chainStart };
@@ -840,10 +1147,11 @@ export function createTools(app) {
             label: opts.label,
             hint: opts.hint,
             options: () => h('span', { class: 'row' }, thicknessOption(), opts.module ? h('button', { class: 'btn btn-outline btn-sm', onclick: () => { axis = axis === 'x' ? 'y' : 'x'; app.refreshOptions(); } }, `Orientación: ${axis === 'x' ? '↔ horizontal' : '↕ vertical'} (X)`) : null),
-            reset() { start = null; end = null; pressed = false; chainStart = null; },
+            reset() { start = null; end = null; pressed = false; chainStart = null; typed = ''; },
             down(p, e) {
                 if (start && !pressed) {
                     const b = compute(p);
+                    typed = '';
                     if (commitSeg(start, b)) start = { ...b };
                     // Doble clic o volver al punto de partida terminan la cadena (el contorno quedó cerrado).
                     if (e.detail >= 2 || (chainStart && b && b.gx === chainStart.gx && b.gy === chainStart.gy)) {
@@ -857,11 +1165,13 @@ export function createTools(app) {
                 start = { gx: p.gx, gy: p.gy };
                 chainStart = { ...start };
                 end = null;
+                typed = '';
                 pressed = true;
                 dragged = false;
                 downAt = { x: p.sx, y: p.sy };
             },
             move(p) {
+                lastP = p;
                 if (!start) return;
                 if (pressed && Math.hypot(p.sx - downAt.x, p.sy - downAt.y) > DRAG_PX) dragged = true;
                 end = compute(p);
@@ -892,8 +1202,38 @@ export function createTools(app) {
                     chainStart = null;
                     end = null;
                     pressed = false;
+                    typed = '';
                     app.render();
                     return true;
+                }
+                // Con el primer punto puesto se puede escribir el largo en metros: Enter coloca el tramo y sigue la cadena.
+                if (!opts.module && start && !pressed) {
+                    const aim = app.pointer ?? lastP ?? { gx: start.gx + 1, gy: start.gy };
+                    if (/^[0-9]$/.test(e.key) || ((e.key === ',' || e.key === '.') && typed !== '' && !/[.,]/.test(typed))) {
+                        if (typed.length < 6) typed += e.key;
+                        end = compute(aim);
+                        app.render();
+                        return true;
+                    }
+                    if (e.key === 'Backspace' && typed !== '') {
+                        typed = typed.slice(0, -1);
+                        end = compute(aim);
+                        app.render();
+                        return true;
+                    }
+                    if (e.key === 'Enter' && typedUnits()) {
+                        e.preventDefault();
+                        const b = compute(aim);
+                        typed = '';
+                        if (commitSeg(start, b)) start = { ...b };
+                        if (chainStart && b.gx === chainStart.gx && b.gy === chainStart.gy) {
+                            start = null;
+                            chainStart = null;
+                        }
+                        end = null;
+                        app.render();
+                        return true;
+                    }
                 }
                 if (opts.module && (e.key === 'x' || e.key === 'X')) {
                     axis = axis === 'x' ? 'y' : 'x';
@@ -907,6 +1247,7 @@ export function createTools(app) {
                 chainStart = null;
                 end = null;
                 pressed = false;
+                typed = '';
                 app.render();
             },
             draw(ctx, cam) {
@@ -924,7 +1265,8 @@ export function createTools(app) {
                     const modular = len % BU === 0;
                     const closes = chainStart && end.gx === chainStart.gx && end.gy === chainStart.gy && (start.gx !== chainStart.gx || start.gy !== chainStart.gy);
                     if (closes) nodeMarker(ctx, cam, end.gx * G, end.gy * G, z, '#2563eb');
-                    if (len > 0) dimLabel(ctx, cam, x0, y0, x1, y1, z + cfg.levelHeight, `${fmt((len * G) / 100)} m · ${fmt((len * G) / BL, 1)} bloques${modular ? '' : ' · con cortes'}${closes ? ' · cierra la habitación' : ''}`);
+                    if (len > 0 && typedUnits()) dimLabel(ctx, cam, x0, y0, x1, y1, z + cfg.levelHeight, `${typed} → ${meters(len * G)} m · ${fmt((len * G) / BL, 1)} bloques${modular ? '' : ' · con cortes'} · Enter lo coloca`);
+                    else if (len > 0) dimLabel(ctx, cam, x0, y0, x1, y1, z + cfg.levelHeight, `${fmt((len * G) / 100)} m · ${fmt((len * G) / BL, 1)} bloques${modular ? '' : ' · con cortes'}${closes ? ' · cierra la habitación' : ''}`);
                 } else if (opts.module && app.pointer && !start) {
                     const a = { gx: app.pointer.gx, gy: app.pointer.gy };
                     const b = axis === 'x' ? { gx: a.gx + BU, gy: a.gy } : { gx: a.gx, gy: a.gy + BU };
@@ -937,7 +1279,7 @@ export function createTools(app) {
             },
         };
     };
-    T.wall = segmentTool({ key: 'w', label: 'Muro', hint: 'Clic en cada esquina (o arrastrá un muro). Al volver al punto de partida la habitación se cierra; Esc o doble clic terminan.', commitLabel: 'Agregar muro' });
+    T.wall = segmentTool({ key: 'w', label: 'Muro', hint: 'Clic en cada esquina (o arrastrá un muro). Con el primer punto puesto, escribí el largo en metros (3,25) y Enter lo coloca hacia donde apunta el cursor. Al volver al punto de partida la habitación se cierra; Esc o doble clic terminan.', commitLabel: 'Agregar muro' });
     T.block = segmentTool({ key: 'b', label: 'Bloque suelto', hint: `Clic: un bloque de ${fmt(BL, 1)} cm. Arrastre: hilera de bloques enteros. X gira la orientación.`, module: true, commitLabel: 'Agregar bloques' });
 
     // ---------------- aberturas (puertas, ventanas, portones) ----------------
@@ -974,26 +1316,38 @@ export function createTools(app) {
             : { wall, pos: clamp(desired, 0, Math.max(0, wallLen(wall) - w)), ok: false, w, reason: `No hay lugar libre de ${fmt(w * G, 1)} cm en este muro (jambas ≥ 25 cm respecto de esquinas, muros y otras aberturas).` };
     };
 
-    const openingState = { kind: 'door', w: OPENING_TYPES.door.w, mode: 'swing', sill: OPENING_TYPES.window.sill };
+    const openingState = { kind: 'door', w: OPENING_TYPES.door.w, mode: 'swing', sill: OPENING_TYPES.door.sill, custom: false };
     const setOpeningKind = (kind) => {
         openingState.kind = kind;
         openingState.w = OPENING_TYPES[kind].w;
         openingState.mode = defaultMode(kind);
         openingState.sill = OPENING_TYPES[kind].sill;
+        openingState.custom = false;
     };
     {
         let ghost = null;
         T.opening = {
             hotkey: 'p',
             label: 'Abertura',
-            hint: 'Elegí el tipo (puerta, ventana o portón), el ancho y cómo abre; apuntá a un muro: el fantasma verde indica un lugar válido. Clic para colocar. Después se mueve arrastrándola.',
+            hint: 'Elegí el tipo (puerta, ventana o portón), la medida (de catálogo o a medida) y cómo abre; apuntá a un muro: el fantasma verde indica un lugar válido. Clic para colocar. Después se mueve arrastrándola.',
             setKind: (kind) => { setOpeningKind(kind); app.refreshOptions(); app.render(); },
             options: () => {
                 const t = OPENING_TYPES[openingState.kind];
+                // Medida comercial del catálogo (fija ancho, antepecho y apertura) o «A medida», con los controles libres.
+                const list = commercialFor(cfg, openingState.kind);
+                const match = openingState.custom ? null : commercialOf(cfg, openingState);
+                const widths = t.widths.includes(openingState.w) ? t.widths : [...t.widths, openingState.w].sort((a, b) => a - b);
                 return h('span', { class: 'row' },
                     selectT('Tipo', openingState.kind, Object.entries(OPENING_TYPES).map(([k, x]) => [k, x.label]), (v) => { setOpeningKind(v); app.refreshOptions(); app.render(); }),
-                    selectT('Ancho', openingState.w, t.widths.map((n) => [n, `${fmt(n * G, 1)} cm`]), (v) => { openingState.w = Number(v); app.render(); }),
-                    openingState.kind === 'window' ? selectT('Antepecho', openingState.sill, [0, 1, 2, 3, 4, 5, 6, 7].map((n) => [n, `${n * 25} cm del suelo`]), (v) => { openingState.sill = Number(v); app.render(); }) : null,
+                    list.length ? selectT('Medida', match?.id ?? '', [...list.map((c) => [c.id, c.label]), ['', 'A medida']], (v) => {
+                        const c = list.find((x) => x.id === v);
+                        if (c) Object.assign(openingState, { w: c.w, sill: c.sill, mode: c.mode, custom: false });
+                        else openingState.custom = true;
+                        app.refreshOptions();
+                        app.render();
+                    }) : null,
+                    match ? null : selectT('Ancho', openingState.w, widths.map((n) => [n, `${fmt(n * G, 1)} cm`]), (v) => { openingState.w = Number(v); app.render(); }),
+                    !match && openingState.kind === 'window' ? selectT('Antepecho', openingState.sill, [0, 1, 2, 3, 4, 5, 6, 7].map((n) => [n, `${n * 25} cm del suelo`]), (v) => { openingState.sill = Number(v); app.render(); }) : null,
                     selectT('Apertura', openingState.mode, t.modes, (v) => { openingState.mode = v; app.render(); }));
             },
             reset() { ghost = null; },
@@ -1579,6 +1933,53 @@ export function createTools(app) {
         },
     };
 
+    // ---------------- muebles simples ----------------
+    const furnitureState = { kind: Object.keys(cfg.furniture ?? {})[0] ?? '', rot: 0 };
+    /** El mueble a colocar, centrado bajo el cursor. */
+    const furnitureAt = (p) => {
+        const m = { kind: furnitureState.kind, rot: furnitureState.rot, x: 0, y: 0 };
+        const s = footprint(cfg, m);
+        if (!s) return null;
+        [m.x, m.y] = furnitureSpot(m, (p.wx - s.w / 2) / G, (p.wy - s.d / 2) / G);
+        return m;
+    };
+    const turnTool = () => { furnitureState.rot = (furnitureState.rot + 1) % 4; app.refreshOptions(); app.render(); };
+    T.furniture = {
+        snap: 1,
+        hotkey: 'g',
+        label: 'Mueble',
+        hint: 'Elegí un mueble y hacé clic para colocarlo; X lo gira. Son gabaritos de tamaño real para ver si el ambiente alcanza: no entran al cómputo. Después se mueve arrastrándolo.',
+        disabled: () => (store.ui.level === 2 ? 'Elegí «Nivel 1» o «Nivel 2».' : null),
+        options: () => h('span', { class: 'row' },
+            h('label', { class: 'field-inline' }, 'Mueble',
+                h('select', { onchange: (e) => { furnitureState.kind = e.target.value; app.render(); } },
+                    furnitureGroups(cfg).map(([group, items]) => h('optgroup', { label: group }, items.map(([id, def]) => h('option', { value: id, selected: id === furnitureState.kind }, def.name)))))),
+            h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: turnTool }, `Girar (X) · ${furnitureState.rot * 90}°`)),
+        down(p) {
+            const m = furnitureAt(p);
+            if (!m) return;
+            store.commit('Agregar mueble', (d) => {
+                (d.levels[store.ui.level].furniture ??= []).push({ id: nextId(d, 'm'), ...m });
+            });
+        },
+        keyDown(e) {
+            if (e.key === 'x' || e.key === 'X') {
+                turnTool();
+                return true;
+            }
+            return false;
+        },
+        draw(ctx, cam) {
+            const p = app.pointer;
+            const m = p && furnitureAt(p);
+            if (!m) return;
+            furnitureGhost(ctx, cam, m, { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' });
+            const s = footprint(cfg, m);
+            const [sx, sy] = cam.project(m.x * G + s.w / 2, m.y * G + s.d / 2, base() + s.h);
+            label(ctx, `${s.def.short} · ${fmt(s.w, 0)} × ${fmt(s.d, 0)} cm`, sx, sy - 18);
+        },
+    };
+
     // ---------------- pilares ----------------
     const columnState = { size: cfg.columnSizes?.[0] ?? 20 };
     const levelOnly = () => (store.ui.level === 2 ? 'Elegí «Nivel 1» o «Nivel 2».' : null);
@@ -1610,13 +2011,19 @@ export function createTools(app) {
     };
 
     // ---------------- nombres de ambientes ----------------
-    const labelState = { name: 'Estar' };
+    const labelState = { name: 'Estar', type: '' };
     T.label = {
         hotkey: 'a',
         label: 'Nombre',
-        hint: 'Escribí o elegí un nombre y hacé clic dentro de un ambiente: se ve en la planta. En un espacio abierto (cocina + estar) podés poner varios.',
+        hint: 'Elegí un tipo o escribí un nombre libre y hacé clic dentro de un ambiente: se ve en la planta. El tipo da las recomendaciones de la Revisión y agrupa los m². En un espacio abierto (cocina + estar) podés poner varios.',
         disabled: levelOnly,
         options: () => h('span', { class: 'row' },
+            selectT('Tipo', labelState.type, roomTypeItems(cfg), (v) => {
+                labelState.type = v;
+                labelState.name = nameForType(cfg, v, labelState.name.trim());
+                app.refreshOptions();
+                app.render();
+            }),
             h('label', { class: 'field-inline' }, 'Nombre',
                 h('input', { type: 'text', list: 'room-names', maxlength: 40, value: labelState.name, oninput: (e) => { labelState.name = e.target.value; } })),
             roomNamesList()),
@@ -1632,7 +2039,7 @@ export function createTools(app) {
             let id = null;
             store.commit('Nombrar ambiente', (d) => {
                 id = nextId(d, 'n');
-                (d.levels[store.ui.level].labels ??= []).push({ id, x, y, name });
+                (d.levels[store.ui.level].labels ??= []).push({ id, x, y, name, ...(labelState.type ? { type: labelState.type } : {}) });
             });
             app.setTool('select');
             store.setUi({ selection: { type: 'label', id } });
@@ -1732,8 +2139,90 @@ export function createTools(app) {
         },
     };
 
+    // ---------------- medir ----------------
+    /** Punto de medición (cm): la retícula de 12,5 cm y, cerca de un muro, su cara (para medir la luz libre interior). */
+    const measurePoint = (p) => {
+        const reach = Math.min(12 / app.cam.zoom, 30);
+        let x = Math.round(p.wx / G) * G;
+        let y = Math.round(p.wy / G) * G;
+        let bx = reach;
+        let by = reach;
+        for (const { w } of snapWalls(store)) {
+            const [x0, y0, x1, y1] = wallRect(w);
+            if (p.wy >= y0 - reach && p.wy <= y1 + reach) for (const fx of [x0, x1]) if (Math.abs(p.wx - fx) < bx) { bx = Math.abs(p.wx - fx); x = fx; }
+            if (p.wx >= x0 - reach && p.wx <= x1 + reach) for (const fy of [y0, y1]) if (Math.abs(p.wy - fy) < by) { by = Math.abs(p.wy - fy); y = fy; }
+        }
+        return [x, y];
+    };
+    /** Segundo punto: si casi no se aparta de la horizontal o la vertical del primero, se endereza. */
+    const measureEnd = (a, p) => {
+        const [x, y] = measurePoint(p);
+        return [Math.abs(x - a[0]) < G ? a[0] : x, Math.abs(y - a[1]) < G ? a[1] : y];
+    };
+    let measure = null;
+    T.measure = {
+        snap: 1,
+        hotkey: 'm',
+        label: 'Medir',
+        hint: 'Clic en un punto y clic en otro: muestra la distancia. Cerca de un muro se pega a su cara (luz libre entre paredes). No cambia el proyecto; Esc borra la medida.',
+        options: () => h('span', { class: 'row' }, h('span', { class: 'muted small' }, 'Se ajusta a la retícula de 12,5 cm y a las caras de los muros.')),
+        reset() { measure = null; },
+        down(p) {
+            if (!measure || measure.done) measure = { a: measurePoint(p), b: null, done: false };
+            else {
+                measure.b = measureEnd(measure.a, p);
+                measure.done = true;
+            }
+        },
+        move(p) {
+            if (measure && !measure.done) measure.b = measureEnd(measure.a, p);
+            app.render();
+        },
+        keyDown(e) {
+            if (e.key === 'Escape' && measure) {
+                measure = null;
+                app.render();
+                return true;
+            }
+            return false;
+        },
+        contextmenu() { measure = null; app.render(); },
+        draw(ctx, cam) {
+            const z = bandZ();
+            if (!measure) {
+                if (app.pointer) {
+                    const [x, y] = measurePoint(app.pointer);
+                    nodeMarker(ctx, cam, x, y, z, '#b45309');
+                }
+                return;
+            }
+            const { a, b } = measure;
+            if (b) {
+                const [ax, ay] = cam.project(a[0], a[1], z);
+                const [bx, by] = cam.project(b[0], b[1], z);
+                ctx.save();
+                ctx.strokeStyle = '#b45309';
+                ctx.lineWidth = 2;
+                if (!measure.done) ctx.setLineDash([6, 4]);
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(bx, by);
+                ctx.stroke();
+                ctx.restore();
+                nodeMarker(ctx, cam, b[0], b[1], z, '#b45309');
+                const dx = Math.abs(b[0] - a[0]);
+                const dy = Math.abs(b[1] - a[1]);
+                const d = Math.hypot(dx, dy);
+                if (d > 0) label(ctx, dx && dy ? `${meters(d)} m · Δx ${meters(dx)} · Δy ${meters(dy)}` : `${meters(d)} m`, (ax + bx) / 2, (ay + by) / 2 - 16, { bg: 'rgba(180,83,9,.95)' });
+            }
+            nodeMarker(ctx, cam, a[0], a[1], z, '#b45309');
+        },
+    };
+    /** Medida en curso o terminada, en cm (para pruebas): { a, b, done } o null. */
+    app.measurement = () => measure;
+
     // metadatos para la barra de herramientas
-    const SHORT = { select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', opening: 'Abertura', column: 'Pilar', label: 'Nombre', zone: 'Zona', tree: 'Árbol', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
+    const SHORT = { measure: 'Medir', furniture: 'Mueble', select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', opening: 'Abertura', column: 'Pilar', label: 'Nombre', zone: 'Zona', tree: 'Árbol', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
     for (const [id, t] of Object.entries(T)) {
         t.id = id;
         t.short = SHORT[id] ?? t.label;

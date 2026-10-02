@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Prueba de humo del editor en Chromium sin pantalla: recorre todas las plantillas (pestañas, 4 vistas, planta, cómputo)
- * y un proyecto en blanco (habitación dibujada con el mouse, puerta, ventana, deshacer/rehacer, herramientas).
+ * y un proyecto en blanco (habitación dibujada con el mouse, puerta, ventana, deshacer/rehacer, herramientas, medidas
+ * exactas, medir, medidas comerciales de aberturas y copiar/pegar).
  * Falla si hay errores de consola o si una plantilla tiene observaciones de severidad «error».
  *
  *   node humo.cjs [--base http://127.0.0.1:8000]
@@ -169,6 +170,116 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     await page.waitForTimeout(200);
     log(await page.evaluate(() => document.querySelector('#props').innerText.includes('Antepecho')), 'la ventana permite elegir el antepecho');
     await page.keyboard.press('Escape');
+
+    // Medidas exactas: largo escrito en Muro, Medir entre caras, medida comercial, copiar/pegar y ancho de la habitación
+    const focusCanvas = () => page.evaluate(() => document.querySelector('#canvas').focus());
+    const undo = async () => { await page.evaluate(() => window.blockk.store.undo()); await ready(); };
+    const at = async (x, y, click = true) => {
+        const p = await toScreen(x, y);
+        await page.mouse.move(p[0], p[1], { steps: 4 });
+        if (click) await page.mouse.click(p[0], p[1]);
+    };
+    await focusCanvas();
+    await page.keyboard.press('w');
+    await at(750, 500);
+    await at(750, 620, false);
+    for (const k of ['1', ',', '5', '5']) await page.keyboard.press(k);
+    const lvlTyped = await page.evaluate(() => window.blockk.store.ui.level);
+    await page.keyboard.press('Enter');
+    await ready();
+    await page.keyboard.press('Escape');
+    const typed = await page.evaluate(() => window.blockk.store.project.levels[0].walls.find((w) => w.x1 === 60 && w.x2 === 60));
+    log(lvlTyped === 0 && typed && typed.y2 - typed.y1 === 12, `muro con el largo escrito: 1,55 → 1,50 m (${typed ? typed.y2 - typed.y1 : 'sin muro'} u)`);
+    await undo();
+
+    // la habitación quedó en bloques enteros: su muro derecho sale del proyecto
+    const right = await page.evaluate(() => Math.max(...window.blockk.store.project.levels[0].walls.map((w) => w.x2)) * 12.5);
+    await page.keyboard.press('m');
+    await at(14, 250);
+    await at(right - 13, 253);
+    const ms = await page.evaluate(() => window.blockk.measurement());
+    log(ms?.done && ms.b[0] - ms.a[0] === right - 20 && ms.a[1] === ms.b[1], `Medir se pega a las caras de los muros: luz libre de ${ms ? (ms.b[0] - ms.a[0]) / 100 : '?'} m`);
+    await page.keyboard.press('Escape');
+
+    await page.evaluate(() => window.blockk.setTool('window'));
+    await page.selectOption('#tooloptions label:has-text("Medida") select', 'V120x110');
+    await at(right, 250);
+    await ready();
+    const com = await page.evaluate(() => window.blockk.store.project.levels[0].openings.at(-1));
+    log(com.kind === 'window' && com.w === 10 && com.sill === 3 && com.mode === 'slide', `ventana de medida comercial 120 × 110 → vano 125 × 125 (${com.w} u, antepecho ${com.sill})`);
+    await page.evaluate((o) => { window.blockk.setTool('select'); window.blockk.store.setUi({ selection: { type: 'opening', id: o.id, wall: o.wall } }); }, com);
+    await page.waitForTimeout(150);
+    log(await page.locator('#props label:has-text("Medida") select').inputValue() === 'V120x110', 'el panel de la abertura muestra su medida de catálogo');
+    await undo();
+
+    await page.evaluate(() => { const c = window.blockk.store.project.levels[0].columns[0]; window.blockk.store.setUi({ selection: { type: 'column', id: c.id } }); });
+    await focusCanvas();
+    await page.keyboard.press('Control+c');
+    await page.keyboard.press('Control+v');
+    await at(450, 400);
+    await page.waitForTimeout(200);
+    await ready();
+    const pasted = await page.evaluate(() => [window.blockk.store.project.levels[0].columns.length, window.blockk.store.history.at(-1)?.label]);
+    log(pasted[0] === 2 && pasted[1] === 'Pegar', `copiar y pegar un pilar (${pasted.join(', ')})`);
+    await undo();
+
+    await page.evaluate(() => window.blockk.store.setUi({ selection: { type: 'room', id: window.blockk.store.analysis.levels[0].rooms[0].id } }));
+    await page.waitForTimeout(150);
+    const wide = page.locator('#props label:has-text("Ancho (m, a ejes)") input');
+    await wide.fill('5.5');
+    await wide.dispatchEvent('change');
+    await page.waitForTimeout(200);
+    await ready();
+    const rw = await page.evaluate(() => window.blockk.store.analysis.levels[0].rooms[0].bbox.w);
+    log(rw === 44, `ancho exacto de la habitación desde el panel (${rw * 12.5 / 100} m)`);
+    await undo();
+    await focusCanvas();
+    await page.keyboard.press('Escape');
+
+    // Muebles simples: colocar girado, mover arrastrando, girar desde el panel; y apagar muebles y árboles
+    const furniture = () => page.evaluate(() => window.blockk.store.project.levels[0].furniture ?? []);
+    await page.keyboard.press('g');
+    await page.selectOption('#tooloptions label:has-text("Mueble") select', 'cama2');
+    await focusCanvas();
+    await page.keyboard.press('x');
+    await at(300, 250);
+    await ready();
+    let bed = (await furniture())[0];
+    log(bed?.kind === 'cama2' && bed.rot === 1 && bed.x === 16 && bed.y === 14, `mueble colocado y girado (${bed ? `${bed.kind}, giro ${bed.rot}, en ${bed.x},${bed.y}` : 'ninguno'})`);
+    await page.click('.tool:has-text("Elegir")');
+    await drag([360, 300], [460, 350]); // lejos del nombre del ambiente, que está en el centro
+    await page.waitForTimeout(200);
+    await ready();
+    bed = (await furniture())[0];
+    log(bed.x === 24 && bed.y === 18 && await page.evaluate(() => window.blockk.store.ui.selection?.type) === 'furniture', `el mueble se mueve arrastrándolo (a ${bed.x},${bed.y})`);
+    await page.click('#props button:has-text("Girar 90°")');
+    await page.waitForTimeout(200);
+    await ready();
+    bed = (await furniture())[0];
+    const bom = await page.evaluate(() => window.blockk.store.analysis.bom.total.stock);
+    log(bed.rot === 2, `«Girar 90°» en el panel (giro ${bed.rot}; el cómputo sigue en ${bom} bloques)`);
+    await page.keyboard.press('Escape');
+    const pickOf = (x, y) => page.evaluate(([x, y]) => {
+        const [sx, sy] = window.blockk.cam.project(x, y, 0);
+        return window.blockk.pickAt(sx, sy)?.type ?? null;
+    }, [x, y]);
+    const hasTool = (name) => page.evaluate((n) => [...document.querySelectorAll('.tool .tool-name')].some((e) => e.textContent === n), name);
+    await page.click('.tool-more[aria-expanded="false"]', { timeout: 1000 }).catch(() => {});
+    const before = [await pickOf(450, 350), await hasTool('Mueble'), await pickOf(1000, 450), await hasTool('Árbol')];
+    await page.uncheck('#opt-furniture');
+    await page.uncheck('#opt-trees');
+    await focusCanvas();
+    await page.keyboard.press('g');
+    await page.keyboard.press('o');
+    const off = [await pickOf(450, 350), await hasTool('Mueble'), await pickOf(1000, 450), await hasTool('Árbol'), await page.evaluate(() => window.blockk.store.ui.tool)];
+    log(before.join() === 'furniture,true,tree,true' && off[0] !== 'furniture' && !off[1] && off[2] !== 'tree' && !off[3] && off[4] === 'select' && (await furniture()).length === 1,
+        `muebles y árboles apagados: no se eligen ni tienen herramienta, y siguen en el proyecto (${off.join(', ')})`);
+    await page.check('#opt-furniture');
+    await page.check('#opt-trees');
+    log(await hasTool('Mueble') && await hasTool('Árbol'), 'al encenderlos vuelven sus herramientas');
+    await undo();
+    await undo();
+    await undo();
 
     await page.click('[data-view="iso"]');
     for (const tool of await page.$$eval('.tool .tool-name', (els) => els.map((e) => e.textContent))) {

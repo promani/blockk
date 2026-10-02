@@ -7,6 +7,7 @@ namespace App\Assistant;
 use App\Domain\Design\HouseDescriber;
 use App\Domain\Design\HouseEditor;
 use App\Domain\Design\HouseGenerator;
+use App\Domain\Design\PlanTracer;
 use App\Domain\Model\InvalidProjectException;
 use App\Domain\Model\ProjectFactory;
 use App\Domain\ProjectAnalyzer;
@@ -21,7 +22,10 @@ use App\Domain\Templates\TemplateThumbnail;
  * la interfaz. El turno termina cuando el modelo pregunta, cuando contesta sin herramientas o cuando deja una casa sin
  * errores (no hace falta otra vuelta para resumirla: la tarjeta ya muestra los números).
  *
- * Eventos: usuario {texto} · asistente {texto} · pregunta {preguntas: [{id, pregunta, opciones, multiple}]} ·
+ * Un mensaje puede traer la imagen de un plano: ese turno va directo al modelo que construye (el que lee imágenes),
+ * que lo calca con `calcar_plano`. En la historia queda sólo la última imagen.
+ *
+ * Eventos: usuario {texto, adjunto?} · asistente {texto} · pregunta {preguntas: [{id, pregunta, opciones, multiple}]} ·
  * casa {diseno, version, nombre, svg, resumen} · error {texto}.
  */
 final class Assistant
@@ -38,6 +42,7 @@ final class Assistant
         private readonly HouseEditor $editor,
         private readonly HouseDescriber $describer,
         private readonly TemplateCatalog $templates,
+        private readonly PlanTracer $tracer = new PlanTracer(),
     ) {
     }
 
@@ -50,12 +55,13 @@ final class Assistant
      * Nueva conversación. $start: {tipo: nueva|plantilla|proyecto, slug?, project?}. Sin mensaje, no se llama al modelo:
      * «nueva» muestra el formulario inicial y las otras sólo la casa de partida.
      *
-     * @param array<string, mixed>        $start
-     * @param array<string, list<string>> $answers
+     * @param array<string, mixed>                   $start
+     * @param array<string, list<string>>            $answers
+     * @param array{mime: string, data: string}|null $attachment imagen de un plano (ver Attachment)
      *
      * @return array<string, mixed> la conversación
      */
-    public function start(string $client, array $start, string $mode = 'galeria', string $text = '', array $answers = []): array
+    public function start(string $client, array $start, string $mode = 'galeria', string $text = '', array $answers = [], ?array $attachment = null): array
     {
         $conv = ['id' => Conversations::newId(), 'client' => $client, 'created' => time(), 'modo' => 'editor' === $mode ? 'editor' : 'galeria', 'turns' => 0, 'messages' => [], 'events' => [], 'draft' => null];
         $kind = (string) ($start['tipo'] ?? 'nueva');
@@ -72,15 +78,15 @@ final class Assistant
             }
             $this->setDraft($conv, $start['project'], [], is_array($start['programa'] ?? null) ? $start['programa'] : null);
             $conv['events'][] = $this->houseEvent($conv);
-        } elseif ('' === trim($text)) {
+        } elseif ('' === trim($text) && null === $attachment) {
             // Formulario inicial fijo, registrado en la historia como si el modelo lo hubiera preguntado.
             $questions = Wizard::questions();
             $conv['messages'][] = ['role' => 'assistant', 'content' => '', 'tool_calls' => [['id' => 'wizard', 'type' => 'function', 'function' => ['name' => 'preguntar', 'arguments' => json_encode(['preguntas' => $questions], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]]]];
             $conv['messages'][] = ['role' => 'tool', 'tool_call_id' => 'wizard', 'name' => 'preguntar', 'content' => 'Preguntas mostradas.'];
             $conv['events'][] = ['tipo' => 'pregunta', 'formulario' => Wizard::FORM_ID, 'preguntas' => $questions];
         }
-        if ('' !== trim($text) || [] !== $answers) {
-            $conv = $this->reply($conv, $text, $answers);
+        if ('' !== trim($text) || [] !== $answers || null !== $attachment) {
+            $conv = $this->reply($conv, $text, $answers, null, $attachment);
         }
 
         return $conv;
@@ -88,19 +94,24 @@ final class Assistant
 
     /**
      * Mensaje de la persona: texto libre y/o respuestas a la última pregunta ({id de pregunta: [ids de opción]}). En
-     * modo editor puede venir el proyecto actual del editor, que reemplaza a la casa de la conversación.
+     * modo editor puede venir el proyecto actual del editor, que reemplaza a la casa de la conversación. Con la imagen
+     * de un plano adjunta alcanza: sin texto, el pedido es calcarlo.
      *
-     * @param array<string, mixed>        $conv
-     * @param array<string, list<string>> $answers
-     * @param array<string, mixed>|null   $project
+     * @param array<string, mixed>                   $conv
+     * @param array<string, list<string>>            $answers
+     * @param array<string, mixed>|null              $project
+     * @param array{mime: string, data: string}|null $attachment
      *
      * @return array<string, mixed> la conversación actualizada
      *
      * @throws InvalidProjectException si el proyecto enviado no es válido
      */
-    public function reply(array $conv, string $text, array $answers, ?array $project = null): array
+    public function reply(array $conv, string $text, array $answers, ?array $project = null, ?array $attachment = null): array
     {
         $text = trim(mb_substr($text, 0, 800));
+        if ('' === $text && null !== $attachment) {
+            $text = 'Calcá este plano.';
+        }
         if (null !== $project) {
             $this->sync($conv, $project);
         }
@@ -136,7 +147,7 @@ final class Assistant
 
             return $conv;
         }
-        $this->turn($conv, $forModel, $display);
+        $this->turn($conv, $forModel, $display, $attachment);
 
         return $conv;
     }
@@ -187,8 +198,11 @@ final class Assistant
         $conv['draft']['editada'] = true;
     }
 
-    /** @param array<string, mixed> $conv */
-    private function turn(array &$conv, string $forModel, string $shown): void
+    /**
+     * @param array<string, mixed>                   $conv
+     * @param array{mime: string, data: string}|null $attachment
+     */
+    private function turn(array &$conv, string $forModel, string $shown, ?array $attachment = null): void
     {
         if ($conv['turns'] >= self::MAX_TURNS) {
             $conv['events'][] = ['tipo' => 'error', 'texto' => 'Esta conversación llegó al máximo de mensajes. Empezá una nueva.'];
@@ -196,14 +210,19 @@ final class Assistant
             return;
         }
         ++$conv['turns'];
-        $conv['messages'][] = ['role' => 'user', 'content' => $forModel];
-        $conv['events'][] = ['tipo' => 'usuario', 'texto' => $shown];
+        if (null !== $attachment) {
+            // En la historia queda una sola imagen: la del último plano.
+            $conv['messages'] = Attachment::strip($conv['messages'], '[Acá la persona había adjuntado otro plano.]');
+        }
+        $conv['messages'][] = ['role' => 'user', 'content' => null === $attachment ? $forModel : Attachment::content($forModel, $attachment)];
+        $conv['events'][] = ['tipo' => 'usuario', 'texto' => $shown] + (null === $attachment ? [] : ['adjunto' => true]);
         $this->trim($conv);
 
         $slugs = array_column($this->templates->all(), 'name', 'slug');
         $tools = Prompt::tools(array_keys($slugs));
-        // El turno siempre arranca con el modelo liviano (coordinador); cuando tiene las órdenes, delega al pesado.
-        $tier = $this->llm->hasLight() ? LlmClient::LIGHT : LlmClient::HEAVY;
+        // El turno arranca con el modelo liviano (coordinador), que delega al pesado cuando tiene las órdenes. Con un
+        // plano adjunto va directo al pesado: es el que lee la imagen y no hay nada que coordinar.
+        $tier = $this->llm->hasLight() && null === $attachment ? LlmClient::LIGHT : LlmClient::HEAVY;
 
         for ($step = 0; $step < self::MAX_STEPS; ++$step) {
             $system = ['role' => 'system', 'content' => LlmClient::LIGHT === $tier
@@ -211,10 +230,16 @@ final class Assistant
                 : Prompt::system($slugs, $conv['modo'] ?? 'galeria', $this->context($conv))];
             $t0 = microtime(true);
             try {
-                $msg = $this->llm->chat([$system, ...$conv['messages']], $tools, $tier);
+                // El coordinador no lee imágenes: recibe una nota en su lugar.
+                $msg = $this->llm->chat([$system, ...(LlmClient::LIGHT === $tier ? Attachment::strip($conv['messages']) : $conv['messages'])], $tools, $tier);
             } catch (LlmUnavailable $e) {
                 $this->log($conv, $step, $tier, $t0, 'ERROR '.$e->getMessage());
-                $conv['events'][] = ['tipo' => 'error', 'texto' => 'El asistente no está disponible en este momento. Probá de nuevo en un rato.', 'detalle' => $e->getMessage()];
+                $withImage = LlmClient::HEAVY === $tier && array_any($conv['messages'], Attachment::in(...));
+                // Si el modelo no pudo con la imagen, se saca de la historia para que los próximos mensajes no fallen igual.
+                $conv['messages'] = Attachment::strip($conv['messages'], '[La persona adjuntó un plano que no se pudo leer.]');
+                $conv['events'][] = ['tipo' => 'error', 'texto' => $withImage
+                    ? 'No pude leer el plano en este momento. Probá de nuevo en un rato o contame la casa con palabras.'
+                    : 'El asistente no está disponible en este momento. Probá de nuevo en un rato.', 'detalle' => $e->getMessage()];
 
                 return;
             }
@@ -263,6 +288,9 @@ final class Assistant
                 $conv['messages'][] = ['role' => 'tool', 'tool_call_id' => (string) ($call['id'] ?? ''), 'name' => $name, 'content' => $result['content']];
                 if (isset($result['event'])) {
                     $events[] = $result['event'];
+                }
+                if ('' !== ($result['note'] ?? '')) {
+                    $events[] = ['tipo' => 'asistente', 'texto' => $result['note']];
                 }
                 $asked = $asked || 'preguntar' === $name && !($result['error'] ?? false);
                 $failed = $failed || ($result['error'] ?? false);
@@ -319,7 +347,7 @@ final class Assistant
      * @param array<string, mixed> $conv
      * @param array<string, mixed> $args
      *
-     * @return array{content: string, event?: array<string, mixed>, error?: bool, clean?: bool}
+     * @return array{content: string, event?: array<string, mixed>, error?: bool, clean?: bool, note?: string}
      */
     private function run(array &$conv, string $name, array $args): array
     {
@@ -371,6 +399,15 @@ final class Assistant
                 }
 
                 return $this->afterChange($conv, $project, $conv['draft']['names'], $conv['draft']['program'] ?? null);
+            case 'calcar_plano':
+                try {
+                    $traced = $this->tracer->trace($args);
+                } catch (\InvalidArgumentException $e) {
+                    return ['content' => 'No se pudo calcar: '.$e->getMessage(), 'error' => true];
+                }
+
+                // Una casa calcada no tiene programa: después se ajusta con editar_casa o volviendo a calcar.
+                return $this->afterChange($conv, $traced['project'], [], null, true, $traced['notes']);
             case 'cargar_plantilla':
                 $slug = (string) ($args['slug'] ?? '');
                 if (!$this->templates->has($slug)) {
@@ -394,10 +431,11 @@ final class Assistant
      * @param array<string, mixed>       $project
      * @param list<array<string, mixed>> $names
      * @param array<string, mixed>|null  $program
+     * @param list<string>               $notes   avisos de quien armó la casa: van al modelo y a la persona
      *
-     * @return array{content: string, event?: array<string, mixed>, error?: bool, clean?: bool}
+     * @return array{content: string, event?: array<string, mixed>, error?: bool, clean?: bool, note?: string}
      */
-    private function afterChange(array &$conv, array $project, array $names, ?array $program, bool $resetProgram = false): array
+    private function afterChange(array &$conv, array $project, array $names, ?array $program, bool $resetProgram = false, array $notes = []): array
     {
         try {
             $summary = $this->setDraft($conv, $project, $names, $program, $resetProgram);
@@ -407,9 +445,10 @@ final class Assistant
         $errors = array_filter($summary['observaciones'], static fn (array $o): bool => 'error' === $o['severidad']);
 
         return [
-            'content' => $this->json(['resultado' => 'ok', 'casa' => $summary]),
+            'content' => $this->json(['resultado' => 'ok', 'casa' => $summary] + ([] === $notes ? [] : ['avisos' => $notes])),
             'event' => $this->houseEvent($conv),
             'clean' => [] === $errors,
+            'note' => implode(' ', $notes),
         ];
     }
 
@@ -517,7 +556,8 @@ final class Assistant
         if ('cli' === PHP_SAPI) {
             return; // tests y consola
         }
-        error_log(sprintf('[asistente] conv=%s modo=%s turno=%d paso=%d modelo=%s %.1fs → %s', substr((string) $conv['id'], 0, 8), $conv['modo'] ?? '?', $conv['turns'], $step + 1, $tier, microtime(true) - $t0, $what));
+        $image = array_any($conv['messages'], Attachment::in(...)) ? ' +plano' : '';
+        error_log(sprintf('[asistente] conv=%s modo=%s turno=%d paso=%d modelo=%s%s %.1fs → %s', substr((string) $conv['id'], 0, 8), $conv['modo'] ?? '?', $conv['turns'], $step + 1, $tier, $image, microtime(true) - $t0, $what));
     }
 
     /** @param array<string, mixed> $data */

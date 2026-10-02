@@ -185,6 +185,22 @@ final class ProjectFactory
             );
         }
 
+        $furniture = [];
+        foreach ($this->list($d['furniture'] ?? [], Hcca::MAX_FURNITURE_PER_LEVEL, "$path.furniture") as $i => $f) {
+            $kind = is_string($f['kind'] ?? null) ? $f['kind'] : '';
+            if (!isset(Hcca::furniture()[$kind])) {
+                $this->errors[] = "$path.furniture[$i].kind: mueble desconocido";
+                continue;
+            }
+            $furniture[] = new Furniture(
+                $this->id($f['id'] ?? null, "$path.furniture[$i].id", $ids),
+                $kind,
+                $this->coord($f['x'] ?? null, "$path.furniture[$i].x"),
+                $this->coord($f['y'] ?? null, "$path.furniture[$i].y"),
+                $this->intInRange($f['rot'] ?? 0, 0, 3, "$path.furniture[$i].rot"),
+            );
+        }
+
         $columns = [];
         foreach ($this->list($d['columns'] ?? [], Hcca::MAX_COLUMNS_PER_LEVEL, "$path.columns") as $i => $c) {
             $size = (int) ($c['size'] ?? 20);
@@ -201,15 +217,19 @@ final class ProjectFactory
         }
         $labels = [];
         foreach ($this->list($d['labels'] ?? [], Hcca::MAX_LABELS_PER_LEVEL, "$path.labels") as $i => $l) {
+            $type = is_string($l['type'] ?? null) && isset(Hcca::roomTypes()[$l['type']]) ? $l['type'] : '';
+            $name = $this->string($l['name'] ?? '', 40, "$path.labels[$i].name");
             $labels[] = new Label(
                 $this->id($l['id'] ?? null, "$path.labels[$i].id", $ids),
                 $this->coord($l['x'] ?? null, "$path.labels[$i].x"),
                 $this->coord($l['y'] ?? null, "$path.labels[$i].y"),
-                $this->string($l['name'] ?? '', 40, "$path.labels[$i].name"),
+                // se puede elegir sólo el tipo: el nombre que se dibuja es el del tipo
+                '' === $name && '' !== $type ? Hcca::roomTypes()[$type]['label'] : $name,
+                $type,
             );
         }
 
-        return new Level($walls, $openings, $ubeams, $timber, $slabs, $stairs, $columns, $labels);
+        return new Level($walls, $openings, $ubeams, $timber, $slabs, $stairs, $columns, $labels, $furniture);
     }
 
     /** @param array<string, mixed> $o @param array<string, true> $ids */

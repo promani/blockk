@@ -45,7 +45,7 @@ export function nextId(project, prefix) {
         if (m) max = Math.max(max, Number(m[1]));
     }
     for (const level of project.levels) {
-        for (const list of [level.walls, level.openings, level.ubeams, level.timber, level.slabs, level.stairs, level.columns, level.labels]) {
+        for (const list of [level.walls, level.openings, level.ubeams, level.timber, level.slabs, level.stairs, level.columns, level.labels, level.furniture]) {
             for (const item of list ?? []) {
                 const m = /^[a-z]+(\d+)/.exec(String(item.id));
                 if (m) max = Math.max(max, Number(m[1]));

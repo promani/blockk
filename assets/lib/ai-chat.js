@@ -4,25 +4,20 @@
  *
  * Preguntas: vienen en formularios (una o varias, una debajo de la otra). Las de opción única se contestan con un
  * clic; si el formulario tiene alguna de opción múltiple, se confirma con «Enviar».
+ *
+ * Adjuntos: con el clip (o pegando una imagen en el campo) se manda la foto o captura de un plano, o un PDF (su primera
+ * página, convertida a imagen acá mismo), para que el asistente lo calque. La imagen viaja reducida y sólo con ese mensaje.
  */
-import { h, add, clear } from './dom.js';
+import { h, add, clear, svgEl } from './dom.js';
 import { fmt, int } from './format.js';
+import { clientId } from './client.js';
+import { pictureFrom, PICTURE_TYPES } from './picture.js';
 
-const CLIENT_KEY = 'blockk.client';
+export { clientId };
 
-export function clientId() {
-    try {
-        let id = localStorage.getItem(CLIENT_KEY);
-        if (!id || !/^[a-f0-9]{24}$/.test(id)) {
-            const bytes = window.crypto.getRandomValues(new Uint8Array(12));
-            id = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-            localStorage.setItem(CLIENT_KEY, id);
-        }
-        return id;
-    } catch {
-        return 'f'.repeat(24);
-    }
-}
+const IMAGE_SIDE = 1600; // px del lado mayor: alcanza para leer las cotas de un plano
+const IMAGE_MAX = 900000; // caracteres en base64 (el servidor admite hasta 1 000 000)
+const CLIP = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.9-8.9a3.7 3.7 0 0 1 5.2 5.2l-8.9 8.9a1.8 1.8 0 0 1-2.6-2.6l8.2-8.2"/></svg>';
 
 export async function api(url, body) {
     const res = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body) } : { headers: { Accept: 'application/json' } });
@@ -63,9 +58,60 @@ export function reviewLine(r) {
  */
 export function createChat(o) {
     const client = clientId();
-    const input = o.form.querySelector('input');
+    const input = o.form.querySelector('input[type="text"]');
+    const placeholder = input.placeholder;
     let conv = null;
     let busy = false;
+
+    // Plano adjunto: el clip elige la imagen; con una ya elegida muestra su miniatura y un clic la quita.
+    let attached = null;
+    let lastPlan = null; // la imagen del último plano enviado (el editor la ofrece como fondo para corregir el calcado)
+    const picker = h('input', { type: 'file', accept: PICTURE_TYPES.join(','), hidden: true, tabindex: '-1', 'aria-hidden': 'true' });
+    const clip = h('button', { type: 'button', class: 'btn btn-outline ai-attach' });
+    function showAttached() {
+        clear(clip);
+        clip.classList.toggle('on', Boolean(attached));
+        add(clip, attached ? [h('img', { src: attached.url, alt: '' }), h('span', { 'aria-hidden': 'true' }, '×')] : svgEl(CLIP));
+        clip.title = attached ? 'Quitar el plano adjunto' : 'Adjuntar la imagen o el PDF de un plano para calcarlo';
+        clip.setAttribute('aria-label', clip.title);
+        input.placeholder = attached ? `Plano adjunto${attached.pages > 1 ? ` (página 1 de ${attached.pages})` : ''}: enviá para calcarlo o sumá una aclaración…` : placeholder;
+    }
+    async function attach(file) {
+        try {
+            attached = await pictureFrom(file, { side: IMAGE_SIDE, max: IMAGE_MAX });
+            if (attached.pages > 1) {
+                add(o.log, h('div', { class: 'ai-msg ai-bot' }, `El PDF tiene ${attached.pages} páginas: uso la página 1. Si el plano está en otra, adjuntá una captura de esa página.`));
+                o.log.scrollTop = o.log.scrollHeight;
+            }
+        } catch (e) {
+            attached = null;
+            add(o.log, h('div', { class: 'ai-msg ai-bot ai-error' }, e.message));
+            o.log.scrollTop = o.log.scrollHeight;
+        }
+        showAttached();
+        input.focus();
+    }
+    clip.addEventListener('click', () => {
+        if (!attached) { picker.click(); return; }
+        attached = null;
+        showAttached();
+    });
+    picker.addEventListener('change', () => {
+        const file = picker.files?.[0];
+        picker.value = '';
+        if (file) attach(file);
+    });
+    input.addEventListener('paste', (e) => {
+        const file = [...(e.clipboardData?.files ?? [])].find((f) => PICTURE_TYPES.includes(f.type));
+        if (!file) return;
+        e.preventDefault();
+        attach(file);
+    });
+    o.form.prepend(clip);
+    o.form.append(picker); // al final: el primer campo del formulario sigue siendo el de texto
+    showAttached();
+    /** Mensaje de la persona: el texto y, si mandó un plano, su marca. */
+    const mine = (ev) => h('div', { class: 'ai-msg ai-me' }, ev.adjunto ? h('span', { class: 'ai-attached' }, '📎 Plano adjunto') : null, ev.texto);
 
     function setBusy(v, label = 'Pensando…') {
         busy = v;
@@ -107,7 +153,7 @@ export function createChat(o) {
         const lastHouse = events.map((e) => e.tipo).lastIndexOf('casa');
         events.forEach((ev, i) => {
             const isLast = i === events.length - 1;
-            if (ev.tipo === 'usuario') add(o.log, h('div', { class: 'ai-msg ai-me' }, ev.texto));
+            if (ev.tipo === 'usuario') add(o.log, mine(ev));
             else if (ev.tipo === 'asistente') add(o.log, h('div', { class: 'ai-msg ai-bot' }, ev.texto));
             else if (ev.tipo === 'pregunta') {
                 // las ya respondidas se achican a una línea: las respuestas se ven en el mensaje de la persona
@@ -151,30 +197,35 @@ export function createChat(o) {
         if (!conv) { o.onFirstMessage?.(payload); return; }
         const q = conv.eventos.at(-1);
         const labels = payload.respuestas && q?.preguntas ? q.preguntas.map((x) => x.opciones.filter((op) => payload.respuestas[x.id]?.includes(op.id)).map((op) => op.texto).join(', ')).filter(Boolean) : [];
-        conv.eventos.push({ tipo: 'usuario', texto: [...labels, payload.texto].filter(Boolean).join(' · ') });
+        conv.eventos.push({ tipo: 'usuario', texto: [...labels, payload.texto].filter(Boolean).join(' · '), adjunto: Boolean(payload.adjunto) });
         conv.activa = false;
         render();
-        const slow = payload.texto ? 'Pensando…' : 'Armando la casa…';
+        const slow = payload.adjunto ? 'Leyendo el plano…' : payload.texto ? 'Pensando…' : 'Armando la casa…';
         request(api(`/api/assistant/conversations/${conv.id}/messages`, { client, ...payload, ...(o.extra?.() ?? {}) }), slow);
     }
 
     o.form.addEventListener('submit', (e) => {
         e.preventDefault();
         const texto = input.value.trim();
-        if (!texto || busy) return;
+        if ((!texto && !attached) || busy) return;
         input.value = '';
-        submit({ texto });
+        const adjunto = attached && { tipo: attached.tipo, datos: attached.datos };
+        if (attached) lastPlan = attached.url;
+        attached = null;
+        showAttached();
+        submit(adjunto ? { texto, adjunto } : { texto });
     });
 
     return {
         client,
         get conv() { return conv; },
-        /** Arranca una conversación: {inicio, modo, texto?}. */
+        get lastPlan() { return lastPlan; },
+        /** Arranca una conversación: {inicio, modo, texto?, adjunto?}. */
         start(body) {
             conv = null;
             clear(o.log);
-            if (body.texto) add(o.log, h('div', { class: 'ai-msg ai-me' }, body.texto));
-            return request(api('/api/assistant/conversations', { client, ...body }), body.texto ? 'Pensando…' : 'Preparando…');
+            if (body.texto || body.adjunto) add(o.log, mine({ texto: body.texto, adjunto: Boolean(body.adjunto) }));
+            return request(api('/api/assistant/conversations', { client, ...body }), body.adjunto ? 'Leyendo el plano…' : body.texto ? 'Pensando…' : 'Preparando…');
         },
         async resume(id) {
             try {

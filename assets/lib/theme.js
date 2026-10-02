@@ -3,7 +3,7 @@
  * Si una falta o no es un hexadecimal, se usa el valor de abajo.
  */
 const DEFAULTS = {
-    sky: '#dcebfb', ground: '#cde7b0', block: '#f3f1ec', cut: '#ffcb5c', u: '#7fc93c', roof: '#d9552c',
+    sky: '#dcebfb', ground: '#a4d279', block: '#f3f1ec', cut: '#ffcb5c', u: '#7fc93c', roof: '#d9552c',
     glass: '#62bdf0', door: '#b8692e', wood: '#e3a04c', slab: '#a3b1c5',
     floors: ['#ffd49a', '#9fd8f5', '#d3bdff', '#b6e699', '#ffb3b3', '#ffec8f', '#93e0cc', '#ffc2e2'],
 };

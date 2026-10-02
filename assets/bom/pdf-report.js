@@ -43,6 +43,17 @@ export function buildPdf(project, analysis, config) {
         { title: 'Pallets', w: 90, align: 'right' },
     ], bom.total.blocks.map((b) => [b.code, b.label, int(b.order), fmt(b.volumeM3, 2), `${b.pallets.full} + ${b.pallets.loose} u`]));
 
+    if (telemetry.byType?.some((t) => t.type)) {
+        y = table(pdf, y + 10, 'Superficie útil por tipo de ambiente', [
+            { title: 'Tipo', w: 262 },
+            { title: 'Ambientes', w: 80, align: 'right' },
+            { title: 'm² útiles', w: 136, align: 'right' },
+        ], [
+            ...telemetry.byType.map((t) => [t.habitable ? t.label : `${t.label} (no habitable)`, int(t.rooms), fmt(t.m2, 2)]),
+            ['Superficie habitable', '', fmt(telemetry.habitableM2, 2)],
+        ], { boldLast: true });
+    }
+
     y = table(pdf, y + 10, `Cotización referencial (${bom.currency}) — precios de ejemplo`, [
         { title: 'Descripción', w: 262 },
         { title: 'Cantidad', w: 80, align: 'right' },

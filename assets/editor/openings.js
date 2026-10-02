@@ -10,6 +10,12 @@ export const OPENING_TYPES = {
     gate: { label: 'Portón', w: 20, widths: [20, 24], sill: 0, modes: [['overhead', 'Seccional'], ['slide', 'Corrediza']] },
 };
 
+/** Medidas comerciales del catálogo del servidor (`config.commercial`) para un tipo de abertura. */
+export const commercialFor = (cfg, kind) => (cfg.commercial ?? []).filter((c) => c.kind === kind);
+
+/** La medida de catálogo que coincide con la abertura (tipo, ancho y antepecho), o null si es a medida. */
+export const commercialOf = (cfg, o) => commercialFor(cfg, o.kind).find((c) => c.w === o.w && c.sill === o.sill) ?? null;
+
 export const openingTitle = (o) => OPENING_TYPES[o.kind]?.label ?? 'Abertura';
 
 /** Forma de abrir por defecto de un tipo. */

@@ -24,8 +24,8 @@
     --ok: #2f6b12;
 
     /* ---- Dibujo del editor, miniaturas y planos ---- */
-    --dibujo-fondo: #dcebfb;     /* fondo del lienzo */
-    --dibujo-terreno: #cde7b0;   /* terreno */
+    --dibujo-fondo: #dcebfb;     /* fondo del lienzo cuando el terreno está oculto */
+    --dibujo-terreno: #a4d279;   /* terreno y pasto de alrededor */
     --dibujo-bloque: #f3f1ec;    /* bloque entero */
     --dibujo-corte: #ffcb5c;     /* bloque cortado */
     --dibujo-bloque-u: #7fc93c;  /* bloque U (dinteles y corona) */

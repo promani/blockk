@@ -2,7 +2,7 @@
 /**
  * Prueba de punta a punta del asistente contra Kimi falso (levantar antes servidor-ia.sh). Galería: formulario
  * inicial sin modelo → casa → sugerencia → pregunta ambigua con varias preguntas → abrir en el editor. Editor: botón
- * flotante → pedido → aplicado y deshacer. Galería: aviso antes de reemplazar y «Modificar con IA» de una plantilla.
+ * flotante → pedido → aplicado y deshacer → plano adjunto con el clip → casa calcada. Galería: aviso antes de reemplazar y «Modificar con IA» de una plantilla.
  * Falla ante errores de consola.
  *
  *   node asistente.cjs [--base http://127.0.0.1:8091] [--shots carpeta]
@@ -82,6 +82,20 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     await page.click('#ai-dialog button:has-text("Deshacer este cambio")');
     await page.waitForSelector('#ai-dialog :text("↶ Deshecho")', { timeout: 30000 });
     log(await page.evaluate(() => window.blockk.store.history.at(-1)?.label !== 'Cambio del asistente' && window.blockk.store.future.length === 1), 'deshacer vuelve a la casa anterior');
+
+    // --- Editor: calcar un plano adjunto (imagen de 1 × 1 px; el Kimi falso «lee» siempre el mismo quincho)
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    await page.setInputFiles('#ai-form input[type="file"]', { name: 'plano.png', mimeType: 'image/png', buffer: png });
+    await page.waitForSelector('#ai-form .ai-attach.on img');
+    log(true, 'el clip muestra la miniatura del plano elegido');
+    await shot('ia-editor-adjunto');
+    await page.click('#ai-form button[type="submit"]');
+    await idle();
+    await page.waitForFunction(() => window.blockk.store.project.name === 'Quincho del plano', null, { timeout: 30000 });
+    log(/Plano adjunto/.test(await page.locator('.ai-me').last().innerText()) && !(await page.isVisible('#ai-form .ai-attach.on')), 'el mensaje lleva la marca del plano y el clip queda libre');
+    const traced = await page.evaluate(() => ({ names: window.blockk.store.project.levels[0].labels.map((l) => l.name), openings: window.blockk.store.project.levels[0].openings.length, label: window.blockk.store.history.at(-1)?.label }));
+    log(traced.names.join() === 'Quincho,Baño,Depósito' && traced.openings === 3 && traced.label === 'Cambio del asistente', `el plano se calcó en el editor (${traced.names.join(', ')}; ${traced.openings} aberturas)`);
+    await shot('ia-editor-calcado');
     await page.click('#ai-dialog [data-close]');
 
     // --- Galería: aviso antes de reemplazar y «Modificar con IA»

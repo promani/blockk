@@ -11,6 +11,7 @@ import { drawTheme, mix } from '../lib/theme.js';
 import { planeEq, planeHoles, gableHoles, withHoles } from './roofclip.js';
 import { ZONE_KINDS, zoneLabel } from './site.js';
 import { treeModel } from './tree-model.js';
+import { backEdge, furnitureOn, treesOn } from './furniture.js';
 
 const G = 12.5;
 
@@ -46,6 +47,7 @@ function PAL() {
         [KIND.STEP]: mix(t.slab, '#ffffff', 0.5),
         [KIND.SLAB]: t.slab,
         [KIND.COLUMN]: mix(t.slab, '#000000', 0.18),
+        [KIND.FURNITURE]: '#b9c4d4', // neutro y distinto del bloque: un mueble es un gabarito, no decoración
     };
     palette = Object.fromEntries(Object.entries(base).map(([k, hex]) => [k, { top: shade(hex, 1.03), yp: shade(hex, 0.88), xp: shade(hex, 0.74) }]));
     paletteFor = t;
@@ -106,9 +108,13 @@ export class Renderer {
         const { cam } = f;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, cam.w, cam.h);
-        ctx.fillStyle = drawTheme().sky;
+        // Con el terreno a la vista, lo de afuera del lote es del mismo color, con pasto; sin terreno, el fondo liso.
+        const showLot = f.ui?.showLot !== false;
+        ctx.fillStyle = showLot ? drawTheme().ground : drawTheme().sky;
         ctx.fillRect(0, 0, cam.w, cam.h);
+        if (showLot) this.drawGrass(f);
         this.drawGround(f);
+        this.drawBackdrop(f);
         if (f.project) {
             this.drawZones(f);
             if (cam.view === 'plan') this.drawPlan(f);
@@ -206,6 +212,7 @@ export class Renderer {
     drawPlanTrees(f) {
         const { ctx } = this;
         const { cam, project, ui } = f;
+        if (!treesOn(ui)) return;
         for (const t of project.trees ?? []) {
             const m = treeModel(t);
             const ox = t.x * G;
@@ -248,7 +255,7 @@ export class Renderer {
      */
     drawTreeShadows(f) {
         const { cam, project, ui, sun } = f;
-        if (!project.trees?.length || !sun || !ui?.solar?.show || sun.alt < 3) return;
+        if (!project.trees?.length || !treesOn(ui) || !sun || !ui?.solar?.show || sun.alt < 3) return;
         const disp = this.sunDisp(project, sun);
         this.treeShadow ??= document.createElement('canvas');
         const c = this.treeShadow;
@@ -358,6 +365,72 @@ export class Renderer {
         ctx.stroke();
     }
 
+    /**
+     * Plano de fondo (`ui.backdrop`, sólo en el editor): la imagen apoyada en el suelo, sobre el terreno y debajo del
+     * dibujo. En las dos vistas el suelo se proyecta con una transformación afín, así que alcanza con tres esquinas.
+     */
+    drawBackdrop(f) {
+        const b = f.ui?.backdrop;
+        if (!b?.img || b.visible === false) return;
+        const { ctx, dpr } = this;
+        const { cam } = f;
+        const w = b.img.naturalWidth;
+        const h = b.img.naturalHeight;
+        const o = cam.project(b.x, b.y, 0);
+        const px = cam.project(b.x + w * b.cmPerPx, b.y, 0);
+        const py = cam.project(b.x, b.y + h * b.cmPerPx, 0);
+        ctx.save();
+        ctx.globalAlpha = b.opacity;
+        ctx.setTransform((dpr * (px[0] - o[0])) / w, (dpr * (px[1] - o[1])) / w, (dpr * (py[0] - o[0])) / h, (dpr * (py[1] - o[1])) / h, dpr * o[0], dpr * o[1]);
+        ctx.drawImage(b.img, 0, 0);
+        ctx.restore();
+    }
+
+    /**
+     * Pasto alrededor del lote: matas de tres briznas repartidas sobre el suelo. Van ancladas al mundo (se mueven con la
+     * vista) y siempre en el mismo lugar: la posición sale de un hash de la celda. Al alejar la vista las celdas se
+     * agrandan, así hay una mata cada ~36 px y no una mancha. Las que caen dentro del lote las tapa el terreno.
+     */
+    drawGrass(f) {
+        const { ctx } = this;
+        const { cam } = f;
+        const ground = drawTheme().ground;
+        let cell = 120;
+        while (cell * cam.zoom < 36) cell *= 2;
+        const corners = [[0, 0], [cam.w, 0], [cam.w, cam.h], [0, cam.h]].map(([x, y]) => cam.unproject(x, y, 0));
+        const i0 = Math.floor(Math.min(...corners.map((c) => c[0])) / cell);
+        const i1 = Math.ceil(Math.max(...corners.map((c) => c[0])) / cell);
+        const j0 = Math.floor(Math.min(...corners.map((c) => c[1])) / cell);
+        const j1 = Math.ceil(Math.max(...corners.map((c) => c[1])) / cell);
+        // dos tonos: las matas oscuras dan el dibujo y las claras, algo de variación
+        const paths = [new window.Path2D(), new window.Path2D()];
+        for (let i = i0; i <= i1; i++) {
+            for (let j = j0; j <= j1; j++) {
+                let h = (Math.imul(i, 73856093) ^ Math.imul(j, 19349663) ^ Math.imul(cell, 83492791)) >>> 0;
+                const rnd = () => {
+                    h = (Math.imul(h ^ (h >>> 15), 2246822519) + 0x9e3779b9) >>> 0;
+                    return (h >>> 8) / 16777216;
+                };
+                const [sx, sy] = cam.project((i + rnd()) * cell, (j + rnd()) * cell, 0);
+                if (sx < -12 || sy < -12 || sx > cam.w + 12 || sy > cam.h + 12) continue;
+                const size = 5 + rnd() * 4;
+                const path = paths[rnd() < 0.3 ? 1 : 0];
+                for (const k of [-1, 0, 1]) {
+                    path.moveTo(sx + k * 1.2, sy);
+                    path.lineTo(sx + k * size * 0.55, sy - size * (1 - Math.abs(k) * 0.3));
+                }
+            }
+        }
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = mix(ground, '#1f5a1c', 0.42);
+        ctx.stroke(paths[0]);
+        ctx.strokeStyle = mix(ground, '#ffffff', 0.38);
+        ctx.stroke(paths[1]);
+        ctx.restore();
+    }
+
     drawGrid(cam, W, D, z) {
         const { ctx } = this;
         // Retícula simple: una línea por metro (tenue) y una más marcada cada 5 m. El ajuste real (12,5 cm o el bloque) se ve como
@@ -405,6 +478,7 @@ export class Renderer {
         for (const it of list) {
             const b = it.b;
             if (b.level > activeLevel) continue;
+            if ((b.kind === KIND.TREE && !treesOn(ui)) || (b.kind === KIND.FURNITURE && !furnitureOn(ui))) continue;
             if (upperFloors && b.zs >= 300) {
                 upperFloors = false;
                 this.drawRoomFloors(f, 1, 300);
@@ -843,6 +917,7 @@ export class Renderer {
             ctx.fillStyle = fill;
             for (const [x0, y0, x1, y1] of rects.values()) this.fillRectPlan(cam, x0, y0, x1, y1);
             ctx.globalAlpha = 1;
+            if (!ghost) this.drawPlanFurniture(f, li); // antes que los nombres de los ambientes, que quedan arriba
             if (!ghost && ui.level !== 2) this.drawPlanRooms(f, li);
             this.drawPlanOpenings(f, project.levels[li], ghost);
             this.drawPlanColumns(f, project.levels[li], ghost);
@@ -1082,6 +1157,46 @@ export class Renderer {
         ctx.fillText(line1, sx, sy - 6);
         ctx.fillStyle = '#3f6212';
         ctx.fillText(line2, sx, sy + 8);
+    }
+
+    /**
+     * Muebles en planta: un rectángulo claro con borde fino, su nombre corto si entra y una línea gruesa en la cabecera
+     * o el respaldo. Nada más: son gabaritos para medir el ambiente.
+     */
+    drawPlanFurniture(f, li) {
+        const { ctx } = this;
+        const { cam, ui, scene } = f;
+        if (!furnitureOn(ui)) return;
+        ctx.save();
+        ctx.font = '500 10px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const m of scene?.furniture?.[li] ?? []) {
+            const { rect } = m;
+            const [ax, ay] = cam.project(rect[0], rect[1], 0);
+            const [bx, by] = cam.project(rect[2], rect[3], 0);
+            const [x, y, w, h] = [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)];
+            ctx.fillStyle = 'rgba(255,255,255,.82)';
+            ctx.strokeStyle = '#64748b';
+            ctx.lineWidth = 1;
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+            if (m.back) {
+                const [ex0, ey0, ex1, ey1] = backEdge(rect, m.rot);
+                const [px, py] = cam.project(ex0, ey0, 0);
+                const [qx, qy] = cam.project(ex1, ey1, 0);
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(qx, qy);
+                ctx.stroke();
+            }
+            if (h >= 14 && ctx.measureText(m.short).width <= w - 6) {
+                ctx.fillStyle = '#475569';
+                ctx.fillText(m.short, x + w / 2, y + h / 2);
+            }
+        }
+        ctx.restore();
     }
 
     /** Pilares en planta: cuadrado oscuro con una cruz (símbolo del hormigón armado). */

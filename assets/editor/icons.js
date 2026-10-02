@@ -14,9 +14,11 @@ export const ICONS = {
     slab: svg('<path d="M3 10l9-5 9 5-9 5z"/><path d="M3 10v3l9 5 9-5v-3"/>'),
     stair: svg('<path d="M4 20h4v-4h4v-4h4V8h4"/><path d="M4 20V4M20 8v12" stroke-width="1.2"/>'),
     roof: svg('<path d="M3 13l9-7 9 7"/><path d="M5 12v7h14v-7" stroke-width="1.3"/>'),
+    furniture: svg('<path d="M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6"/><path d="M3 15h18M5 10V7h6v3M3 18v2M21 18v2"/>'),
     column: svg('<rect x="8" y="3" width="8" height="18" rx="1"/><path d="M6 21h12M6 3h12"/>'),
     label: svg('<path d="M4 7h16M4 12h10M4 17h13"/><path d="M18 12l2 2-2 2" stroke-width="1.4"/>'),
     zone: svg('<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M6 11c2-2 3 2 5 0s3 2 5 0" stroke-width="1.4"/>'),
     tree: svg('<circle cx="12" cy="9" r="6"/><path d="M12 15v6M9 21h6"/>'),
+    measure: svg('<path d="M3 16L16 3l5 5L8 21z"/><path d="M7 12l2 2M10 9l2 2M13 6l2 2" stroke-width="1.4"/>'),
     beam: svg('<rect x="3" y="9" width="18" height="6" rx="1"/><path d="M6 9v6M18 9v6" stroke-width="1.3"/>'),
 };

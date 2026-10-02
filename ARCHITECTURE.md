@@ -15,7 +15,8 @@ con la respuesta. El asistente de IA es una capa aparte (`src/Assistant`) que us
 | Cómputo, Galería, Catálogo | Páginas Twig + módulos ES: exportación CSV/PDF (generados en el navegador), plantillas, fichas | `templates/`, `assets/{bom,gallery,catalog}/` |
 | API de cálculo | `POST /api/analyze` y afines; sin estado | `src/Controller/Api/ProjectApiController.php` |
 | Motor (dominio) | Normalización, topología, ambientes, hiladas, cortes, madera, losas, escaleras, techos, cómputo, validación, sol | `src/Domain/` |
-| Generador y editor de casas | Programa de ambientes → casa válida; operaciones puntuales sobre un proyecto | `src/Domain/Design/` |
+| Generador y editor de casas | Programa de ambientes → casa válida; operaciones puntuales sobre un proyecto; calcado de un plano desde sus ambientes | `src/Domain/Design/` |
+| Mis casas | Casas guardadas por navegador, privadas (el enlace para compartir es aparte: `src/Share/`) | `src/Houses/`, `src/Controller/Api/HousesController.php`, `assets/lib/houses.js`, `assets/editor/houses.js`, `assets/gallery/houses.js` |
 | Asistente de IA | Conversación, herramientas, dos modelos (liviano/pesado), persistencia, límites | `src/Assistant/`, `src/Controller/Api/AssistantController.php`, `assets/lib/ai-chat.js` |
 | Kimi (externo) | LLM por API compatible con OpenAI | `KIMI_*` |
 | Redis (lab) | Conversaciones, diseños por navegador y contadores de uso | `REDIS_URL` |
@@ -83,6 +84,11 @@ sequenceDiagram
   interfaz, casa actual y su programa), `design:{id}`, contadores `rl:*`.
 - **Proyectos compartidos** (Redis, 180 días desde el último cambio): `share:{id}` con `{project, version, updated}`;
   el id (32 hexadecimales al azar) es la credencial de lectura y escritura (`src/Share/SharedProjects.php`).
+- **Mis casas** (Redis, 1 año desde el último uso): `house:{id}` `{id, client, name, project, summary, svg, created,
+  updated}` e índice `houses:{client}` (hasta 30 por navegador); contadores `rl:houses:*`. Sin usuarios: `client` es el
+  id aleatorio del navegador, nunca sale en una respuesta y sólo él puede leer, cambiar o borrar sus casas.
+- **Traspaso de Mis casas** (Redis, 15 minutos, un solo uso): `transfer:{código}` con los ids a copiar; no guarda el
+  navegador de origen.
 
 ## API
 
@@ -95,10 +101,16 @@ sequenceDiagram
 | `POST /api/thumbnail` | Miniatura SVG de un proyecto. |
 | `GET /api/calc/panel?…` | Calculadora rápida de paño. |
 | `GET /api/assistant/status` | ¿Está configurado el asistente? |
-| `POST /api/assistant/conversations` | Nueva conversación `{client, modo, inicio:{tipo: nueva\|plantilla\|proyecto, …}, texto?, respuestas?}`. |
-| `POST /api/assistant/conversations/{id}/messages` | Mensaje `{client, texto?, respuestas?, project?}`. |
+| `POST /api/assistant/conversations` | Nueva conversación `{client, modo, inicio:{tipo: nueva\|plantilla\|proyecto, …}, texto?, respuestas?, adjunto?}`. |
+| `POST /api/assistant/conversations/{id}/messages` | Mensaje `{client, texto?, respuestas?, project?, adjunto?}`; `adjunto: {tipo, datos}` es la imagen de un plano en base64 para calcarlo. |
 | `GET /api/assistant/conversations/{id}`, `GET /api/assistant/designs/{id}` | Retomar una conversación; casa de una conversación. |
 | `POST /api/compartidos`, `GET/PUT /api/compartidos/{id}` | Enlaces para compartir editables: crear (`{project}` → `{id, version, url}`, 60 por hora por IP), leer y guardar (gana el último). |
+| `GET /api/houses?client=` | «Mis casas»: las guardadas por ese navegador (id, name, summary, svg, created, updated). Nunca lista las de otros. |
+| `POST /api/houses` | `{client, project, id?}`: crea (201) o actualiza la propia (200); `422` si el proyecto es inválido, `409` al pasar de 30. |
+| `GET /api/houses/{id}?client=`, `DELETE /api/houses/{id}?client=` | Abrir o borrar una casa guardada: sólo el navegador que la guardó (para los demás, `404`). |
+| `PATCH /api/houses/{id}` | `{client, name}`: renombra la propia; `404` si es ajena. |
+| `POST /api/houses/transfer`, `POST /api/houses/transfer/{código}` | Llevar «Mis casas» a otro navegador: crea un código de un solo uso (`{client}` → `{codigo, casas, venceEn}`) y lo canjea (`{client}` → `{copiadas, omitidas}`; `404` si no existe, venció o ya se usó). |
+| `GET /comparar?a=&b=` | Página que compara dos casas guardadas de ese navegador (las calcula con `/api/analyze`). |
 | `GET /api/admin/ping`, `GET/POST /api/admin/galeria`, `GET/PUT/DELETE /api/admin/galeria/{slug}` | **API de administración de la Galería** (`Authorization: Bearer $ADMIN_API_TOKEN`; sin token configurado no existe). Crea, edita y borra modelos que ve todo el mundo en `/galeria` (guardados en Redis, clave `gallery:{slug}`, máx. 100). Cuerpo: `nombre`, `descripcion?`, `etiquetas?`, `slug?` y un dibujo: `programa` (generador), `plantilla` (clonar) o `project`; en `PUT` también `operaciones` sobre el actual. Las plantillas del código no se editan ni borran. |
 
 ## Decisiones y trade-offs
@@ -106,14 +118,18 @@ sequenceDiagram
 - **Reglas sólo en el servidor.** El cliente no duplica reglas: para validar en vivo (p. ej. dónde entra una puerta) el
   servidor devuelve los tramos libres de cada muro. Costo: una ida y vuelta por edición (~50 ms por análisis de una
   casa de 2 plantas).
-- **Sin base de datos para el editor.** El proyecto vive en el navegador: cero cuentas y cero datos personales. Sólo
-  si alguien aprieta «Compartir» la casa se guarda en Redis, sin dueño: el enlace es la credencial.
+- **Sin base de datos ni cuentas para el editor.** El proyecto vive en el navegador: cero cuentas y cero datos
+  personales. A Redis va sólo lo que la persona pide: «Compartir» guarda la casa sin dueño (el enlace es la
+  credencial, y quien lo tiene la edita) y «Guardar» la deja en «Mis casas», atada al id aleatorio del navegador y
+  visible sólo para él. A cambio, «Mis casas» no pasa sola de un navegador a otro.
 - **La IA no dibuja.** El modelo elige un programa o una operación y el código construye y valida; así toda casa que
   muestra la IA pasa la misma Revisión que una dibujada a mano. Costo: el generador sólo produce plantas en «tira».
 - **Dos modelos.** Uno liviano (barato) coordina y pregunta; uno pesado arma el JSON y las acciones. El formulario
   inicial no usa ningún modelo (la primera casa sale en < 1 s).
 - **Sin paso de build en el front** (AssetMapper + import maps nativos): menos herramientas; a cambio, sin TypeScript
-  ni bundling.
+  ni bundling. La única dependencia de front es pdf.js (`pdfjs-dist`, para adjuntar un PDF o usarlo de fondo): está en
+  `importmap.php`, se baja a `assets/vendor/` con `php bin/console importmap:install` (lo corre `composer install`) y
+  el navegador la carga sólo cuando llega un PDF. Sin CDN en tiempo de ejecución.
 - **Render propio en Canvas 2D** (algoritmo del pintor por capas con orden topológico) en lugar de WebGL: liviano y
   exacto para cajas alineadas; sostiene 60 FPS en casas de 2 plantas.
 

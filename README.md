@@ -50,6 +50,7 @@ Todas tienen valor por defecto en `.env`; las secretas van en `.env.local` (no s
 | `KIMI_API_KEY`, `KIMI_BASE_URL` | Clave y endpoint de la API de Kimi (por defecto `https://api.moonshot.ai/v1`). Sin clave, el asistente no aparece. |
 | `KIMI_MODEL` | Modelo pesado: arma el JSON de la casa y las acciones directas. |
 | `KIMI_MODEL_LIGHT` | Modelo liviano (mismo endpoint y clave): conversa, pregunta y delega. Vacío: todo lo hace `KIMI_MODEL`. |
+| `KIMI_MODEL_VISION` | Modelo que lee imágenes, para calcar un plano adjunto. Vacío: lo hace `KIMI_MODEL` (tiene que aceptar imágenes). |
 | `REDIS_URL`, `REDIS_PREFIX` | Persistencia del asistente (prefijo de claves `blockk:`). |
 | `ASSISTANT_HOURLY_LIMIT`, `ASSISTANT_DAILY_LIMIT` | Mensajes al asistente por hora por IP (60) y por día en total (500). |
 | `ADMIN_API_TOKEN` | Token de la API de administración (`/api/admin/*`, crear casas desde fuera del navegador). Vacío: la API no existe. Generarlo largo y aleatorio. |

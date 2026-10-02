@@ -6,6 +6,7 @@
 import { $, h } from '../lib/dom.js';
 import { saveProject } from '../lib/storage.js';
 import { api, createChat, thumb, kpis, reviewLine } from '../lib/ai-chat.js';
+import { linkHouse } from '../lib/houses.js';
 
 export const LINK_KEY = 'blockk.ai.link';
 
@@ -57,6 +58,7 @@ export function mountAssistant({ card, dialog, confirmReplace }) {
     async function openInEditor(id) {
         const d = await api(`/api/assistant/designs/${id}?client=${chat.client}`);
         saveProject(d.project);
+        linkHouse(null); // casa nueva: no es ninguna de las guardadas
         try { localStorage.setItem(LINK_KEY, JSON.stringify({ name: d.project.name, programa: d.programa })); } catch { /* ok */ }
         location.href = '/';
     }

@@ -10,11 +10,15 @@ import { createTools, openingBox } from './tools.js';
 import { mountPanels } from './panels.js';
 import { wireBox, snapDots, magnetHit } from './overlay.js';
 import { TREE_SIZES } from './site.js';
+import { furnitureRect, footprint, furnitureOn, treesOn } from './furniture.js';
 import { magnet } from './snap.js';
 import { mountGuide } from './guide.js';
 import { wallRect, G } from './pick.js';
 import { mountAssistant } from './ai.js';
 import { mountShare } from './share.js';
+import { mountHouses } from './houses.js';
+import { mountBackdrop } from './backdrop.js';
+import { linkHouse } from '../lib/houses.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
 const store = new Store(config);
@@ -30,10 +34,12 @@ const ROOF_LEVEL = 2;
  * desde un nivel lleva a la pestaña Techo.
  */
 const TOOLSETS = {
-    0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['block', 'ubeam', 'zone', 'tree'] },
-    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['block', 'ubeam', 'beam', 'zone', 'tree'] },
-    2: { main: ['select', 'roof'], more: [] },
+    0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['measure', 'furniture', 'block', 'ubeam', 'zone', 'tree'] },
+    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['measure', 'furniture', 'block', 'ubeam', 'beam', 'zone', 'tree'] },
+    2: { main: ['select', 'roof', 'measure'], more: [] },
 };
+/** Muebles y árboles se pueden apagar («Configuraciones generales»): su herramienta sale de la barra y su atajo no hace nada. */
+const toolHidden = (id) => (id === 'furniture' && !furnitureOn(store.ui)) || (id === 'tree' && !treesOn(store.ui));
 let showMore = false;
 
 let dirty = true;
@@ -63,6 +69,7 @@ app.draw = () => draw(); // dibujo síncrono (mediciones de rendimiento)
 app.tools = createTools(app);
 const panels = mountPanels(app);
 app.setTool = (id) => setTool(id);
+app.backdrop = mountBackdrop(app);
 mountAssistant(app);
 const guide = mountGuide(app, {
     go: (level, tool) => {
@@ -94,7 +101,7 @@ const levelLabel = () => config.levelShort[store.ui.level] ?? 'Techo';
 
 function persistUi() {
     try {
-        localStorage.setItem(UI_KEY, JSON.stringify({ view: store.ui.view, showLot: store.ui.showLot, showGrid: store.ui.showGrid }));
+        localStorage.setItem(UI_KEY, JSON.stringify({ view: store.ui.view, showLot: store.ui.showLot, showGrid: store.ui.showGrid, showFurniture: store.ui.showFurniture, showTrees: store.ui.showTrees }));
     } catch { /* sin persistencia */ }
 }
 
@@ -326,6 +333,23 @@ document.addEventListener('keydown', (e) => {
         store.redo();
         return;
     }
+    if (mod && e.key.toLowerCase() === 'c') {
+        // Ctrl+C: copia lo elegido en el editor, salvo que haya texto marcado en la página (ese lo copia el navegador)
+        if (String(window.getSelection() ?? '') !== '') return;
+        e.preventDefault();
+        app.copySelection();
+        return;
+    }
+    if (mod && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        app.pasteClipboard();
+        return;
+    }
+    if (mod && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        app.duplicateSelection();
+        return;
+    }
     if (mod) return;
 
     if (activeTool().keyDown?.(e)) return;
@@ -363,7 +387,7 @@ function setTool(id) {
         id = 'opening';
     }
     const tool = app.tools[id];
-    if (!tool) return;
+    if (!tool || toolHidden(id)) return;
     if (id === 'roof' && store.ui.level !== ROOF_LEVEL) {
         setLevel(ROOF_LEVEL);
         return;
@@ -383,7 +407,8 @@ function setTool(id) {
 
 /** Motivo por el que una herramienta no está disponible ahora (null si lo está). */
 function toolDisabled(tool) {
-    if (tool.id === 'roof') return null;
+    if (tool.id === 'roof' || tool.id === 'measure') return null;
+    if (tool.free) return tool.disabled?.() ?? null; // las del plano de fondo valen en cualquier pestaña
     if (store.ui.level === ROOF_LEVEL && tool.id !== 'select') return 'En la pestaña Techo solo se dibujan y editan techos: volvé a un nivel para dibujar muros, losas o escaleras.';
     return tool.disabled?.() ?? null;
 }
@@ -392,7 +417,7 @@ function refreshOptions() {
     const tool = activeTool();
     // En la pestaña Techo, tanto Elegir como Techo muestran las opciones del techo (elegido o de los nuevos), salvo que
     // haya un grupo elegido con un rectángulo: ahí van las de Elegir.
-    const roofOpts = store.ui.level === ROOF_LEVEL && !(tool.id === 'select' && app.multiCount());
+    const roofOpts = store.ui.level === ROOF_LEVEL && tool.id !== 'measure' && !tool.free && !(tool.id === 'select' && app.multiCount());
     const opts = roofOpts ? app.roofOptions() : tool.options?.();
     const title = roofOpts ? 'Techo' : tool.label;
     add(clear($('#tooloptions')), h('span', { class: 'title' }, title), opts);
@@ -432,10 +457,11 @@ function renderToolbar() {
     const bar = clear($('#toolbar'));
     const set = TOOLSETS[store.ui.level] ?? TOOLSETS[0];
     for (const id of set.main) bar.append(toolButton(id));
-    if (set.more.length) {
-        const open = showMore || set.more.includes(store.ui.tool);
+    const more = set.more.filter((id) => !toolHidden(id));
+    if (more.length) {
+        const open = showMore || more.includes(store.ui.tool);
         bar.append(h('button', { type: 'button', class: 'tool-more', 'aria-expanded': String(open), onclick: () => { showMore = !open; renderToolbar(); } }, open ? 'Menos ▴' : 'Más ▾'));
-        if (open) for (const id of set.more) bar.append(toolButton(id));
+        if (open) for (const id of more) bar.append(toolButton(id));
     }
 }
 
@@ -600,6 +626,11 @@ function selectionBox(sel) {
         const z = (store.project.zones ?? []).find((x) => x.id === sel.id);
         return z ? { x0: z.x * G, y0: z.y * G, x1: (z.x + z.w) * G, y1: (z.y + z.h) * G, z0: 0, z1: 4 } : null;
     }
+    if (sel.type === 'furniture') {
+        const m = (lv.furniture ?? []).find((x) => x.id === sel.id);
+        const r = m && furnitureRect(config, m);
+        return r ? { x0: r[0], y0: r[1], x1: r[2], y1: r[3], z0: base, z1: base + footprint(config, m).h } : null;
+    }
     if (sel.type === 'column') {
         const c = (lv.columns ?? []).find((x) => x.id === sel.id);
         return c ? { x0: c.x * G - c.size / 2, y0: c.y * G - c.size / 2, x1: c.x * G + c.size / 2, y1: c.y * G + c.size / 2, z0: base, z1: base + config.levelHeight } : null;
@@ -692,7 +723,7 @@ function sceneKey() {
     const { level, cut, snap, solar } = store.ui;
     const s = store.ui.solar.show ? store.sun() : null;
     const p = store.project;
-    return [sceneVersion, level, cut, snap, solar.show, store.ui.showLot, store.ui.showGrid, s ? `${s.alt.toFixed(2)}:${s.az.toFixed(2)}` : '-', p.north, p.lot.w, p.lot.d].join(',');
+    return [sceneVersion, level, cut, snap, solar.show, store.ui.showLot, store.ui.showGrid, store.ui.showFurniture, store.ui.showTrees, store.ui.backdrop?.rev ?? 0, s ? `${s.alt.toFixed(2)}:${s.az.toFixed(2)}` : '-', p.north, p.lot.w, p.lot.d].join(',');
 }
 
 function draw() {
@@ -735,6 +766,17 @@ store.addEventListener('ui', (e) => {
     // La hora y la época del sol sólo cambian el dibujo: no se redibujan los paneles (cortaría el arrastre del deslizador).
     const keys = Object.keys(e.detail ?? {});
     if (keys.some((k) => k === 'showLot' || k === 'showGrid')) persistUi();
+    if (keys.some((k) => k === 'showFurniture' || k === 'showTrees')) {
+        // Al apagar muebles o árboles se suelta lo que estuviera elegido de eso y se deja su herramienta.
+        persistUi();
+        const type = store.ui.selection?.type;
+        if ((type === 'furniture' && !furnitureOn(store.ui)) || (type === 'tree' && !treesOn(store.ui))) store.ui.selection = null;
+        if (toolHidden(store.ui.tool)) {
+            activeTool().reset?.();
+            store.ui.tool = 'select';
+            refreshOptions();
+        }
+    }
     if (keys.length && keys.every((k) => k === 'solar' || k === 'showLot' || k === 'showGrid')) {
         app.render();
         return;
@@ -748,6 +790,8 @@ store.addEventListener('ui', (e) => {
     if (k !== contextKey) {
         contextKey = k;
         panels.renderContext();
+        // Las opciones de Elegir dependen de lo elegido (botón «Duplicar»).
+        if (store.ui.tool === 'select' && store.ui.level !== ROOF_LEVEL) refreshOptions();
     }
     updateHistoryButtons();
     renderToolbar();
@@ -791,7 +835,9 @@ $('#file-open').addEventListener('change', async (e) => {
         const data = JSON.parse(await file.text());
         if (!Array.isArray(data.levels)) throw new Error('el archivo no es un proyecto de Blockk');
         share.unlink();
+        app.backdrop.remove(); // el plano de fondo era del proyecto anterior
         await store.load(data);
+        linkHouse(null); // es otro proyecto: al guardarlo queda como una casa nueva
         fitView();
         toast(`Proyecto «${store.project.name}» abierto.`);
     } catch (err) {
@@ -811,12 +857,15 @@ $('#form-new').addEventListener('submit', async (e) => {
     const f = Object.fromEntries(new FormData(e.target));
     dlg.close();
     share.unlink();
+    app.backdrop.remove();
     await store.load(blankProject({ name: String(f.name).trim() || 'Proyecto sin título', lotW: Number(f.lotW), lotD: Number(f.lotD), t: Number(f.t), lat: Number(f.lat) }));
+    linkHouse(null);
     fitView();
     store.ensureSolar();
 });
 
 const share = mountShare({ store, toast, fitView });
+const houses = mountHouses(app, { unlinkShare: () => share.unlink() });
 
 /* ------------------------------------------------------------------ arranque */
 (async function boot() {
@@ -825,6 +874,8 @@ const share = mountShare({ store, toast, fitView });
         if (ui.view) store.setUi({ view: ui.view }, { silent: true });
         if (ui.showLot === false) store.setUi({ showLot: false }, { silent: true });
         if (ui.showGrid === false) store.setUi({ showGrid: false }, { silent: true });
+        if (ui.showFurniture === false) store.setUi({ showFurniture: false }, { silent: true });
+        if (ui.showTrees === false) store.setUi({ showTrees: false }, { silent: true });
     } catch { /* ok */ }
     cam.view = store.ui.view;
     for (const b of $$('#view-toggle button')) b.setAttribute('aria-pressed', String(b.dataset.view === store.ui.view));
@@ -836,7 +887,13 @@ const share = mountShare({ store, toast, fitView });
     resize();
 
     // Un enlace compartido (/?compartido=…) manda sobre lo guardado en este navegador.
-    if (!(await share.boot())) await store.load(loadProject() ?? blankProject());
+    if (await share.boot()) linkHouse(null); // es el proyecto del enlace, no una de «Mis casas»
+    else {
+        await store.load(loadProject() ?? blankProject());
+        // «Abrir» de Mis casas: /?casa={id}
+        await houses.openFromUrl();
+    }
+    await app.backdrop.restore();
     // En sólo lectura se muestra la casa completa, con techo.
     if (readOnly() && store.project.levels.some((l) => l.walls.length)) setLevel(ROOF_LEVEL);
     fitView();

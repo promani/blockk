@@ -64,6 +64,13 @@ final class PageController extends AbstractController
         return $this->render('gallery/index.html.twig', ['cards' => $cards, 'nav' => 'gallery', 'assistant' => $this->assistant->enabled(), 'config' => ClientConfig::json()]);
     }
 
+    /** Comparación de dos casas de «Mis casas» (`?a=&b=`): los datos los trae el navegador, que es quien las puede leer. */
+    #[Route('/comparar', name: 'compare', methods: ['GET'])]
+    public function compare(): Response
+    {
+        return $this->render('compare/index.html.twig', ['nav' => 'gallery']);
+    }
+
     #[Route('/catalogo', name: 'catalog', methods: ['GET'])]
     public function catalog(): Response
     {

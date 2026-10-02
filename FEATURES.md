@@ -56,16 +56,30 @@ trabajo en equipo).
 - **Aberturas**: una sola herramienta con **tipo** (puerta, ventana, portón), **ancho**, **alto** y **apertura**
   (batiente con bisagra y lado, corrediza, fija, seccional); en las ventanas, el **antepecho** (distancia desde el suelo).
   Se colocan apuntando al muro (el verde marca lugar
-  válido) y se mueven arrastrándolas, también a otro muro.
-- **Pilares** de hormigón armado (20 a 40 cm) y **nombres de ambiente** que se ven en la planta.
+  válido) y se mueven arrastrándolas, también a otro muro. Se eligen por **medida comercial** de carpintería (puerta
+  80 × 200, ventana 120 × 110…), que fija el vano modular que la contiene, o **a medida**.
+- **Pilares** de hormigón armado (20 a 40 cm) y **nombres de ambiente** que se ven en la planta. El nombre es libre y
+  se le puede elegir un **tipo** (dormitorio, baño, cocina…); si no se elige, se deduce del nombre.
 - **Terreno**: **zonas** rectangulares (pileta, patio o deck, jardín, camino) y **árboles** simples (tronco, copa y
   sombra, en tres tamaños). Sirven para pensar la disposición del espacio; no entran al cómputo ni a la Revisión.
+- **Muebles simples** como gabarito de tamaño real (camas, placard, mesas con sillas, sillones, mesadas, artefactos de
+  baño…): rectángulos con su nombre en la planta y cajas bajas en la isométrica. Sirven para ver si un ambiente
+  alcanza; no entran al cómputo. Los muebles y los árboles se **apagan** con un interruptor: dejan de verse y sus
+  herramientas salen de la barra.
+- **Plano de fondo**: una imagen o la primera página de un PDF apoyada sobre el terreno, debajo del dibujo, para
+  calcar encima. Se pone a escala marcando dos puntos de una medida conocida; se mueve, se atenúa y se quita. No entra
+  al proyecto ni al cómputo: queda en el navegador.
 - **Dos niveles + techo**: Nivel 1, Nivel 2 (con piso: losa de hormigón o entrepiso de madera) y pestaña Techo.
 - **Escaleras**: recta, en L y en U, con ancho, huella y giro; abren el hueco en el piso de arriba.
 - **Techos** rectangulares a dos aguas o a un agua, que se apoyan solos en los muros, se cruzan y se cortan entre sí
   (limahoya); alero, pendiente, cabios y hastiales de bloque despiezados.
 - **Imán y guías** al dibujar, mover muros arrastrando (el resto se estira), selección múltiple con rectángulo y
   movimiento en grupo, deshacer y rehacer ilimitado, guía «Próximo paso».
+- **Medidas exactas**: la cota se ve mientras se dibuja; en un muro se puede **escribir el largo** y Enter; el ancho y
+  el fondo de una habitación se escriben en el panel; la herramienta **Medir** da la distancia entre dos puntos,
+  también entre caras de muros (luz libre).
+- **Copiar y pegar** (`Ctrl+C` / `Ctrl+V`, `Ctrl+D` duplica): un elemento o un grupo, también de un nivel al otro para
+  repetir la planta arriba.
 - **Terreno** configurable (hasta 100 m por lado), norte que se orienta con una brújula, ciudad y huso horario.
 
 ### 3.2 Entender (vistas y revisión)
@@ -76,7 +90,12 @@ trabajo en equipo).
 - **Revisión constructiva** en vivo, con errores, advertencias e información, cada una vinculada al elemento que la
   causa: jambas de 25 cm, 60 % de vanos en muros portantes, luces de dintel, esbeltez, apoyos del Nivel 2 y de
   pilares, luces de losa y de madera. Los techos se dibujan para ver la casa completa y computar la madera: no generan observaciones.
-- **Resumen y panel contextual**: lo que se muestra cambia según la herramienta o el elemento elegido.
+- **Recomendaciones por tipo de ambiente**: estar, comedor, dormitorio o escritorio sin ventana y **dormitorio de
+  paso** (advertencia); baño, cocina o lavadero sin ventilación, baño que abre a la cocina o al comedor, escalera que
+  llega a un dormitorio y superficie por debajo de la referencia (nota). Son recomendaciones, no normativa.
+- **Resumen y panel contextual**: lo que se muestra cambia según la herramienta o el elemento elegido; incluye los
+  **m² útiles por tipo de ambiente** y la **superficie habitable** (sin garajes ni galerías), que también están en el
+  Cómputo y en su PDF.
 
 ### 3.3 Calcular (cómputo)
 
@@ -98,11 +117,23 @@ trabajo en equipo).
 - **Generador determinista**: mismo programa, misma casa; siempre sin errores o rechazado con un motivo claro.
 - **Ve lo que se cambió a mano**: con cada mensaje viaja el proyecto del editor. Se puede partir de una plantilla
   («✦ Modificar con IA»).
+- **Calca un plano**: se adjunta la imagen de un plano o un PDF (se usa su primera página) con el clip del chat y arma
+  esa casa: ambientes con su tipo, medidas, aberturas (ancho, alto de las ventanas y sentido de las puertas), pilares,
+  escalera y techo (también en plantas en L y la parte baja de una casa de dos plantas). Es un punto de partida: un
+  plano simple sale casi exacto; uno complejo o de dos plantas queda aproximado. Después se puede dejar ese mismo
+  plano de fondo en el editor para corregir el calcado.
 - **Límites de uso** por IP y por día; sin la clave del modelo, el asistente directamente no aparece.
 
 ### 3.5 Guardar y compartir
 
 - El proyecto vive en el **navegador** y se **descarga y abre como `.json`**; sin cuenta ni instalación.
+- **Mis casas**: «Guardar» en el editor deja la casa en el servidor (hasta 30 por navegador, 1 año desde el último
+  uso), sin cuenta: se reconoce al navegador por un id aleatorio y sólo él las ve (en la Galería), las abre y las
+  borra. Es un guardado privado; para mostrarle la casa a otra persona está «Compartir».
+- **Comparar dos casas guardadas**: en «Mis casas» se marcan dos y se ven lado a lado (superficie, m² por tipo de
+  ambiente, bloques, materiales, costo por rubro y Revisión) con la diferencia de la segunda contra la primera.
+  **Renombrar** una casa desde su tarjeta. **Llevar a otro navegador**: un enlace de un solo uso (15 minutos) copia
+  las casas al otro navegador, sin cuentas.
 - **Galería** con 3 plantillas calculadas por el mismo motor (casa en L, vivienda evolutiva, dos plantas con garaje y
   alfresco) más los modelos que se agreguen por la API, con miniaturas de planta e isométrica.
 - **API de administración** con token para que otra herramienta (por ejemplo Claude Code) cree, edite y borre modelos
@@ -120,7 +151,7 @@ trabajo en equipo).
 
 | No hay | Por qué |
 | --- | --- |
-| Texturas, materiales de terminación y muebles de catálogo | No cambian el cómputo de mampostería; agregan peso y distraen. Los **muebles simples como gabarito** (camas, mesas, mesadas, artefactos de baño) están en el [BACKLOG.md](BACKLOG.md): sirven para validar medidas, no para decorar. |
+| Texturas, materiales de terminación y muebles de catálogo | No cambian el cómputo de mampostería; agregan peso y distraen. Los **muebles simples como gabarito** (camas, mesas, mesadas, artefactos de baño) sí existen: sirven para validar medidas, no para decorar. |
 | Render fotorrealista y recorrido virtual | El dibujo es esquemático para entender la casa, no para venderla. |
 | Cortes y planos de taller completos | Los planos son de obra gruesa (plantas, techos, alzados con despiece); no documentan instalaciones ni detalles. |
 | Muros curvos o diagonales, retículas libres | Todo el motor (trabas, cortes, jambas) depende de muros a 90° sobre la retícula del bloque. |
@@ -130,16 +161,16 @@ trabajo en equipo).
 | Otros sistemas constructivos y marcas | El producto es para bloques HCCA Lika; el motor aísla los datos del bloque, pero sin datos reales de fabricantes no se suman. |
 | Terreno en pendiente y retiros | El terreno es un rectángulo plano: la pendiente toca cimientos, que están fuera del cómputo. |
 | Edición desde el celular | En pantallas chicas el editor es de sólo lectura; dibujar con el dedo no justifica la complejidad. |
-| Cuentas y trabajo en equipo con permisos | Cero fricción de entrada; el enlace compartido es la credencial y el `.json` sigue sirviendo de respaldo. |
+| Cuentas y trabajo en equipo con permisos | Cero fricción de entrada: el enlace compartido es la credencial, «Mis casas» se reconoce por el navegador y el `.json` sigue sirviendo de respaldo. |
 | Precios reales, stock y flete de distribuidores | Los precios son de referencia y editables; cada distribuidor cotiza lo suyo. |
 
 ### 4.2 Todavía no (ver [BACKLOG.md](BACKLOG.md))
 
-- Un **tipo** por ambiente (dormitorio, baño…) con revisiones propias; hoy el nombre es texto libre.
-- **Muebles simples** como gabarito (camas, mesa con sillas, mesadas, artefactos de baño).
+- Que la Revisión use los muebles (paso libre, puertas que los pisan) y que el asistente los coloque.
 - Vigas libres, techo a cuatro aguas o de forma libre, balcones y voladizos.
-- Cotas internas y fachadas en los planos; importar un plano como fondo para calcarlo.
-- Comparar alternativas de una misma casa.
+- Cotas internas y fachadas en los planos.
+- **Mano de obra**: jornales, plazo y costo por rubro (hoy el presupuesto es sólo de materiales).
+- **Losas y entrepisos**: viguetas, paneles, voladizos, doble altura y cubierta plana (hoy, losa maciza o madera).
 - El asistente con todas las operaciones del editor (pilares, nombres, aberturas).
 
 ## 5. Cuándo conviene y cuándo no

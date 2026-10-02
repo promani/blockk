@@ -46,6 +46,7 @@ hace `KIMI_MODEL`. Los tests fuerzan modelos falsos (`phpunit.dist.xml`) para no
 | `delegar` | Sólo el coordinador: pasa instrucciones al constructor. |
 | `generar_casa` | Programa (`niveles`, `techo`, `ambientes[{tipo, nivel, cantidad, m2}]`) → casa completa con `HouseGenerator`. |
 | `editar_casa` | Operaciones con `HouseEditor`: `agregar_ventana` (por ambiente `N1-A2` y orientación), `agregar_vano`, `quitar_vano`, `cambiar_vano`, `agregar_muro`, `quitar_muro`, `cambiar_techo`, `renombrar`. |
+| `calcar_plano` | Lo leído de un plano, en metros: `ambientes[{nombre, tipo, nivel, x, y, ancho, fondo, abierto}]`, `aberturas[{tipo, x, y, ancho, alto, bisagra, abre}]`, `escaleras[{x, y, ancho, fondo, sube}]`, `pilares[{x, y, lado}]`, `techo` → casa con `PlanTracer`. |
 | `cargar_plantilla` | Reemplaza la casa por una plantilla de la Galería. |
 | `ver_casa` | Muros y vanos con ids y medidas en metros (sólo si hacen falta ids). |
 
@@ -62,11 +63,43 @@ Elige la sección de cabio que cubre la luz; a un agua, dos faldones sobre un mu
 con jambas de 25 cm y sin pasar el 60 % de vanos de un muro portante. Probado con cientos de programas al azar: o sale
 sin errores ni advertencias, o se rechaza con un motivo («quedaría de 23 m de largo…»).
 
+## Calcar un plano (adjuntos)
+
+El chat tiene un **clip** (Galería y editor) para adjuntar la imagen de un plano; también se puede pegar una imagen en
+el campo de texto. El navegador la reduce (lado mayor de 1600 px, JPEG) y viaja en el mensaje como
+`adjunto: {tipo, datos}` (base64, hasta 1 000 000 de caracteres). `Attachment` comprueba que sea una imagen JPG, PNG o
+WebP de verdad. El clip acepta también **PDF**: el navegador convierte la primera página a imagen con pdf.js
+(`assets/lib/picture.js`, cargado sólo en ese momento) y sigue el mismo camino; con varias páginas avisa «página 1 de N».
+
+- El turno con adjunto **saltea al coordinador** y va directo al constructor, que lee la imagen y llama a
+  `calcar_plano`. Si hay `KIMI_MODEL_VISION`, ese turno lo atiende ese modelo; si no, `KIMI_MODEL`, que tiene que
+  aceptar imágenes.
+- Con una imagen en la conversación el **razonamiento se desactiva** (`thinking: disabled`) y la respuesta admite 8192
+  tokens: razonando, el modelo gasta toda la respuesta en las coordenadas y no llega a contestar (medido con un plano
+  de dos plantas: más de 4 minutos sin resultado, contra 15 a 40 s sin razonar).
+- En la historia queda **sólo la última imagen** (sirve para corregir el calcado); el coordinador recibe una nota en su
+  lugar y la imagen nunca vuelve al navegador. Si el modelo no puede leerla, se saca de la historia y se avisa.
+- `PlanTracer` (`src/Domain/Design/`) es determinista: lleva las medidas a la retícula, unifica las rectas a menos de
+  37,5 cm, arma los muros con los lados de los rectángulos (exterior 20 cm; compartido 10 cm, o 15 cm abajo de una
+  planta alta; sin muro en los lados `abierto`), ubica cada abertura en el muro más cercano con sus jambas, pone una
+  losa bajo la planta alta y un techo si la planta es un rectángulo. Si la planta alta viene dibujada al lado de la
+  baja, la superpone por la esquina donde más muros coinciden. Lo que no pudo hacer vuelve como **avisos**, que se
+  muestran a la persona.
+- También calca: el **tipo** de cada ambiente; el alto de las ventanas (fija el antepecho) y el **sentido de las
+  puertas** (`bisagra` y `abre`, dichos por el plano); los **pilares**; la **escalera** (se prueba la forma, el ancho y
+  la huella que mejor llenan su rectángulo y entran en el ambiente; si ninguna entra, se avisa); y el **techo** de
+  plantas que no son un rectángulo: un techo por cada rectángulo grande de la planta (una L lleva dos que se cruzan)
+  y, en dos plantas, uno a un agua sobre la parte baja que queda sin nada encima.
+- En el editor, la tarjeta de la casa calcada ofrece «Usar el plano como fondo»: deja la misma imagen debajo del
+  dibujo para corregir el calcado (ver [EDITOR.md](EDITOR.md)).
+- **Límites**: hasta 40 ambientes y 80 aberturas. La calidad depende del plano: con cotas legibles y una planta, sale
+  casi exacto; sin cotas o con dos plantas, aproximado.
+
 ## Flujo de un turno
 
 `Assistant::reply` → (formulario inicial: programa directo, sin modelo) → coordinador → `delegar` → constructor →
-herramientas → eventos. Límites: 6 llamadas por turno, 40 turnos por conversación, `ASSISTANT_HOURLY_LIMIT` por IP y
-`ASSISTANT_DAILY_LIMIT` por día. Eventos para la interfaz: `usuario`, `asistente`, `pregunta {preguntas}`,
+herramientas → eventos (con un plano adjunto, directo al constructor). Límites: 6 llamadas por turno, 40 turnos por conversación, `ASSISTANT_HOURLY_LIMIT` por IP y
+`ASSISTANT_DAILY_LIMIT` por día. Eventos para la interfaz: `usuario` (con `adjunto: true` si llevó un plano), `asistente`, `pregunta {preguntas}`,
 `casa {diseno, version, nombre, svg, resumen}`, `error`.
 
 ## Diagnóstico y problemas típicos
@@ -87,6 +120,8 @@ Cada llamada al modelo deja una línea en el log del contenedor (en Dokploy, «v
 | Rehízo la casa entera en el editor | Usó `generar_casa` sobre una casa sin programa. | Ya está prohibido en el prompt del editor y el error de `editar_casa` le avisa si no hay programa; se deshace con «Deshacer este cambio». |
 | «A un agua no se puede» | Ningún cabio cubre el fondo y no hay muro portante interior. | Dejar a dos aguas o regenerar con `techo: un_agua` (el generador agrega el muro). |
 | Advertencias de vanos (`opening.pier`, `opening.ratio`) | Ventanas pedidas por muro/posición. | Preferir `agregar_ventana` por ambiente, que ya respeta jambas y el 60 %. |
+| «No pude leer el plano en este momento» | El modelo no acepta imágenes o tardó demasiado. El log dice `modelo=pesado +plano … ERROR`. | Configurar `KIMI_MODEL_VISION` con un modelo que lea imágenes. |
+| El plano calcado queda corrido o con ambientes de más | Plano sin cotas, con dos plantas o muy cargado. | Corregir en el editor o pedirle al asistente el cambio puntual; recortar la imagen a una planta ayuda. |
 | Dice que un error «ya venía» | Alucinación del modelo. | El prompt lo prohíbe; la Revisión de la tarjeta muestra la verdad. |
 
 ## Probar
@@ -100,7 +135,7 @@ Cada llamada al modelo deja una línea en el log del contenedor (en Dokploy, «v
 
 ## Código
 
-`src/Assistant/`: `Assistant.php` (orquestador), `Prompt.php` (instrucciones y herramientas), `Wizard.php`
-(formulario inicial y su programa), `KimiClient.php` / `LlmClient.php`, `Conversations.php` + `Store/` (Redis o
-archivos). `src/Domain/Design/`: `HouseGenerator`, `HouseEditor`, `HouseDescriber`. Front: `assets/lib/ai-chat.js`
+`src/Assistant/`: `Assistant.php` (orquestador), `Prompt.php` (instrucciones y herramientas), `Attachment.php` (imagen
+adjunta), `Wizard.php` (formulario inicial y su programa), `KimiClient.php` / `LlmClient.php`, `Conversations.php` + `Store/` (Redis o
+archivos). `src/Domain/Design/`: `HouseGenerator`, `HouseEditor`, `PlanTracer`, `HouseDescriber`. Front: `assets/lib/ai-chat.js`
 (componente compartido), `assets/gallery/assistant.js`, `assets/editor/ai.js`.

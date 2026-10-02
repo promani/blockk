@@ -14,11 +14,24 @@ let calls = 0;
 const byModel = {};
 const call = (name, args, content = '') => ({ role: 'assistant', content, tool_calls: [{ id: `c${++n}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
 const q = (id, pregunta, opciones, multiple = false) => ({ id, pregunta, multiple, opciones: opciones.map(([oid, texto]) => ({ id: oid, texto })) });
+/** Texto de un mensaje: con un plano adjunto el contenido es una lista de partes (texto + image_url). */
+const textOf = (m) => (Array.isArray(m?.content) ? m.content.filter((p) => p.type === 'text').map((p) => p.text).join('\n') : String(m?.content ?? ''));
+const hasImage = (m) => Array.isArray(m?.content) && m.content.some((p) => p.type === 'image_url' && String(p.image_url?.url).startsWith('data:image/'));
+/** Lo que «lee» de cualquier plano adjunto: un quincho con baño y galería abierta. */
+const PLANO = {
+    nombre: 'Quincho del plano',
+    ambientes: [
+        { nombre: 'Quincho', x: 0, y: 0, ancho: 6, fondo: 4 },
+        { nombre: 'Baño', x: 6, y: 0, ancho: 2, fondo: 2 },
+        { nombre: 'Depósito', x: 6, y: 2, ancho: 2, fondo: 2 },
+    ],
+    aberturas: [{ tipo: 'puerta', x: 3, y: 4, ancho: 0.9 }, { tipo: 'ventana', x: 3, y: 0, ancho: 1.5 }, { tipo: 'puerta', x: 6, y: 1 }],
+};
 
 /** Modelo liviano (coordinador): pregunta si el pedido es ambiguo; si no, delega al pesado. */
 function coordinator(messages) {
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-    const t = String(lastUser?.content ?? '');
+    const t = textOf(lastUser);
     if (/agrandala/i.test(t)) return call('preguntar', { preguntas: [q('cuanto', '¿Cuánto más grande?', [['poco', 'Un poco'], ['mucho', 'Bastante']]), q('que', '¿Qué sumamos?', [['dorm', 'Un dormitorio'], ['esc', 'Escritorio'], ['gal', 'Galería']], true)] });
     if (/[¿?]\s*$/.test(t) && !/Sum|luz|familia/i.test(t)) return { role: 'assistant', content: 'Sí, se puede.' };
     return call('delegar', { instrucciones: t });
@@ -37,7 +50,8 @@ function reply(messages) {
         return { role: 'assistant', content: 'No pude: ' + text.slice(0, 120) };
     }
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-    const t = String(lastUser?.content ?? '');
+    const t = textOf(lastUser);
+    if (hasImage(lastUser)) return call('calcar_plano', PLANO, 'Tomé las medidas del plano.');
     if (/familia/i.test(t)) return call('generar_casa', { niveles: 1, ambientes: [{ tipo: 'estar_comedor_cocina' }, { tipo: 'dormitorio_principal' }, { tipo: 'dormitorio', cantidad: 3 }, { tipo: 'bano', cantidad: 2 }, { tipo: 'lavadero' }] }, 'Para 5 personas: 4 dormitorios y 2 baños.');
     if (/dormitorio/i.test(t) && /Sum/i.test(t)) return call('generar_casa', { niveles: 1, ambientes: [{ tipo: 'estar_comedor_cocina' }, { tipo: 'dormitorio_principal' }, { tipo: 'dormitorio', cantidad: 3 }, { tipo: 'bano' }, { tipo: 'toilette' }] });
     if (/agrandala/i.test(t)) return call('preguntar', { preguntas: [q('cuanto', '¿Cuánto más grande?', [['poco', 'Un poco'], ['mucho', 'Bastante']]), q('que', '¿Qué sumamos?', [['dorm', 'Un dormitorio'], ['esc', 'Escritorio'], ['gal', 'Galería']], true)] });
@@ -65,6 +79,12 @@ http.createServer((req, res) => {
         calls++;
         const { messages, model } = JSON.parse(body);
         byModel[model] = (byModel[model] ?? 0) + 1;
+        // como el modelo real, el liviano no acepta imágenes: la app no tiene que mandárselas
+        if (model === 'liviano' && messages.some(hasImage)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: 'image input is not supported by this model' } }));
+            return;
+        }
         // el coordinador actúa hasta delegar; después, el pesado
         const delegated = messages.at(-1)?.role === 'tool' && messages.at(-1)?.name === 'delegar';
         const message = model === 'liviano' && !delegated ? coordinator(messages) : reply(messages);

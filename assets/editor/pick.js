@@ -3,6 +3,7 @@ import { Camera } from './camera.js';
 import { convexHull } from './renderer.js';
 import { roofOuter } from './scene.js';
 import { TREE_SIZES } from './site.js';
+import { furnitureRect, footprint, furnitureOn, treesOn } from './furniture.js';
 
 export const G = 12.5;
 
@@ -114,6 +115,24 @@ function pickColumnHit(app, sx, sy) {
         if (!inHull(boxHull(cam, rect, base, top - base), sx, sy)) continue;
         const depth = rayDepth(cam, sx, sy, rect, base, top) ?? depthOf(cam, rect, wx, wy);
         if (!best || depth > best.depth) best = { id: c.id, depth };
+    }
+    return best;
+}
+
+/** Mueble del nivel activo bajo el puntero, con su profundidad. */
+function pickFurnitureHit(app, sx, sy) {
+    const { cam, store } = app;
+    if (!furnitureOn(store.ui)) return null;
+    const base = store.ui.level * store.config.levelHeight;
+    let best = null;
+    for (const f of store.level().furniture ?? []) {
+        const rect = furnitureRect(store.config, f);
+        if (!rect) continue;
+        const h = footprint(store.config, f).h;
+        if (!inHull(boxHull(cam, rect, base, h), sx, sy)) continue;
+        const [wx, wy] = cam.unproject(sx, sy, base + h);
+        const depth = rayDepth(cam, sx, sy, rect, base, base + h) ?? depthOf(cam, rect, wx, wy);
+        if (!best || depth > best.depth) best = { id: f.id, depth };
     }
     return best;
 }
@@ -235,9 +254,11 @@ export function pickAt(app, sx, sy) {
     }
     const hit = pickWallHit(app, sx, sy);
     const column = pickColumnHit(app, sx, sy);
-    const tree = store.ui.level <= 1 ? pickTreeHit(app, sx, sy) : null;
+    const tree = store.ui.level <= 1 && treesOn(store.ui) ? pickTreeHit(app, sx, sy) : null;
     if (tree && (!hit || tree.depth > hit.depth) && (!column || tree.depth > column.depth)) return { type: 'tree', id: tree.id };
     if (column && (!hit || column.depth > hit.depth)) return { type: 'column', id: column.id };
+    const furniture = pickFurnitureHit(app, sx, sy);
+    if (furniture && (!hit || furniture.depth > hit.depth)) return { type: 'furniture', id: furniture.id };
     // En la planta baja, una escalera delante de la pared del fondo gana sobre la pared (y una pared delante, sobre ella).
     const stair = store.ui.level === 0 ? pickStairHit(app, sx, sy) : null;
     if (stair && (!hit || stair.depth > hit.depth)) return { type: 'stair', id: stair.id };
