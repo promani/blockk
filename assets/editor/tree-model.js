@@ -41,7 +41,7 @@ export function treeModel(t) {
     const leaves = [];
 
     // Racimos de hojas: espiral de Fibonacci sobre una esfera algo achatada abajo, con un poco de desorden.
-    const n = { S: 22, M: 34, L: 48 }[t.size] ?? 34;
+    const n = { S: 30, M: 46, L: 64 }[t.size] ?? 46;
     const rLeaf = d.r * (t.size === 'L' ? 0.26 : 0.3);
     for (let i = 0; i < n; i++) {
         const v = 1 - (2 * (i + 0.5)) / n; // -1 … 1 (abajo → arriba)

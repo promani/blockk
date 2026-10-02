@@ -197,27 +197,7 @@ export class Renderer {
             const [sx, sy] = P([lf.x, lf.y, lf.z]);
             const rpx = Math.max(1.5, lf.r * unit);
             const light = Math.max(0, Math.min(1, 0.55 + lf.nz * 0.35 + (it.d - depth([0, 0])) / (m.size.r * unit * 6)));
-            const grad = ctx.createRadialGradient(sx - rpx * 0.35, sy - rpx * 0.4, rpx * 0.1, sx, sy, rpx);
-            grad.addColorStop(0, mix('#8cc95a', '#c2e88f', light));
-            grad.addColorStop(1, mix('#2f6b25', '#4f8a33', light));
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(sx, sy, rpx, 0, Math.PI * 2);
-            ctx.fill();
-            // hojas sueltas sobre el racimo (girasol: ángulo áureo) cuando hay zoom para verlas
-            if (rpx > 7) {
-                ctx.fillStyle = mix('#7fb850', '#b9e08a', light);
-                for (let k = 1; k <= 7; k++) {
-                    const a = k * 2.39996;
-                    const rr = rpx * 0.75 * Math.sqrt(k / 7);
-                    ctx.beginPath();
-                    ctx.ellipse(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr * 0.8, rpx * 0.16, rpx * 0.08, a, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-            ctx.strokeStyle = picked ? '#2563eb' : 'rgba(30,60,20,.35)';
-            ctx.lineWidth = picked ? 1.6 : 0.7;
-            ctx.stroke();
+            leafCluster(ctx, sx, sy, rpx, light, picked);
         }
         ctx.restore();
     }
@@ -243,23 +223,21 @@ export class Renderer {
                 ctx.lineTo(bx, by);
                 ctx.stroke();
             }
+            ctx.globalAlpha = 0.8;
             for (const lf of [...m.leaves].sort((p, q) => p.z - q.z)) {
                 const [sx, sy] = cam.project(ox + lf.x, oy + lf.y, 0);
-                const light = 0.5 + lf.nz * 0.5;
-                ctx.fillStyle = mix('#4f8a33', '#a7d977', light);
-                ctx.globalAlpha = 0.55;
-                ctx.beginPath();
-                ctx.arc(sx, sy, Math.max(1.5, lf.r * cam.zoom), 0, Math.PI * 2);
-                ctx.fill();
+                leafCluster(ctx, sx, sy, Math.max(1.5, lf.r * cam.zoom), 0.45 + lf.nz * 0.45, false);
             }
             ctx.globalAlpha = 1;
             const [cx, cy] = cam.project(ox, oy, 0);
-            ctx.strokeStyle = picked ? '#2563eb' : 'rgba(40,90,30,.55)';
-            ctx.lineWidth = picked ? 2.5 : 1;
-            ctx.setLineDash(picked ? [] : [4, 3]);
-            ctx.beginPath();
-            ctx.arc(cx, cy, m.size.r * cam.zoom, 0, Math.PI * 2);
-            ctx.stroke();
+            if (picked) {
+                ctx.strokeStyle = '#2563eb';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 4]);
+                ctx.beginPath();
+                ctx.arc(cx, cy, m.size.r * cam.zoom, 0, Math.PI * 2);
+                ctx.stroke();
+            }
             ctx.restore();
         }
     }
@@ -1347,4 +1325,28 @@ export function convexHull(points) {
         upper.push(p);
     }
     return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+/**
+ * Un racimo de hojas sueltas, sin contorno: las hojas se acomodan como las semillas de un girasol (ángulo áureo), de
+ * afuera hacia adentro, y cada una apunta hacia afuera. `light` (0…1) aclara el racimo del lado del sol.
+ */
+const LEAVES = 22;
+function leafCluster(ctx, sx, sy, rpx, light, picked) {
+    const len = Math.max(1.6, rpx * 0.36);
+    const wid = Math.max(0.8, rpx * 0.15);
+    for (let k = LEAVES; k >= 1; k--) {
+        const a = k * 2.39996;
+        const rr = rpx * 0.92 * Math.sqrt(k / LEAVES);
+        const shade = Math.max(0, Math.min(1, light * 0.8 + ((k * 7) % 5) * 0.06 - (k / LEAVES) * 0.15));
+        ctx.fillStyle = mix('#2f6b25', '#b9e08a', shade);
+        ctx.beginPath();
+        ctx.ellipse(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr * 0.85, len, wid, a + 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        if (picked) {
+            ctx.strokeStyle = '#2563eb';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+        }
+    }
 }
