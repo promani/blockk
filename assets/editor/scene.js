@@ -332,7 +332,8 @@ function buildRoofs(roof) {
 /** Peldaños y descansos de escaleras (nivel 0) y losas de piso (nivel 1). */
 function buildFloors(floors, config) {
     const boxes = [];
-    const base = (o) => ({ axis: 'x', adjA: true, adjB: true, top: true, ...o });
+    // Cada peldaño (del alto de una contrahuella) y cada descanso es un bloque cerrado, con todas sus caras.
+    const base = (o) => ({ axis: 'x', adjA: false, adjB: false, top: true, ...o });
     for (const st of floors?.stairs ?? []) {
         for (const p of st.steps) boxes.push(base({ x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1, z0: p.z - st.riseCm, z1: p.z, zs: p.z - st.riseCm, kind: KIND.STEP, level: 0, stair: st.id }));
         for (const p of st.landings) boxes.push(base({ x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1, z0: p.z - 12, z1: p.z, zs: p.z - 12, kind: KIND.STEP, level: 0, stair: st.id }));

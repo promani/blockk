@@ -11,6 +11,7 @@ import { roomNamesList, roomAnchor, roomTypeItems, nameForType, setLabelType } f
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
 import { footprint, furnitureGroups, turnFurniture } from './furniture.js';
 import { contextOf, CONTEXT_TITLE, roomWalls, facing, openingM2, issueMatches } from './context.js';
+import { stairCoverage, stairBox, STAIR_BLOCKED } from './stair-fit.js';
 
 const G = 12.5;
 /** [nombre, latitud, longitud, huso horario (UTC)] */
@@ -697,6 +698,17 @@ export function mountPanels(app) {
             if (!st) return void (store.ui.selection = null);
             const upd = (fn) => store.commit('Editar escalera', (d) => fn(d.levels[0].stairs.find((x) => x.id === st.id)));
             const plan = store.analysis?.floors?.stairs?.find((x) => x.id === st.id);
+            // Mover desde el panel: tampoco puede atravesar un muro ni salir de la habitación.
+            const moveTo = (nx, ny) => {
+                const now = stairBox(store.analysis, st.id);
+                const next = stairBox(store.analysis, st.id, nx - st.x, ny - st.y);
+                if (now && next && stairCoverage(store.analysis, next) < stairCoverage(store.analysis, now) - 1e-6) {
+                    app.toast(STAIR_BLOCKED);
+                    renderProps();
+                    return;
+                }
+                upd((x) => { x.x = nx; x.y = ny; });
+            };
             add(el.props,
                 h('div', { class: 'kv-title' }, 'Escalera'),
                 field('Forma', sel(st.shape, [['straight', 'Recta'], ['L', 'En L con descanso'], ['U', 'En U con descanso']], (v) => upd((x) => { x.shape = v; }))),
@@ -704,8 +716,8 @@ export function mountPanels(app) {
                 st.shape !== 'straight' ? field('Gira a', sel(st.turn, [['right', 'la derecha'], ['left', 'la izquierda']], (v) => upd((x) => { x.turn = v; }))) : null,
                 field('Ancho (× 12,5 cm)', num(st.w, 7, 16, (v) => upd((x) => { x.w = v; }))),
                 field('Huella (cm)', num(st.tread, 25, 32, (v) => upd((x) => { x.tread = v; }))),
-                field('Posición X (× 12,5 cm)', num(st.x, 0, 1000, (v) => upd((x) => { x.x = v; }))),
-                field('Posición Y (× 12,5 cm)', num(st.y, 0, 1000, (v) => upd((x) => { x.y = v; }))),
+                field('Posición X (× 12,5 cm)', num(st.x, 0, 1000, (v) => moveTo(v, st.y))),
+                field('Posición Y (× 12,5 cm)', num(st.y, 0, 1000, (v) => moveTo(st.x, v))),
                 plan ? h('dl', { class: 'dl' },
                     h('dt', {}, 'Contrahuella'), h('dd', {}, `${fmt(plan.riseCm, 1)} cm`),
                     h('dt', {}, 'Peldaños'), h('dd', {}, int(plan.steps.length)),

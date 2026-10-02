@@ -15,6 +15,7 @@ import { OPENING_TYPES, defaultMode, newOpening, commercialFor, commercialOf } f
 import { roomNamesList, roomTypeItems, nameForType } from './names.js';
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
 import { footprint, furnitureRect, furnitureGroups, furnitureOn } from './furniture.js';
+import { stairCoverage, stairBox, STAIR_BLOCKED } from './stair-fit.js';
 
 const DRAG_PX = 6;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -387,7 +388,16 @@ export function createTools(app) {
             if (!box) return;
             const o = clampOffset(box, dx, dy);
             if (!o.dx && !o.dy) return;
+            // La escalera no puede quedar atravesando un muro ni fuera de la planta baja: si con el movimiento queda menos
+            // dentro de una habitación que antes, se deshace (los muros elegidos se mueven con ella, por eso se mira después).
+            const cover = (id) => { const b = stairBox(store.analysis, id); return b ? stairCoverage(store.analysis, b) : 1; };
+            const before = multi.sel.stairs.map(([, id]) => cover(id));
             await applyMove(multi.sel, o.dx, o.dy);
+            if (store.fresh && multi.sel?.stairs.some(([, id], i) => cover(id) < before[i] - 1e-6)) {
+                await store.undo();
+                app.toast(STAIR_BLOCKED);
+                return;
+            }
             if (multi.sel) setMulti(collectIn(box.x0 + o.dx, box.y0 + o.dy, box.x1 + o.dx, box.y1 + o.dy));
         });
     };
