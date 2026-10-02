@@ -507,7 +507,7 @@ export function mountPanels(app) {
                 field('Largo (cm)', num(z.h * G, 25, 90000, (v) => upd((x) => { x.h = Math.max(2, Math.round(v / G)); }), G)),
                 h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2((z.w * G * z.h * G) / 10000))),
                 h('div', { class: 'actions-row' }, delBtn),
-                h('p', { class: 'muted small' }, 'No es parte de la casa ni entra al cómputo. Para moverla, arrastrala.'),
+                h('p', { class: 'muted small' }, 'No es parte de la casa ni entra al cómputo. Para moverla, arrastrala; para agrandarla o achicarla, arrastrá los puntos azules de sus lados.'),
             );
             return;
         }
@@ -643,8 +643,6 @@ export function mountPanels(app) {
                 store.project.upper ? field('Apoya sobre', sel(r.level, [[0, 'Nivel 1'], [1, 'Nivel 2']], (v) => upd((x) => { x.level = Number(v); }))) : null,
                 field('Ancho (× 12,5 cm)', num(r.w, 2, 900, (v) => upd((x) => { x.w = v; }))),
                 field('Profundidad (× 12,5 cm)', num(r.h, 2, 900, (v) => upd((x) => { x.h = v; }))),
-                field('Posición X (× 12,5 cm)', num(r.x, 0, 1000, (v) => upd((x) => { x.x = v; }))),
-                field('Posición Y (× 12,5 cm)', num(r.y, 0, 1000, (v) => upd((x) => { x.y = v; }))),
                 check('Hastial A (extremo inicial)', 'gableA'),
                 check('Hastial B (extremo final)', 'gableB'),
                 field('Espesor de hastiales', sel(r.gableT, [10, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.gableT = Number(v); }))),
@@ -684,8 +682,6 @@ export function mountPanels(app) {
                 field('Espesor', sel(sl.thickness, [10, 12, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.thickness = Number(v); }))),
                 field('Ancho (× 12,5 cm)', num(sl.w, 2, 900, (v) => upd((x) => { x.w = v; }))),
                 field('Profundidad (× 12,5 cm)', num(sl.h, 2, 900, (v) => upd((x) => { x.h = v; }))),
-                field('Posición X (× 12,5 cm)', num(sl.x, 0, 1000, (v) => upd((x) => { x.x = v; }))),
-                field('Posición Y (× 12,5 cm)', num(sl.y, 0, 1000, (v) => upd((x) => { x.y = v; }))),
                 plan ? h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2(plan.areaM2)), h('dt', {}, 'Hormigón'), h('dd', {}, `${fmt((plan.areaM2 * sl.thickness) / 100, 2)} m³`)) : null,
                 h('div', { class: 'actions-row' }, delBtn),
             );
@@ -704,8 +700,6 @@ export function mountPanels(app) {
                 st.shape !== 'straight' ? field('Gira a', sel(st.turn, [['right', 'la derecha'], ['left', 'la izquierda']], (v) => upd((x) => { x.turn = v; }))) : null,
                 field('Ancho (× 12,5 cm)', num(st.w, 7, 16, (v) => upd((x) => { x.w = v; }))),
                 field('Huella (cm)', num(st.tread, 25, 32, (v) => upd((x) => { x.tread = v; }))),
-                field('Posición X (× 12,5 cm)', num(st.x, 0, 1000, (v) => upd((x) => { x.x = v; }))),
-                field('Posición Y (× 12,5 cm)', num(st.y, 0, 1000, (v) => upd((x) => { x.y = v; }))),
                 plan ? h('dl', { class: 'dl' },
                     h('dt', {}, 'Contrahuella'), h('dd', {}, `${fmt(plan.riseCm, 1)} cm`),
                     h('dt', {}, 'Peldaños'), h('dd', {}, int(plan.steps.length)),

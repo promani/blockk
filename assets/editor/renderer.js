@@ -9,7 +9,7 @@ import { KIND, sortedItems, visibleFaces } from './scene.js';
 import { fmt } from '../lib/format.js';
 import { drawTheme, mix } from '../lib/theme.js';
 import { planeEq, planeHoles, gableHoles, withHoles } from './roofclip.js';
-import { ZONE_KINDS, zoneLabel } from './site.js';
+import { ZONE_KINDS, TREE_SIZES, zoneLabel } from './site.js';
 import { treeModel } from './tree-model.js';
 import { backEdge, furnitureOn, treesOn } from './furniture.js';
 
@@ -206,6 +206,44 @@ export class Renderer {
             leafCluster(ctx, sx, sy, rpx, light, picked);
         }
         ctx.restore();
+    }
+
+    /**
+     * Árboles delante de la casa. El pintor los dibuja en la capa del suelo y las hiladas de más arriba los tapan aunque
+     * estén detrás: acá se repasan traslúcidos sobre lo que tienen detrás (la casa se sigue viendo a través) y, recortado
+     * a la silueta del árbol (copa y tronco), se vuelve a pintar lo que está delante de ellos.
+     */
+    drawTreesOver(ctx, cam, trees, drawn, strokeOn) {
+        for (const t of trees) {
+            const d = TREE_SIZES[t.b.treeSize] ?? TREE_SIZES.M;
+            const ox = (t.b.x0 + t.b.x1) / 2;
+            const oy = (t.b.y0 + t.b.y1) / 2;
+            const cx = (t.x0 + t.x1) / 2;
+            const cy = (t.y0 + t.y1) / 2;
+            // En pantalla la x sale de x' − y' (marco girado): sólo importa lo que cae en la franja de la copa.
+            const reach = (t.x1 - t.x0) * 0.9;
+            const front = [];
+            let back = false;
+            for (const it of drawn) {
+                if (it.x1 - it.y0 < cx - cy - reach || it.x0 - it.y1 > cx - cy + reach) continue;
+                if ((cx <= it.x0 + 0.01 && cy < it.y1) || (cy <= it.y0 + 0.01 && cx < it.x1)) front.push(it);
+                else if (it.b.z1 > 1) back = true;
+            }
+            if (!back) continue;
+            const [sx, sy] = cam.project(ox, oy, d.h - d.r);
+            const [bx, by] = cam.project(ox, oy, 0);
+            const lw = Math.max(2, d.trunk * 2 * cam.zoom) + 2;
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(sx, sy, d.r * cam.zoom * 1.25, 0, Math.PI * 2);
+            ctx.rect(bx - lw / 2, sy, lw, by - sy + 2);
+            ctx.clip();
+            ctx.globalAlpha = 0.6;
+            this.drawTree(ctx, cam, t.b);
+            ctx.globalAlpha = 1;
+            for (const it of front) this.drawBox(ctx, cam, it, strokeOn);
+            ctx.restore();
+        }
     }
 
     /** Árboles en planta (vistos desde arriba): ramas y racimos translúcidos, los más altos encima. */
@@ -473,6 +511,8 @@ export class Renderer {
 
         const list = sortedItems(scene, scene.all, cam.rot, 'all');
         const margin = 40;
+        const trees = [];
+        const drawn = [];
         this.drawRoomFloors(f, 0, 0);
         let upperFloors = f.project.upper && activeLevel >= 1;
         for (const it of list) {
@@ -491,9 +531,11 @@ export class Renderer {
             if (b.opening) {
                 if (b.level === activeLevel && ui.cut < 12 && b.course >= ui.cut) continue;
             }
+            (b.kind === KIND.TREE ? trees : drawn).push(it);
             this.drawBox(ctx, cam, it, strokeOn);
         }
         if (upperFloors) this.drawRoomFloors(f, 1, 300);
+        if (trees.length) this.drawTreesOver(ctx, cam, trees, drawn, strokeOn);
     }
 
     /** Piso de color de cada ambiente cerrado del nivel `li`, a la cota `z`. */

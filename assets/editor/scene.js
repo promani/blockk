@@ -114,11 +114,24 @@ function treeBox(t) {
     };
 }
 
+/**
+ * Parte una caja lisa por hiladas para que el pintor la ordene junto con la mampostería: de una sola pieza entra en la
+ * capa del suelo y las hiladas de más arriba de un muro que está detrás la tapan.
+ */
+function pushSliced(boxes, b) {
+    for (let z = b.z0; z < b.z1 - EPS; z += COURSE_H) {
+        const top = Math.min(z + COURSE_H, b.z1);
+        const last = top >= b.z1 - EPS;
+        // se solapan un poco con la tajada de arriba para que no se vea la costura
+        boxes.push({ ...b, z0: z, z1: last ? top : top + 0.8, zs: z, top: last });
+    }
+}
+
 /** Pilares de hormigón armado: una caja lisa de piso a techo del nivel. */
 function addColumns(boxes, level, base, li, config) {
     for (const c of level.columns ?? []) {
         const half = c.size / 2;
-        boxes.push({
+        pushSliced(boxes, {
             x0: c.x * G - half,
             x1: c.x * G + half,
             y0: c.y * G - half,
@@ -143,7 +156,7 @@ function addFurniture(boxes, level, base, li, config) {
     for (const f of level.furniture ?? []) {
         const rect = furnitureRect(config, f);
         if (!rect) continue;
-        boxes.push({
+        pushSliced(boxes, {
             x0: rect[0],
             x1: rect[2],
             y0: rect[1],
