@@ -40,7 +40,7 @@ export function blankProject({ name = 'Proyecto sin título', lotW = 24, lotD = 
 /** Siguiente id libre con prefijo (w = muro, o = vano, u = viga U, t = madera, l = losa, e = escalera). */
 export function nextId(project, prefix) {
     let max = 0;
-    for (const r of project.roofs ?? []) {
+    for (const r of [...(project.roofs ?? []), ...(project.zones ?? []), ...(project.trees ?? [])]) {
         const m = /^[a-z]+(\d+)/.exec(String(r.id));
         if (m) max = Math.max(max, Number(m[1]));
     }

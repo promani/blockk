@@ -2,6 +2,7 @@
 import { Camera } from './camera.js';
 import { convexHull } from './renderer.js';
 import { roofOuter } from './scene.js';
+import { TREE_SIZES } from './site.js';
 
 export const G = 12.5;
 
@@ -117,6 +118,31 @@ function pickColumnHit(app, sx, sy) {
     return best;
 }
 
+/** Árbol bajo el puntero (su copa), con una profundidad comparable a la de los muros. */
+function pickTreeHit(app, sx, sy) {
+    const { cam, store } = app;
+    let best = null;
+    for (const t of store.project.trees ?? []) {
+        const d = TREE_SIZES[t.size] ?? TREE_SIZES.M;
+        const cx = t.x * G;
+        const cy = t.y * G;
+        let depth;
+        if (cam.view === 'plan') {
+            const [wx, wy] = cam.unproject(sx, sy, 0);
+            if (Math.hypot(wx - cx, wy - cy) > d.r) continue;
+            depth = 1e6;
+        } else {
+            const [px, py] = cam.project(cx, cy, d.h - d.r);
+            const [qx, qy] = cam.project(cx + 1, cy, d.h - d.r);
+            if (Math.hypot(sx - px, sy - py) > d.r * Math.hypot(qx - px, qy - py) * 1.18) continue;
+            const [X, Y] = Camera.rotate(cx, cy, cam.rot);
+            depth = X + Y + 2 * (d.h - d.r);
+        }
+        if (!best || depth > best.depth) best = { id: t.id, depth };
+    }
+    return best;
+}
+
 /** Nombre de ambiente bajo el puntero (sólo en planta, donde se dibujan). */
 function pickLabel(app, sx, sy) {
     const { cam, store } = app;
@@ -209,6 +235,8 @@ export function pickAt(app, sx, sy) {
     }
     const hit = pickWallHit(app, sx, sy);
     const column = pickColumnHit(app, sx, sy);
+    const tree = store.ui.level <= 1 ? pickTreeHit(app, sx, sy) : null;
+    if (tree && (!hit || tree.depth > hit.depth) && (!column || tree.depth > column.depth)) return { type: 'tree', id: tree.id };
     if (column && (!hit || column.depth > hit.depth)) return { type: 'column', id: column.id };
     // En la planta baja, una escalera delante de la pared del fondo gana sobre la pared (y una pared delante, sobre ella).
     const stair = store.ui.level === 0 ? pickStairHit(app, sx, sy) : null;
@@ -249,6 +277,10 @@ export function pickAt(app, sx, sy) {
         const uy = wy / G;
         for (const room of store.analysis?.levels?.[store.ui.level]?.rooms ?? []) {
             if (room.fill?.some(([x, y, w, h]) => ux >= x && ux < x + w && uy >= y && uy < y + h)) return { type: 'room', id: room.id };
+        }
+        for (const z of [...(store.project.zones ?? [])].reverse()) {
+            const [zx, zy] = cam.unproject(sx, sy, 0.4);
+            if (zx >= z.x * G && zx <= (z.x + z.w) * G && zy >= z.y * G && zy <= (z.y + z.h) * G) return { type: 'zone', id: z.id };
         }
     }
     return null;

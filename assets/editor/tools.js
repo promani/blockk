@@ -13,6 +13,7 @@ import { moveWallLine, collinearChain, mirrorMove } from './wallmove.js';
 import { wallLines, nearestLine, anchorLines, nearestAnchor, ANCHOR_LABEL } from './snap.js';
 import { OPENING_TYPES, defaultMode, newOpening } from './openings.js';
 import { roomNamesList } from './names.js';
+import { ZONE_KINDS, TREE_SIZES } from './site.js';
 
 const DRAG_PX = 6;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -438,6 +439,7 @@ export function createTools(app) {
             if (multi.press?.item && Math.hypot(p.sx - multi.press.sx, p.sy - multi.press.sy) > DRAG_PX) {
                 // aberturas, pilares y nombres se mueven arrastrándolos
                 const { type, id } = multi.press.item;
+                const press = multi.press;
                 const lv = store.level();
                 multi.press = null;
                 if (type === 'opening') {
@@ -449,6 +451,12 @@ export function createTools(app) {
                 } else if (type === 'label') {
                     const lb = lv.labels?.find((q) => q.id === id);
                     if (lb) drag = { kind: 'label', lb: { ...lb }, nx: lb.x, ny: lb.y };
+                } else if (type === 'tree') {
+                    const t = store.project.trees?.find((q) => q.id === id);
+                    if (t) drag = { kind: 'tree', t: { ...t }, nx: t.x, ny: t.y };
+                } else if (type === 'zone') {
+                    const z = store.project.zones?.find((q) => q.id === id);
+                    if (z) drag = { kind: 'zone', z: { ...z }, off: [press.wx / G - z.x, press.wy / G - z.y], nx: z.x, ny: z.y };
                 }
                 if (drag) {
                     store.setUi({ selection: type === 'opening' ? { type, id, wall: drag.o.wall } : { type, id } });
@@ -470,6 +478,12 @@ export function createTools(app) {
                 else if (drag.kind === 'column') {
                     drag.nx = Math.round(p.wx / G);
                     drag.ny = Math.round(p.wy / G);
+                } else if (drag.kind === 'tree') {
+                    drag.nx = Math.round(p.wx / G);
+                    drag.ny = Math.round(p.wy / G);
+                } else if (drag.kind === 'zone') {
+                    drag.nx = clamp(Math.round(p.wx / G - drag.off[0]), 0, lot().w - drag.z.w);
+                    drag.ny = clamp(Math.round(p.wy / G - drag.off[1]), 0, lot().d - drag.z.h);
                 } else if (drag.kind === 'label') {
                     drag.nx = Math.floor(p.wx / G);
                     drag.ny = Math.floor(p.wy / G);
@@ -527,7 +541,7 @@ export function createTools(app) {
             }
             // Se decide al soltar: sin moverse es un clic (elige lo de abajo); arrastrando, un rectángulo.
             const under = pickAt(app, p.sx, p.sy);
-            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: ['opening', 'column', 'label'].includes(under?.type) ? under : null };
+            multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: ['opening', 'column', 'label', 'tree', 'zone'].includes(under?.type) ? under : null };
         },
         up(p) {
             if (multi.drag) {
@@ -569,6 +583,10 @@ export function createTools(app) {
                 }
             } else if (d.kind === 'column') {
                 if ((d.nx !== d.c.x || d.ny !== d.c.y) && inLot(d.nx, d.ny)) store.commit('Mover pilar', (dr) => Object.assign(dr.levels[store.ui.level].columns.find((q) => q.id === d.c.id), { x: d.nx, y: d.ny }));
+            } else if (d.kind === 'tree') {
+                if ((d.nx !== d.t.x || d.ny !== d.t.y) && inLot(d.nx, d.ny)) store.commit('Mover árbol', (dr) => Object.assign(dr.trees.find((q) => q.id === d.t.id), { x: d.nx, y: d.ny }));
+            } else if (d.kind === 'zone') {
+                if (d.nx !== d.z.x || d.ny !== d.z.y) store.commit('Mover zona', (dr) => Object.assign(dr.zones.find((q) => q.id === d.z.id), { x: d.nx, y: d.ny }));
             } else if (d.kind === 'label') {
                 if (d.nx !== d.lb.x || d.ny !== d.lb.y) store.commit('Mover nombre', (dr) => Object.assign(dr.levels[store.ui.level].labels.find((q) => q.id === d.lb.id), { x: d.nx, y: d.ny }));
             } else if (d.kind === 'wall') {
@@ -639,6 +657,14 @@ export function createTools(app) {
                 if (drag.kind === 'column') {
                     const half = drag.c.size / 2;
                     ghostBox(ctx, cam, { x0: drag.nx * G - half, x1: drag.nx * G + half, y0: drag.ny * G - half, y1: drag.ny * G + half, z0: z, z1: z + cfg.levelHeight }, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
+                    return;
+                }
+                if (drag.kind === 'tree') {
+                    treeRing(ctx, cam, drag.nx, drag.ny, drag.t.size, '#2563eb');
+                    return;
+                }
+                if (drag.kind === 'zone') {
+                    outlineRect(ctx, cam, drag.nx * G, drag.ny * G, (drag.nx + drag.z.w) * G, (drag.ny + drag.z.h) * G, 0.5, { stroke: '#2563eb', fill: 'rgba(37,99,235,.2)', width: 2, dash: [6, 4] });
                     return;
                 }
                 if (drag.kind === 'label') {
@@ -967,7 +993,7 @@ export function createTools(app) {
                 return h('span', { class: 'row' },
                     selectT('Tipo', openingState.kind, Object.entries(OPENING_TYPES).map(([k, x]) => [k, x.label]), (v) => { setOpeningKind(v); app.refreshOptions(); app.render(); }),
                     selectT('Ancho', openingState.w, t.widths.map((n) => [n, `${fmt(n * G, 1)} cm`]), (v) => { openingState.w = Number(v); app.render(); }),
-                    openingState.kind === 'window' ? selectT('Alto', openingState.sill, [4, 5, 6, 0].map((n) => [n, `${fmt((cfg.openingTopCourse - n) * 25, 0)} cm`]), (v) => { openingState.sill = Number(v); app.render(); }) : null,
+                    openingState.kind === 'window' ? selectT('Antepecho', openingState.sill, [0, 1, 2, 3, 4, 5, 6, 7].map((n) => [n, `${n * 25} cm del suelo`]), (v) => { openingState.sill = Number(v); app.render(); }) : null,
                     selectT('Apertura', openingState.mode, t.modes, (v) => { openingState.mode = v; app.render(); }));
             },
             reset() { ghost = null; },
@@ -1620,8 +1646,94 @@ export function createTools(app) {
         },
     };
 
+    // ---------------- terreno: zonas y árboles ----------------
+    const zoneState = { kind: 'pool' };
+    let zoneDraft = null;
+    const zoneRect = (d) => ({ x: Math.min(d.a[0], d.b[0]), y: Math.min(d.a[1], d.b[1]), w: Math.abs(d.b[0] - d.a[0]), h: Math.abs(d.b[1] - d.a[1]) });
+    T.zone = {
+        magnet: false,
+        snap: 2,
+        hotkey: 'z',
+        label: 'Zona',
+        hint: 'Arrastrá un rectángulo sobre el terreno: pileta, patio o deck, jardín o camino. No son parte de la casa ni entran al cómputo: marcan cómo se usa el espacio.',
+        disabled: levelOnly,
+        options: () => h('span', { class: 'row' },
+            selectT('Tipo', zoneState.kind, Object.entries(ZONE_KINDS).map(([k, z]) => [k, z.label]), (v) => { zoneState.kind = v; app.render(); })),
+        reset() { zoneDraft = null; },
+        down(p) {
+            if (inLot(p.gx, p.gy)) zoneDraft = { a: [p.gx, p.gy], b: [p.gx, p.gy] };
+        },
+        move(p) {
+            if (!zoneDraft) return;
+            zoneDraft.b = [clamp(p.gx, 0, lot().w), clamp(p.gy, 0, lot().d)];
+            app.render();
+        },
+        up() {
+            if (!zoneDraft) return;
+            const r = zoneRect(zoneDraft);
+            zoneDraft = null;
+            if (r.w < 2 || r.h < 2) {
+                app.render();
+                return;
+            }
+            let id = null;
+            store.commit('Agregar zona', (d) => {
+                id = nextId(d, 'z');
+                (d.zones ??= []).push({ id, ...r, kind: zoneState.kind, name: '' });
+            });
+            app.setTool('select');
+            store.setUi({ selection: { type: 'zone', id } });
+        },
+        draw(ctx, cam) {
+            if (!zoneDraft) return;
+            const r = zoneRect(zoneDraft);
+            outlineRect(ctx, cam, r.x * G, r.y * G, (r.x + r.w) * G, (r.y + r.h) * G, 0.5, { stroke: '#2563eb', fill: 'rgba(37,99,235,.15)', width: 2, dash: [6, 4] });
+            const [sx, sy] = cam.project((r.x + r.w / 2) * G, (r.y + r.h / 2) * G, 0);
+            label(ctx, `${fmt((r.w * G) / 100)} × ${fmt((r.h * G) / 100)} m`, sx, sy, { bg: 'rgba(37,99,235,.92)' });
+        },
+    };
+
+    const treeState = { size: 'M' };
+    /** Contorno de la copa (para el fantasma y el arrastre). */
+    const treeRing = (ctx, cam, x, y, size, color) => {
+        const d = TREE_SIZES[size] ?? TREE_SIZES.M;
+        const pts = Array.from({ length: 28 }, (_, i) => cam.project(x * G + Math.cos((i / 28) * Math.PI * 2) * d.r, y * G + Math.sin((i / 28) * Math.PI * 2) * d.r, 0.6));
+        ctx.save();
+        ctx.beginPath();
+        pts.forEach(([sx, sy], i) => (i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy)));
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(139,197,63,.35)';
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.stroke();
+        ctx.restore();
+        nodeMarker(ctx, cam, x * G, y * G, 0.6, color);
+    };
+    T.tree = {
+        magnet: false,
+        snap: 1,
+        hotkey: 'o',
+        label: 'Árbol',
+        hint: 'Clic en el terreno para plantar un árbol (tronco, copa y sombra). No entra al cómputo; con el sol activado proyecta su sombra.',
+        disabled: levelOnly,
+        options: () => h('span', { class: 'row' },
+            selectT('Tamaño', treeState.size, Object.entries(TREE_SIZES).map(([k, t]) => [k, t.label]), (v) => { treeState.size = v; app.render(); })),
+        down(p) {
+            if (!inLot(p.gx, p.gy)) return;
+            store.commit('Plantar árbol', (d) => {
+                (d.trees ??= []).push({ id: nextId(d, 'a'), x: p.gx, y: p.gy, size: treeState.size });
+            });
+        },
+        draw(ctx, cam) {
+            const p = app.pointer;
+            if (p && inLot(p.gx, p.gy)) treeRing(ctx, cam, p.gx, p.gy, treeState.size, '#3f6212');
+        },
+    };
+
     // metadatos para la barra de herramientas
-    const SHORT = { select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', opening: 'Abertura', column: 'Pilar', label: 'Nombre', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
+    const SHORT = { select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', opening: 'Abertura', column: 'Pilar', label: 'Nombre', zone: 'Zona', tree: 'Árbol', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
     for (const [id, t] of Object.entries(T)) {
         t.id = id;
         t.short = SHORT[id] ?? t.label;

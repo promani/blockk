@@ -9,6 +9,7 @@ import { KIND, sortedItems, visibleFaces } from './scene.js';
 import { fmt } from '../lib/format.js';
 import { drawTheme, mix } from '../lib/theme.js';
 import { planeEq, planeHoles, gableHoles, withHoles } from './roofclip.js';
+import { ZONE_KINDS, TREE_SIZES, zoneLabel } from './site.js';
 
 const G = 12.5;
 
@@ -108,8 +109,126 @@ export class Renderer {
         ctx.fillRect(0, 0, cam.w, cam.h);
         this.drawGround(f);
         if (f.project) {
+            this.drawZones(f);
             if (cam.view === 'plan') this.drawPlan(f);
             else this.drawIso(f);
+        }
+    }
+
+    // ---------- terreno: zonas y árboles ----------
+    /** Zonas del terreno (pileta, patio, jardín, camino): superficies planas sobre el suelo. */
+    drawZones(f) {
+        const { ctx } = this;
+        const { cam, project, ui } = f;
+        for (const z of project.zones ?? []) {
+            const st = ZONE_KINDS[z.kind] ?? ZONE_KINDS.patio;
+            const quad = (inset) => [[z.x * G + inset, z.y * G + inset], [(z.x + z.w) * G - inset, z.y * G + inset], [(z.x + z.w) * G - inset, (z.y + z.h) * G - inset], [z.x * G + inset, (z.y + z.h) * G - inset]].map(([x, y]) => cam.project(x, y, 0.4));
+            const path = (pts) => {
+                ctx.beginPath();
+                pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+                ctx.closePath();
+            };
+            path(quad(0));
+            ctx.fillStyle = st.fill;
+            ctx.fill();
+            const picked = ui?.selection?.type === 'zone' && ui.selection.id === z.id;
+            ctx.strokeStyle = picked ? '#2563eb' : st.stroke;
+            ctx.lineWidth = picked ? 2.5 : 1.4;
+            ctx.stroke();
+            // borde interior: el coronamiento de la pileta, la guarda del deck
+            if (z.w * G > 80 && z.h * G > 80) {
+                path(quad(z.kind === 'pool' ? 22 : 12));
+                ctx.strokeStyle = st.inner;
+                ctx.lineWidth = z.kind === 'pool' ? 2 : 1;
+                ctx.stroke();
+            }
+        }
+    }
+
+    /** Nombres de las zonas en la planta. */
+    drawZoneLabels(f) {
+        const { ctx } = this;
+        const { cam, project } = f;
+        ctx.font = '600 12px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const z of project.zones ?? []) {
+            // arriba y al centro: una zona dentro de otra (pileta en el deck) no tapa el nombre de la grande
+            const [sx, sy0] = cam.project((z.x + z.w / 2) * G, z.y * G, 0);
+            const sy = sy0 + 14;
+            this.tag(ctx, zoneLabel(z), sx, sy, f.ui?.selection?.type === 'zone' && f.ui.selection.id === z.id);
+        }
+    }
+
+    /** Árbol en la isométrica: sombra en el suelo, tronco y copa. */
+    drawTree(ctx, cam, b) {
+        const d = TREE_SIZES[b.treeSize] ?? TREE_SIZES.M;
+        const cx = (b.x0 + b.x1) / 2;
+        const cy = (b.y0 + b.y1) / 2;
+        const unit = Math.hypot(...cam.project(cx + 1, cy, 0).map((v, i) => v - cam.project(cx, cy, 0)[i])) || cam.zoom;
+        ctx.save();
+        // sombra propia (siempre): una elipse suave sobre el suelo
+        const ring = Array.from({ length: 24 }, (_, i) => {
+            const a = (i / 24) * Math.PI * 2;
+            return cam.project(cx + Math.cos(a) * d.r * 0.85 + d.r * 0.12, cy + Math.sin(a) * d.r * 0.85 + d.r * 0.12, 0.3);
+        });
+        ctx.beginPath();
+        ring.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(15,23,42,.18)';
+        ctx.fill();
+        // tronco
+        const [bx, by] = cam.project(cx, cy, 0);
+        const [tx, ty] = cam.project(cx, cy, d.trunkH + d.r * 0.5);
+        ctx.strokeStyle = '#6b4a2b';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(2, d.trunk * 2 * unit);
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        // copa
+        const [sx, sy] = cam.project(cx, cy, d.h - d.r);
+        const rpx = d.r * unit * 1.18;
+        const grad = ctx.createRadialGradient(sx - rpx * 0.35, sy - rpx * 0.4, rpx * 0.1, sx, sy, rpx);
+        grad.addColorStop(0, '#9fd16a');
+        grad.addColorStop(1, '#4f8a33');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(sx, sy, rpx, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(30,60,20,.45)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /** Árboles en planta: copa translucida, tronco y una sombra corrida. */
+    drawPlanTrees(f) {
+        const { ctx } = this;
+        const { cam, project, ui } = f;
+        for (const t of project.trees ?? []) {
+            const d = TREE_SIZES[t.size] ?? TREE_SIZES.M;
+            const [cx, cy] = cam.project(t.x * G, t.y * G, 0);
+            const [sx, sy] = cam.project(t.x * G + d.r * 0.14, t.y * G + d.r * 0.14, 0);
+            const r = d.r * cam.zoom;
+            ctx.save();
+            ctx.fillStyle = 'rgba(15,23,42,.14)';
+            ctx.beginPath();
+            ctx.arc(sx, sy, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(111,170,70,.62)';
+            ctx.strokeStyle = ui?.selection?.type === 'tree' && ui.selection.id === t.id ? '#2563eb' : 'rgba(40,90,30,.8)';
+            ctx.lineWidth = ui?.selection?.type === 'tree' && ui.selection.id === t.id ? 2.5 : 1.3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#6b4a2b';
+            ctx.beginPath();
+            ctx.arc(cx, cy, Math.max(2, d.trunk * cam.zoom), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
         }
     }
 
@@ -475,6 +594,10 @@ export class Renderer {
             this.drawRoofPart(this.frame, b.roof);
             return;
         }
+        if (b.kind === KIND.TREE) {
+            this.drawTree(ctx, cam, b);
+            return;
+        }
         // Junta de los bloques: se fija en cada caja (el piso y el techo dejan su propio color de trazo en el contexto).
         ctx.strokeStyle = 'rgba(30,41,59,.30)';
         ctx.lineWidth = 0.6;
@@ -581,6 +704,26 @@ export class Renderer {
                 }
             }
         }
+        for (const t of project.trees ?? []) {
+            const d = TREE_SIZES[t.size] ?? TREE_SIZES.M;
+            const cx = t.x * G;
+            const cy = t.y * G;
+            const zc = d.h - d.r;
+            const pts = [[cx, cy]];
+            for (let i = 0; i < 16; i++) {
+                const a = (i / 16) * Math.PI * 2;
+                for (const dz of [-0.7, 0, 0.7]) {
+                    const o = disp(zc + dz * d.r);
+                    const rr = d.r * Math.sqrt(1 - dz * dz);
+                    pts.push([cx + rr * Math.cos(a) + o[0], cy + rr * Math.sin(a) + o[1]]);
+                }
+            }
+            const hull = convexHull(pts).map(([x, y]) => cam.project(x, y, 0));
+            sctx.beginPath();
+            hull.forEach(([x, y], i) => (i ? sctx.lineTo(x, y) : sctx.moveTo(x, y)));
+            sctx.closePath();
+            sctx.fill();
+        }
         this.ctx.save();
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.globalAlpha = 0.27;
@@ -623,6 +766,8 @@ export class Renderer {
             if (li === 0) this.drawPlanStairs(f, ghost);
             if (li === 1) this.drawPlanSlabs(f);
         }
+        this.drawZoneLabels(f);
+        this.drawPlanTrees(f);
         if (ui.level === 2) this.drawPlanRoof(f);
     }
 

@@ -30,6 +30,18 @@ Al final hay un caso de estudio (un plano real que se recreó) y las **brechas d
 - **Luz natural**: vidrio ≥ 1/8 de la superficie del ambiente (lo mide la Revisión). Cocina y baños pueden ir con
   ventiluz (`VT62`, `VT100`); dormitorios y estar, no.
 
+## 2 bis. El terreno: pileta, patio y árboles
+
+Las **zonas** y los **árboles** del editor no suman material, pero deciden cómo se vive la casa:
+
+- **Pileta y deck** al norte o al oeste del estar, donde pega el sol; lejos de la medianera si el reglamento pide retiro, y
+  cerca de la salida del estar o del alfresco, no de los dormitorios. Un deck de 1 m alrededor evita pisar el pasto mojado.
+- **Árboles de hoja caduca al norte y al oeste**: dan sombra en verano y dejan pasar el sol de invierno (hemisferio sur).
+  Los perennes, en el lado sur como pantalla del viento. Ninguno a menos de un radio de copa de la pared ni sobre la pileta.
+- **Un camino** (o el acceso del garaje) que llegue sin cruzar el jardín ni el deck; el camino al hall de entrada, directo.
+- La **sombra** de los árboles se ve en la isométrica con el sol activado: sirve para comprobar que no tapan las
+  ventanas del estar en invierno.
+
 ## 3. Circulación
 
 - **Un recorrido claro**: entrada → distribución → cada ambiente, sin atravesar otro para llegar. Excepciones aceptables:
@@ -76,7 +88,7 @@ qué lado abre); si es corrediza, hacia dónde corre la hoja. Anchos habituales:
 
 ## 5. Ventanas
 
-- **Antepecho 1,00 m** (`sill 4 u`) en estar y dormitorios; **ventiluz** (`sill 6 u`, alto 50 cm) en baños y cocinas
+- **Antepecho** (la distancia desde el suelo, se elige por ventana): **1,00 m** en estar y dormitorios; **ventiluz** (`sill 6 u`, alto 50 cm) en baños y cocinas
   arriba de la mesada; **ventanal** al piso (`VG150`) al patio.
 - **Un solo ancho por muro** si se puede: ritmo visual y menos cortes de bloque.
 - **Total de vanos ≤ 60 % del tramo** de un muro portante entre cruces (advertencia `opening.ratio`); ventanas de más
@@ -198,10 +210,12 @@ Salieron de dibujar el plano anterior. Ordenadas por cuánto destraban, con el c
   - **Hueco de doble altura** (sin escalera) en la losa.
 - La Revisión no verifica **cabeza libre** (≥ 2,00 m bajo el descanso o la losa) ni que el hueco no corte un tabique.
 
-### 9.5 Exteriores y elementos de transición (medio, M)
+### 9.5 Exteriores y elementos de transición (medio, M) — hecho lo del terreno
 
-- **Balcón, terraza y voladizo**: una losa sin muros debajo, con baranda, que no cuenta como ambiente.
-- **Porche con techo** apoyado en columna (ver 9.2) y **escalones de acceso** o desniveles de piso.
+- **Hecho**: **zonas** del terreno (pileta, patio o deck, jardín, camino) y **árboles** con tronco, copa y sombra; el porche
+  o alfresco con techo ya se puede dibujar sobre pilares (ver 9.2).
+- **Falta**: **balcón, terraza y voladizo** (una losa sin muros debajo, con baranda, que no cuenta como ambiente) y
+  **escalones de acceso** o desniveles de piso.
 - **Techo de cuatro aguas** (`hip`): hoy sólo hay dos aguas y un agua (`gable`, `shed`); el plano no muestra la cubierta, pero en una casa así es habitual.
 
 ### 9.6 Validaciones de uso (medio, M)

@@ -139,6 +139,31 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     log(moved !== win.pos, `la ventana se mueve arrastrándola (pos ${win.pos} → ${moved})`);
     await page.keyboard.press('Escape');
 
+    // Terreno: una pileta (zona) y un árbol; el antepecho de la ventana se elige desde el suelo
+    await page.evaluate(() => window.blockk.setTool('zone'));
+    const za = await toScreen(700, 100);
+    const zb = await toScreen(900, 300);
+    await page.mouse.move(za[0], za[1]);
+    await page.mouse.down();
+    await page.mouse.move(zb[0], zb[1], { steps: 8 });
+    await page.mouse.up();
+    await ready();
+    await page.evaluate(() => window.blockk.setTool('tree'));
+    const tp = await toScreen(1000, 450);
+    await page.mouse.move(tp[0], tp[1], { steps: 3 });
+    await page.mouse.click(tp[0], tp[1]);
+    await ready();
+    const site = await page.evaluate(() => [window.blockk.store.project.zones?.length ?? 0, window.blockk.store.project.trees?.length ?? 0]);
+    log(site[0] === 1 && site[1] === 1, `pileta (zona) y árbol colocados (${site.join(', ')})`);
+    await page.evaluate(() => {
+        const o = window.blockk.store.project.levels[0].openings.find((q) => q.kind === 'window');
+        window.blockk.setTool('select');
+        window.blockk.store.setUi({ selection: { type: 'opening', id: o.id, wall: o.wall } });
+    });
+    await page.waitForTimeout(200);
+    log(await page.evaluate(() => document.querySelector('#props').innerText.includes('Antepecho')), 'la ventana permite elegir el antepecho');
+    await page.keyboard.press('Escape');
+
     await page.click('[data-view="iso"]');
     for (const tool of await page.$$eval('.tool .tool-name', (els) => els.map((e) => e.textContent))) {
         if (tool !== 'Techo') await page.click(`.tool:has-text("${tool}")`).catch(() => {});

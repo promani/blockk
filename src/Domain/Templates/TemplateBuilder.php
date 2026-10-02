@@ -24,6 +24,10 @@ final class TemplateBuilder
     private ?array $roofs = null;
     private bool $upper = false;
     private int $seq = 0;
+    /** @var list<array<string, mixed>> */
+    private array $zones = [];
+    /** @var list<array<string, mixed>> */
+    private array $trees = [];
     private int $dx = 0;
     private int $dy = 0;
 
@@ -134,6 +138,22 @@ final class TemplateBuilder
         return $this;
     }
 
+    /** Zona del terreno (pileta, patio, jardín, camino): rectángulo de `$w` × `$h` unidades desde (x, y). */
+    public function zone(int $x, int $y, int $w, int $h, string $kind = 'patio', string $name = ''): self
+    {
+        $this->zones[] = ['id' => 'z'.(++$this->seq), 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'w' => $w, 'h' => $h, 'kind' => $kind, 'name' => $name];
+
+        return $this;
+    }
+
+    /** Árbol simple de tamaño S, M o L en el nodo (x, y). */
+    public function tree(int $x, int $y, string $size = 'M'): self
+    {
+        $this->trees[] = ['id' => 'a'.(++$this->seq), 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'size' => $size];
+
+        return $this;
+    }
+
     public function upper(): self
     {
         $this->upper = true;
@@ -152,6 +172,8 @@ final class TemplateBuilder
             'lot' => ['w' => 24, 'd' => 20],
             'settings' => ['defaultT' => 20, 'reservePct' => 3, 'currency' => 'USD'],
             'upper' => $this->upper,
+            ...([] === $this->zones ? [] : ['zones' => $this->zones]),
+            ...([] === $this->trees ? [] : ['trees' => $this->trees]),
             ...(null === $this->roofs ? ['roof' => $this->roof] : ['roofs' => $this->roofs]),
             // sin pilares ni nombres no se agregan las claves: así las plantillas viejas conservan su hash
             'levels' => array_map(static fn (array $l): array => array_filter($l, static fn (mixed $v, string $k): bool => !in_array($k, ['columns', 'labels'], true) || [] !== $v, ARRAY_FILTER_USE_BOTH), [$this->levels[0], $this->levels[1]]),

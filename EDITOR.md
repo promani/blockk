@@ -35,6 +35,8 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 | Habitación | `R` | Arrastrar en diagonal dibuja cuatro muros; empezando desde una pared existente, se comparte. |
 | Muro | `W` | Muro a muro; al volver al punto de partida la cadena se cierra sola (igual que Habitación). |
 | Abertura | `P` (`N`: ventana) | Una sola herramienta con **tipo** (puerta, ventana, portón), **ancho**, **alto** (ventanas) y **apertura** (batiente, corrediza, fija, seccional). Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Después se mueve **arrastrándola** (también a otro muro). |
+| Zona | `Z` | Bajo «Más»: arrastrar un rectángulo sobre el terreno y elegir su tipo: pileta, patio o deck, jardín o camino. Marca cómo se usa el espacio; **no es parte de la casa ni entra al cómputo**. Se arrastra para moverla; el panel cambia tipo, nombre y medidas. |
+| Árbol | `O` | Bajo «Más»: clic para plantar un árbol chico, mediano o grande, con tronco, copa y sombra (con el sol activado, la sombra sigue su posición). Se arrastra para moverlo. No entra al cómputo. |
 | Pilar | `C` | Clic en un punto de la retícula: pilar de hormigón armado (20, 25, 30 o 40 cm) de piso a techo. Se arrastra para moverlo; sostiene techos o losas donde no hay muro (alfresco, galería). |
 | Nombre | `A` | Escribir o elegir un nombre y hacer clic dentro de un ambiente: se ve en la planta. En un espacio abierto se pueden poner varios; se arrastran. También desde el campo «Nombre» al elegir una habitación. |
 | Escalera | `S` | Clic dentro de una habitación del Nivel 1: recta, en L o en U. Sigue al cursor, se acomoda dentro de la habitación y, si no entra, se gira sola. `X` gira. |
@@ -56,7 +58,7 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 - **Muro**: espesor (los del sistema: 10 / 15 / 20 cm con Lika), **alto** (de 50 cm a 3,00 m; sin nada encima hasta 4,00 m) y **corona U**
   (se puede sacar en paredes que son sólo mampostería).
-- **Abertura**: tipo, ancho y alto (en cm), apertura y, si abre, el giro (bisagra y lado) o el recorrido de la hoja. No tiene campo de posición: se arrastra.
+- **Abertura**: tipo, ancho (en cm), antepecho de las ventanas (distancia desde el suelo; el alto sale de ahí porque todas llegan a los 2,00 m), apertura y, si abre, el giro (bisagra y lado) o el recorrido de la hoja. No tiene campo de posición: se arrastra.
 - **Pilar**: lado (20 a 40 cm). **Nombre**: el texto.
 - **Techo**: tipo, sentido de la cumbrera o de la caída, pendiente, alero, sección y separación de cabios. Si dos techos
   se superponen sólo queda el más alto (dos techos a dos aguas cruzados forman una cruz). Los **hastiales** de bloque se

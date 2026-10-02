@@ -15,7 +15,7 @@ pallets, bolsas, hierro y madera compro?»*. Todo lo demás existe para llegar a
 | **Conversar antes que dibujar** | Se puede pedir la casa («2 plantas, 3 dormitorios, cocina integrada») y ajustarla hablando. La IA no dibuja: conversa y usa un generador determinista que siempre devuelve una casa válida. |
 | **El bloque es la unidad** | El modelo *es* la pared de bloques: hilada por hilada, con trabas, cortes, dinteles y corona. No es un dibujo al que después se le calcula algo: el dibujo se construye con las reglas del sistema. |
 | **Calcular bien lo que importa** | Bloques por espesor, cortes con reutilización, pallets, adhesivo, hormigón y hierro de los bloques U, madera, losas, escaleras, pilares y presupuesto. Cada número sale de una pieza concreta. |
-| **Perder detalle a propósito** | Sin muebles, texturas, cotas de taller, instalaciones ni curvas. Lo que no cambia el cómputo o la coherencia constructiva se deja afuera. |
+| **Perder detalle a propósito** | Sin muebles de catálogo, texturas, cotas de taller, instalaciones ni curvas. Lo que no cambia el cómputo o la coherencia constructiva se deja afuera. |
 | **Avisar, no calcular estructuras** | La Revisión marca lo que no se puede construir (vanos pegados a una esquina, apoyos, luces de madera). Predimensiona; no reemplaza a un profesional. |
 
 ## 2. Cómo se compara (a grandes rasgos)
@@ -54,9 +54,12 @@ trabajo en equipo).
 - **Muros ortogonales** sobre la retícula de 12,5 cm (el bloque entero de 50 cm es el paso). Herramientas: Habitación,
   Muro, Bloque suelto. Espesores del sistema: 10, 15 y 20 cm; alto de 50 cm a 3 m (hasta 4 m si no hay nada arriba).
 - **Aberturas**: una sola herramienta con **tipo** (puerta, ventana, portón), **ancho**, **alto** y **apertura**
-  (batiente con bisagra y lado, corrediza, fija, seccional). Se colocan apuntando al muro (el verde marca lugar
+  (batiente con bisagra y lado, corrediza, fija, seccional); en las ventanas, el **antepecho** (distancia desde el suelo).
+  Se colocan apuntando al muro (el verde marca lugar
   válido) y se mueven arrastrándolas, también a otro muro.
 - **Pilares** de hormigón armado (20 a 40 cm) y **nombres de ambiente** que se ven en la planta.
+- **Terreno**: **zonas** rectangulares (pileta, patio o deck, jardín, camino) y **árboles** simples (tronco, copa y
+  sombra, en tres tamaños). Sirven para pensar la disposición del espacio; no entran al cómputo ni a la Revisión.
 - **Dos niveles + techo**: Nivel 1, Nivel 2 (con piso: losa de hormigón o entrepiso de madera) y pestaña Techo.
 - **Escaleras**: recta, en L y en U, con ancho, huella y giro; abren el hueco en el piso de arriba.
 - **Techos** rectangulares a dos aguas o a un agua, que se apoyan solos en los muros, se cruzan y se cortan entre sí
@@ -112,7 +115,7 @@ trabajo en equipo).
 
 | No hay | Por qué |
 | --- | --- |
-| Muebles, artefactos, texturas, materiales de terminación | No cambian el cómputo de mampostería; agregan peso y distraen. |
+| Texturas, materiales de terminación y muebles de catálogo | No cambian el cómputo de mampostería; agregan peso y distraen. Los **muebles simples como gabarito** (camas, mesas, mesadas, artefactos de baño) están en el [BACKLOG.md](BACKLOG.md): sirven para validar medidas, no para decorar. |
 | Render fotorrealista y recorrido virtual | El dibujo es esquemático para entender la casa, no para venderla. |
 | Cotas, cortes y planos de taller | La herramienta calcula materiales; no documenta una obra. |
 | Muros curvos o diagonales, retículas libres | Todo el motor (trabas, cortes, jambas) depende de muros a 90° sobre la retícula del bloque. |
@@ -125,6 +128,7 @@ trabajo en equipo).
 ### 4.2 Todavía no (ver [BACKLOG.md](BACKLOG.md))
 
 - Un **tipo** por ambiente (dormitorio, baño…) con revisiones propias; hoy el nombre es texto libre.
+- **Muebles simples** como gabarito (camas, mesa con sillas, mesadas, artefactos de baño).
 - Vigas libres, techo a cuatro aguas o de forma libre, balcones y voladizos, terreno en pendiente y retiros.
 - Planos exportables con cotas; importar un plano como fondo para calcarlo.
 - Guardado y enlace compartible; comparar alternativas de una misma casa.
@@ -151,5 +155,6 @@ trabajo en equipo).
 | Techos | hasta 20 por proyecto; rectangulares, a una o dos aguas |
 | Escaleras | hasta 10 por nivel; recta, L o U |
 | Pilares / nombres | hasta 40 por nivel cada uno |
+| Zonas / árboles del terreno | hasta 30 zonas y 60 árboles |
 | Pedidos al asistente | 6 llamadas por turno, 40 turnos por conversación, límites por IP y por día |
 | Tamaño de proyecto | hasta 1,5 MB de JSON |

@@ -6,7 +6,9 @@
  * Códigos adicionales de la escena: 4 hoja de puerta · 5 vidrio · 6 tirante · 7 placa de entrepiso · 8 viga.
  */
 
-export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8, STEP: 9, SLAB: 10, ROOF: 11, FRAME: 12, COLUMN: 13 };
+import { TREE_SIZES } from './site.js';
+
+export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8, STEP: 9, SLAB: 10, ROOF: 11, FRAME: 12, COLUMN: 13, TREE: 14 };
 
 const G = 12.5;
 const COURSE_H = 25;
@@ -26,7 +28,8 @@ export function buildScene(project, analysis, config) {
     const timber = buildTimber(analysis.timber, config);
     const floors = buildFloors(analysis.floors, config);
     const roofs = buildRoofs(analysis.roof);
-    const all = [...levels.flatMap((l) => l.boxes), ...timber.boxes, ...floors, ...roofs];
+    const trees = (project.trees ?? []).map(treeBox);
+    const all = [...levels.flatMap((l) => l.boxes), ...timber.boxes, ...floors, ...roofs, ...trees];
     return { levels, timber, all, sorted: new Map() };
 }
 
@@ -80,6 +83,28 @@ function addMasonry(boxes, courses, base, li) {
             });
         }
     });
+}
+
+/** Árbol: una sola caja (copa y tronco) para el orden de pintado; se dibuja aparte. */
+function treeBox(t) {
+    const d = TREE_SIZES[t.size] ?? TREE_SIZES.M;
+    return {
+        x0: t.x * G - d.r,
+        x1: t.x * G + d.r,
+        y0: t.y * G - d.r,
+        y1: t.y * G + d.r,
+        z0: 0,
+        z1: d.h,
+        zs: 0,
+        kind: KIND.TREE,
+        axis: 'x',
+        adjA: false,
+        adjB: false,
+        top: true,
+        level: 0,
+        tree: t.id,
+        treeSize: t.size,
+    };
 }
 
 /** Pilares de hormigón armado: una caja lisa de piso a techo del nivel. */

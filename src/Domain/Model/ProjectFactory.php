@@ -57,6 +57,8 @@ final class ProjectFactory
             roofs: $this->roofs($data, $levels),
             longitude: $this->floatInRange($data['lon'] ?? -58.4, -180.0, 180.0, 'lon'),
             utcOffset: $this->floatInRange($data['tz'] ?? -3.0, -12.0, 14.0, 'tz'),
+            zones: $this->zones($data['zones'] ?? []),
+            trees: $this->trees($data['trees'] ?? []),
         );
 
         if ([] !== $this->errors) {
@@ -64,6 +66,45 @@ final class ProjectFactory
         }
 
         return $project;
+    }
+
+    /** @return list<Zone> */
+    private function zones(mixed $list): array
+    {
+        $ids = [];
+        $out = [];
+        foreach ($this->list($list, Hcca::MAX_ZONES, 'zones') as $i => $z) {
+            $kind = in_array($z['kind'] ?? 'patio', Hcca::ZONE_KINDS, true) ? $z['kind'] : 'patio';
+            $out[] = new Zone(
+                $this->id($z['id'] ?? null, "zones[$i].id", $ids),
+                $this->coord($z['x'] ?? null, "zones[$i].x"),
+                $this->coord($z['y'] ?? null, "zones[$i].y"),
+                $this->intInRange($z['w'] ?? 8, 2, Hcca::MAX_BBOX_UNITS, "zones[$i].w"),
+                $this->intInRange($z['h'] ?? 8, 2, Hcca::MAX_BBOX_UNITS, "zones[$i].h"),
+                $kind,
+                $this->string($z['name'] ?? '', 40, "zones[$i].name"),
+            );
+        }
+
+        return $out;
+    }
+
+    /** @return list<Tree> */
+    private function trees(mixed $list): array
+    {
+        $ids = [];
+        $out = [];
+        foreach ($this->list($list, Hcca::MAX_TREES, 'trees') as $i => $t) {
+            $size = in_array($t['size'] ?? 'M', Hcca::TREE_SIZES, true) ? $t['size'] : 'M';
+            $out[] = new Tree(
+                $this->id($t['id'] ?? null, "trees[$i].id", $ids),
+                $this->coord($t['x'] ?? null, "trees[$i].x"),
+                $this->coord($t['y'] ?? null, "trees[$i].y"),
+                $size,
+            );
+        }
+
+        return $out;
     }
 
     /** @param array<string, mixed> $d */

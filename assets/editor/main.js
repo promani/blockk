@@ -9,6 +9,7 @@ import { buildScene, roofOuter } from './scene.js';
 import { createTools, openingBox } from './tools.js';
 import { mountPanels } from './panels.js';
 import { wireBox, snapDots, magnetHit } from './overlay.js';
+import { TREE_SIZES } from './site.js';
 import { magnet } from './snap.js';
 import { mountGuide } from './guide.js';
 import { wallRect, G } from './pick.js';
@@ -28,8 +29,8 @@ const ROOF_LEVEL = 2;
  * desde un nivel lleva a la pestaña Techo.
  */
 const TOOLSETS = {
-    0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['block', 'ubeam'] },
-    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['block', 'ubeam', 'beam'] },
+    0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['block', 'ubeam', 'zone', 'tree'] },
+    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['block', 'ubeam', 'beam', 'zone', 'tree'] },
     2: { main: ['select', 'roof'], more: [] },
 };
 let showMore = false;
@@ -588,6 +589,15 @@ function selectionBox(sel) {
         const o = lv.openings.find((x) => x.id === sel.id);
         const w = o && lv.walls.find((x) => x.id === o.wall);
         return o && w ? openingBox(w, o.pos, o.w, o.sill, o.h, base) : null;
+    }
+    if (sel.type === 'tree') {
+        const t = (store.project.trees ?? []).find((x) => x.id === sel.id);
+        const d = t && TREE_SIZES[t.size];
+        return t ? { x0: t.x * G - d.r, y0: t.y * G - d.r, x1: t.x * G + d.r, y1: t.y * G + d.r, z0: 0, z1: d.h } : null;
+    }
+    if (sel.type === 'zone') {
+        const z = (store.project.zones ?? []).find((x) => x.id === sel.id);
+        return z ? { x0: z.x * G, y0: z.y * G, x1: (z.x + z.w) * G, y1: (z.y + z.h) * G, z0: 0, z1: 4 } : null;
     }
     if (sel.type === 'column') {
         const c = (lv.columns ?? []).find((x) => x.id === sel.id);

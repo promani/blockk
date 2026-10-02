@@ -290,6 +290,11 @@ final class TemplateCatalog
                     ->label(0, 66, 77, 'Lavadero')
                     ->label(0, 59, 98, 'Escritorio')
                     ->label(0, 52, -10, 'Alfresco')
+                    ->zone(80, 36, 56, 52, 'patio', 'Deck')                // el terreno: no es de la casa pero ocupa lugar
+                    ->zone(88, 44, 34, 36, 'pool', 'Pileta')
+                    ->tree(150, 30, 'M')
+                    ->tree(172, 100, 'L')
+                    ->tree(118, 112, 'S')
                     ->upper()
                     ->room(1, 0, 0, 72, 112, 20)
                     ->wall(1, 0, 26, 72, 26, 10)

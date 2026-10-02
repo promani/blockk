@@ -8,6 +8,7 @@ import { sideLabel } from '../lib/orient.js';
 import { collinearChain } from './wallmove.js';
 import { OPENING_TYPES, openingTitle, defaultMode, turnOptions, turnValue, applyTurn } from './openings.js';
 import { roomNamesList, roomAnchor } from './names.js';
+import { ZONE_KINDS, TREE_SIZES } from './site.js';
 import { contextOf, CONTEXT_TITLE, roomWalls, facing, openingM2, issueMatches } from './context.js';
 
 const G = 12.5;
@@ -239,6 +240,8 @@ export function mountPanels(app) {
                 else if (r && side === 'B') r.gableB = false;
             } else if (sel_.type === 'slab') d.levels[1].slabs = d.levels[1].slabs.filter((x) => x.id !== sel_.id);
             else if (sel_.type === 'stair') d.levels[0].stairs = d.levels[0].stairs.filter((x) => x.id !== sel_.id);
+            else if (sel_.type === 'tree') d.trees = (d.trees ?? []).filter((x) => x.id !== sel_.id);
+            else if (sel_.type === 'zone') d.zones = (d.zones ?? []).filter((x) => x.id !== sel_.id);
             else if (sel_.type === 'column') lv.columns = (lv.columns ?? []).filter((x) => x.id !== sel_.id);
             else if (sel_.type === 'label') lv.labels = (lv.labels ?? []).filter((x) => x.id !== sel_.id);
         });
@@ -456,12 +459,43 @@ export function mountPanels(app) {
                 }))),
                 field('Ancho (cm)', num(o.w * G, 25, 500, (v) => upd((x) => { x.w = Math.max(2, Math.round(v / G)); x.preset = ''; }), G)),
                 o.kind === 'window'
-                    ? field('Alto (cm)', sel(top - o.sill, [25, 50, 75, 100, 125, 150, 175, 200].map((n) => [n / 25, `${n}`]), (v) => upd((x) => { x.h = Number(v); x.sill = top - Number(v); x.preset = ''; })))
-                    : field('Alto (cm)', h('input', { type: 'text', value: cm(o.h * 25), disabled: true })),
+                    ? field('Antepecho (cm del suelo)', sel(o.sill, [0, 1, 2, 3, 4, 5, 6, 7].map((n) => [n, `${n * 25}`]), (v) => upd((x) => { x.sill = Number(v); x.h = top - Number(v); x.preset = ''; })))
+                    : null,
+                field('Alto (cm)', h('input', { type: 'text', value: cm(o.h * 25), disabled: true, title: o.kind === 'window' ? 'Llega hasta los 2,00 m: se baja o sube con el antepecho.' : 'Alto fijo de 2,00 m.' })),
                 field('Apertura', sel(mode, type.modes, (v) => upd((x) => { x.mode = v; }))),
                 turns ? field(mode === 'slide' ? 'Recorrido' : 'Giro', sel(turnValue(o), turnOptions(wall ? wall.y1 === wall.y2 : true, mode), (v) => upd((x) => applyTurn(x, v)))) : null,
                 h('div', { class: 'actions-row' }, delBtn, wall ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'wall', id: wall.id } }) }, 'Ver muro') : null),
                 h('p', { class: 'muted small' }, 'Para moverla, arrastrala por el muro.'),
+            );
+            return;
+        }
+
+        if (s?.type === 'zone') {
+            const z = (store.project.zones ?? []).find((x) => x.id === s.id);
+            if (!z) return void (store.ui.selection = null);
+            const upd = (fn) => store.commit('Editar zona', (d) => fn(d.zones.find((x) => x.id === z.id)));
+            add(el.props,
+                h('div', { class: 'kv-title' }, ZONE_KINDS[z.kind]?.label ?? 'Zona'),
+                field('Tipo', sel(z.kind, Object.entries(ZONE_KINDS).map(([k, x]) => [k, x.label]), (v) => upd((x) => { x.kind = v; }))),
+                field('Nombre', h('input', { type: 'text', maxlength: 40, value: z.name, placeholder: ZONE_KINDS[z.kind]?.label, onchange: (e) => upd((x) => { x.name = e.target.value.trim(); }) })),
+                field('Ancho (cm)', num(z.w * G, 25, 90000, (v) => upd((x) => { x.w = Math.max(2, Math.round(v / G)); }), G)),
+                field('Largo (cm)', num(z.h * G, 25, 90000, (v) => upd((x) => { x.h = Math.max(2, Math.round(v / G)); }), G)),
+                h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2((z.w * G * z.h * G) / 10000))),
+                h('div', { class: 'actions-row' }, delBtn),
+                h('p', { class: 'muted small' }, 'No es parte de la casa ni entra al cómputo. Para moverla, arrastrala.'),
+            );
+            return;
+        }
+
+        if (s?.type === 'tree') {
+            const t = (store.project.trees ?? []).find((x) => x.id === s.id);
+            if (!t) return void (store.ui.selection = null);
+            add(el.props,
+                h('div', { class: 'kv-title' }, 'Árbol'),
+                field('Tamaño', sel(t.size, Object.entries(TREE_SIZES).map(([k, x]) => [k, x.label]), (v) => store.commit('Editar árbol', (d) => { d.trees.find((x) => x.id === t.id).size = v; }))),
+                h('dl', { class: 'dl' }, h('dt', {}, 'Altura'), h('dd', {}, `${fmt(TREE_SIZES[t.size].h / 100)} m`), h('dt', {}, 'Copa'), h('dd', {}, `${fmt((TREE_SIZES[t.size].r * 2) / 100)} m de diámetro`)),
+                h('div', { class: 'actions-row' }, delBtn),
+                h('p', { class: 'muted small' }, 'No entra al cómputo. Para moverlo, arrastralo.'),
             );
             return;
         }

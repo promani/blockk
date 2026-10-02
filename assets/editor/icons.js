@@ -16,5 +16,7 @@ export const ICONS = {
     roof: svg('<path d="M3 13l9-7 9 7"/><path d="M5 12v7h14v-7" stroke-width="1.3"/>'),
     column: svg('<rect x="8" y="3" width="8" height="18" rx="1"/><path d="M6 21h12M6 3h12"/>'),
     label: svg('<path d="M4 7h16M4 12h10M4 17h13"/><path d="M18 12l2 2-2 2" stroke-width="1.4"/>'),
+    zone: svg('<rect x="3" y="6" width="18" height="12" rx="3"/><path d="M6 11c2-2 3 2 5 0s3 2 5 0" stroke-width="1.4"/>'),
+    tree: svg('<circle cx="12" cy="9" r="6"/><path d="M12 15v6M9 21h6"/>'),
     beam: svg('<rect x="3" y="9" width="18" height="6" rx="1"/><path d="M6 9v6M18 9v6" stroke-width="1.3"/>'),
 };
