@@ -19,6 +19,7 @@ import { mountShare } from './share.js';
 import { mountHouses } from './houses.js';
 import { mountBackdrop } from './backdrop.js';
 import { linkHouse } from '../lib/houses.js';
+import { TYPE_CHOICES, typeOf, applyType } from './openings.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
 const store = new Store(config);
@@ -659,9 +660,47 @@ function selectionBox(sel) {
     return null;
 }
 
+/**
+ * Menú flotante junto a la abertura elegida para cambiarle el tipo (puerta, arcada, ventana, portón) sin ir al panel.
+ * Se rearma sólo cuando cambia la abertura o su tipo; en cada dibujo, sólo se reubica.
+ */
+const opMenu = h('div', { class: 'op-menu', role: 'toolbar', 'aria-label': 'Tipo de abertura', hidden: true });
+$('#stage').append(opMenu);
+let opMenuKey = '';
+function placeOpeningMenu(box) {
+    const s = store.ui.selection;
+    const o = s?.type === 'opening' && store.ui.tool === 'select' ? store.level().openings.find((x) => x.id === s.id) : null;
+    if (!o || !box) {
+        opMenu.hidden = true;
+        opMenuKey = '';
+        return;
+    }
+    const key = `${o.id}:${typeOf(o)}`;
+    if (key !== opMenuKey) {
+        opMenuKey = key;
+        clear(opMenu);
+        add(opMenu, ...TYPE_CHOICES.map(([v, label]) => h('button', {
+            type: 'button',
+            class: `btn btn-sm ${typeOf(o) === v ? 'btn-primary' : 'btn-outline'}`,
+            'aria-pressed': String(typeOf(o) === v),
+            onclick: () => {
+                if (typeOf(o) === v) return;
+                store.commit('Cambiar tipo de abertura', (d) => applyType(d.levels[store.ui.level].openings.find((x) => x.id === o.id), v, config.openingTopCourse));
+            },
+        }, label)));
+    }
+    const [sx, sy] = cam.project((box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2, box.z1);
+    opMenu.hidden = false;
+    // arriba de la abertura, sin salirse del lienzo
+    const half = opMenu.offsetWidth / 2 + 6;
+    opMenu.style.left = `${Math.round(Math.min(Math.max(sx, half), cam.w - half))}px`;
+    opMenu.style.top = `${Math.round(Math.max(sy - 12, opMenu.offsetHeight + 6))}px`;
+}
+
 function overlay(ctx) {
     const hover = store.ui.tool === 'select' ? selectionBox(app.hover) : null;
     const sel = selectionBox(store.ui.selection);
+    placeOpeningMenu(sel);
     if (hover && JSON.stringify(app.hover) !== JSON.stringify(store.ui.selection)) wireBox(ctx, cam, hover, { stroke: 'rgba(30,41,59,.65)', width: 1.5, dash: [4, 3] });
     if (sel) wireBox(ctx, cam, sel, { stroke: '#8bc53f', width: 3 });
     drawSelectionExtras(ctx);

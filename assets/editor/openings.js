@@ -5,7 +5,7 @@
 export const G = 12.5;
 
 export const OPENING_TYPES = {
-    door: { label: 'Puerta', w: 7, widths: [6, 7, 8, 12], sill: 0, modes: [['swing', 'Batiente'], ['slide', 'Corrediza']] },
+    door: { label: 'Puerta', w: 7, widths: [6, 7, 8, 12], sill: 0, modes: [['swing', 'Batiente'], ['slide', 'Corrediza'], ['open', 'Sin hoja (arcada)']] },
     window: { label: 'Ventana', w: 10, widths: [5, 8, 10, 12, 15], sill: 4, modes: [['swing', 'Batiente'], ['slide', 'Corrediza'], ['fixed', 'Fija']] },
     gate: { label: 'Portón', w: 20, widths: [20, 24], sill: 0, modes: [['overhead', 'Seccional'], ['slide', 'Corrediza']] },
 };
@@ -16,7 +16,27 @@ export const commercialFor = (cfg, kind) => (cfg.commercial ?? []).filter((c) =>
 /** La medida de catálogo que coincide con la abertura (tipo, ancho y antepecho), o null si es a medida. */
 export const commercialOf = (cfg, o) => commercialFor(cfg, o.kind).find((c) => c.w === o.w && c.sill === o.sill) ?? null;
 
-export const openingTitle = (o) => OPENING_TYPES[o.kind]?.label ?? 'Abertura';
+export const openingTitle = (o) => (typeOf(o) === 'arch' ? 'Arcada' : OPENING_TYPES[o.kind]?.label ?? 'Abertura');
+
+/** Tipos para elegir: la arcada es una puerta sin hoja (`mode: 'open'`), pero se elige como un tipo más. */
+export const TYPE_CHOICES = [['door', 'Puerta'], ['arch', 'Arcada'], ['window', 'Ventana'], ['gate', 'Portón']];
+export const typeOf = (o) => (o.kind === 'door' && o.mode === 'open' ? 'arch' : o.kind);
+
+/** Formas de abrir que se ofrecen para la abertura (la arcada no abre; en una puerta, «sin hoja» es la arcada). */
+export const modeChoices = (o) => (typeOf(o) === 'arch' ? [] : OPENING_TYPES[o.kind].modes.filter(([m]) => m !== 'open'));
+
+/**
+ * Cambia el tipo de la abertura `o` (en el lugar). Entre puerta y arcada se conserva el ancho; a otro tipo, las medidas
+ * habituales de ese tipo. `top` = hilada donde termina el vano.
+ */
+export function applyType(o, type, top) {
+    const kind = type === 'arch' ? 'door' : type;
+    const keep = kind === 'door' && o.kind === 'door';
+    const n = OPENING_TYPES[kind];
+    Object.assign(o, { kind, preset: '', mode: type === 'arch' ? 'open' : defaultMode(kind), flip: false, hingeEnd: false });
+    if (!keep) Object.assign(o, { w: n.w, sill: n.sill, h: top - n.sill });
+    return o;
+}
 
 /** Forma de abrir por defecto de un tipo. */
 export const defaultMode = (kind) => OPENING_TYPES[kind].modes[0][0];

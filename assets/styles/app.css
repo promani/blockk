@@ -496,3 +496,8 @@ details.more > summary { cursor: pointer; font-size: .85rem; font-weight: 600; c
 .cmp-table .cmp-rel { font-weight: 400; opacity: .85; }
 @media (max-width: 700px) { .cmp-heads { grid-template-columns: 1fr; } .cmp-house { grid-template-columns: 110px 1fr; } }
 .table-wrap { overflow-x: auto; }
+
+/* Menú de tipo junto a la abertura elegida */
+.op-menu { position: absolute; z-index: 5; transform: translate(-50%, -100%); display: flex; gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 14px rgba(15, 23, 42, .18); white-space: nowrap; }
+.op-menu[hidden] { display: none; }
+.op-menu .btn { padding: 3px 8px; }

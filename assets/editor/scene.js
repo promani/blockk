@@ -249,7 +249,7 @@ function addOpenings(boxes, level, base, li) {
             boxes.push(box(from, from + F, -half, half, lo, hi, zc0, KIND.FRAME, { adjA: true }));
             boxes.push(box(to - F, to, -half, half, lo, hi, zc0, KIND.FRAME, { adjB: true }));
             if (mullion !== null) boxes.push(box(mullion - F / 2, mullion + F / 2, -3, 3, lo, hi, zc0, KIND.FRAME));
-            for (const [a, b] of panes) {
+            for (const [a, b] of o.mode === 'open' ? [] : panes) {
                 const handle = door && handleZ >= lo && handleZ < top ? { handle: { at: o.hingeEnd ? a + 8 : b - 8, z: handleZ } } : {};
                 boxes.push(box(a, b, -leaf, leaf, lo, hi, zc0, door ? KIND.DOOR : KIND.GLASS, handle));
             }

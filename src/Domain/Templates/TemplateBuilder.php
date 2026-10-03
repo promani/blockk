@@ -62,7 +62,7 @@ final class TemplateBuilder
      * @param string $axis 'x' (muro horizontal en y=$line) o 'y' (muro vertical en x=$line); $start = coordenada inicial del vano
      * @param bool   $flip la puerta abre hacia el lado negativo (arriba o a la izquierda) en vez del positivo (abajo o a la derecha)
      * @param bool   $hingeEnd la bisagra va en el extremo final del vano (derecha o abajo) en vez del inicial
-     * @param string $mode forma de abrir: `swing`, `slide`, `fixed` u `overhead`; vacío, la habitual del tipo
+     * @param string $mode forma de abrir: `swing`, `slide`, `open` (arcada, sin hoja), `fixed` u `overhead`; vacío, la habitual del tipo
      */
     public function opening(int $level, string $preset, string $axis, int $line, int $start, bool $flip = false, bool $hingeEnd = false, string $mode = ''): self
     {

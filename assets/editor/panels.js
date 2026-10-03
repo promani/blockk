@@ -6,7 +6,7 @@ import { roomColor } from './renderer.js';
 import { anchorLines } from './snap.js';
 import { sideLabel } from '../lib/orient.js';
 import { collinearChain } from './wallmove.js';
-import { OPENING_TYPES, openingTitle, defaultMode, turnOptions, turnValue, applyTurn, commercialFor, commercialOf } from './openings.js';
+import { TYPE_CHOICES, openingTitle, typeOf, applyType, modeChoices, defaultMode, turnOptions, turnValue, applyTurn, commercialFor, commercialOf } from './openings.js';
 import { roomNamesList, roomAnchor, roomTypeItems, nameForType, setLabelType } from './names.js';
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
 import { footprint, furnitureGroups, turnFurniture } from './furniture.js';
@@ -458,19 +458,16 @@ export function mountPanels(app) {
             const wall = lv.walls.find((w) => w.id === o.wall);
             const upd = (fn) => modify('Editar abertura', (l) => fn(l.openings.find((x) => x.id === o.id)));
             const top = cfg.openingTopCourse;
-            const type = OPENING_TYPES[o.kind] ?? OPENING_TYPES.door;
             const mode = o.mode ?? defaultMode(o.kind);
+            const arch = typeOf(o) === 'arch';
             const turns = (mode === 'swing' && o.kind === 'door') || mode === 'slide';
             // Medida de catálogo (se deduce del tipo, el ancho y el antepecho) o a medida, con los campos libres.
-            const match = customOpenings.has(o.id) ? null : commercialOf(cfg, o);
+            const match = customOpenings.has(o.id) || arch ? null : commercialOf(cfg, o);
             add(el.props,
                 h('div', { class: 'kv-title' }, openingTitle(o)),
-                field('Tipo', sel(o.kind, Object.entries(OPENING_TYPES).map(([k, x]) => [k, x.label]), (v) => upd((x) => {
-                    const n = OPENING_TYPES[v];
-                    Object.assign(x, { kind: v, preset: '', w: n.w, sill: n.sill, h: top - n.sill, mode: defaultMode(v), flip: false, hingeEnd: false });
-                }))),
+                field('Tipo', sel(typeOf(o), TYPE_CHOICES, (v) => upd((x) => applyType(x, v, top)))),
                 (() => {
-                    const list = commercialFor(cfg, o.kind);
+                    const list = arch ? [] : commercialFor(cfg, o.kind);
                     return list.length ? field('Medida', sel(match?.id ?? '', [...list.map((c) => [c.id, c.label]), ['', 'A medida']], (v) => {
                         const c = list.find((x) => x.id === v);
                         if (!c) {
@@ -487,7 +484,7 @@ export function mountPanels(app) {
                     ? field('Antepecho (cm del suelo)', sel(o.sill, [0, 1, 2, 3, 4, 5, 6, 7].map((n) => [n, `${n * 25}`]), (v) => upd((x) => { x.sill = Number(v); x.h = top - Number(v); x.preset = ''; })))
                     : null,
                 field('Alto (cm)', h('input', { type: 'text', value: cm(o.h * 25), disabled: true, title: o.kind === 'window' ? 'Llega hasta los 2,00 m: se baja o sube con el antepecho.' : 'Alto fijo de 2,00 m.' })),
-                field('Apertura', sel(mode, type.modes, (v) => upd((x) => { x.mode = v; }))),
+                arch ? null : field('Apertura', sel(mode, modeChoices(o), (v) => upd((x) => { x.mode = v; }))),
                 turns ? field(mode === 'slide' ? 'Recorrido' : 'Giro', sel(turnValue(o), turnOptions(wall ? wall.y1 === wall.y2 : true, mode), (v) => upd((x) => applyTurn(x, v)))) : null,
                 h('div', { class: 'actions-row' }, delBtn, wall ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'wall', id: wall.id } }) }, 'Ver muro') : null),
                 h('p', { class: 'muted small' }, 'Para moverla, arrastrala por el muro.'),

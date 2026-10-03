@@ -50,7 +50,7 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 | Elegir | `V` | Clic en un muro, vano, losa, escalera, techo o hastial para verlo y cambiarlo; doble clic en el piso elige la habitación. Manijas azules para estirar. **Toda pieza se mueve arrastrándola**: aberturas, pilares, muebles, escaleras, zonas, árboles y nombres, directamente; un muro (se corre perpendicular, igual que con su manija), una losa, un entrepiso, una viga de madera o un techo, una vez elegidos con un clic (sin elegir, arrastrar sobre ellos sigue siendo el rectángulo de selección). Arrastrando un rectángulo se eligen varios elementos (muros con sus vanos, escaleras, pisos y techos de todos los niveles) o `Ctrl+A` toda la casa; se arrastran o se corren con flechas de a un bloque dentro del terreno. Lo elegido se **copia y pega** (`Ctrl+C` / `Ctrl+V`, o «Duplicar», `Ctrl+D`): ver más abajo. |
 | Habitación | `R` | Arrastrar en diagonal dibuja cuatro muros; empezando desde una pared existente, se comparte. |
 | Muro | `W` | Muro a muro; al volver al punto de partida la cadena se cierra sola (igual que Habitación). Con el primer punto puesto se puede **escribir el largo** en metros (`3,25`) y `Enter` coloca el tramo hacia donde apunta el cursor, redondeado a 12,5 cm; `Retroceso` corrige. |
-| Abertura | `P` (`N`: ventana) | Una sola herramienta con **tipo** (puerta, ventana, portón), **medida** (de catálogo o «A medida», con **ancho** y **antepecho** libres) y **apertura** (batiente, corrediza, fija, seccional). Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Después se mueve **arrastrándola** (también a otro muro). |
+| Abertura | `P` (`N`: ventana) | Una sola herramienta con **tipo** (puerta, **arcada** —el vano sin hoja—, ventana, portón), **medida** (de catálogo o «A medida», con **ancho** y **antepecho** libres) y **apertura** (batiente, corrediza, fija, seccional). Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Después se mueve **arrastrándola** (también a otro muro). |
 | Medir | `M` | Bajo «Más» (y en la pestaña Techo): clic en un punto y clic en otro muestra la distancia (y Δx / Δy si es diagonal). Los puntos se ajustan a la retícula de 12,5 cm y, cerca de un muro, a su **cara**: así se mide la luz libre entre paredes. No cambia el proyecto; `Esc` borra la medida. |
 | Zona | `Z` | Bajo «Más»: arrastrar un rectángulo sobre el terreno y elegir su tipo: pileta, patio o deck, jardín o camino. Marca cómo se usa el espacio; **no es parte de la casa ni entra al cómputo**. Se arrastra para moverla y, una vez elegida, los puntos azules de sus cuatro lados la agrandan o la achican de a 12,5 cm; el panel cambia tipo, nombre y medidas. |
 | Árbol | `O` | Bajo «Más»: clic para plantar un árbol chico, mediano o grande, con tronco, copa y sombra (con el sol activado, la sombra sigue su posición). Se arrastra para moverlo. En la isométrica, el árbol que queda delante de la casa se transparenta sobre ella: las hojas casi no tapan y las ramas se insinúan (el que queda detrás, tapado). No entra al cómputo. |
@@ -81,7 +81,10 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
   lo pega (un solo paso de deshacer, «Pegar») y queda elegido para seguir moviéndolo. `Esc` cancela.
 - Si lo copiado es de un solo nivel y se pega con el otro nivel activo, los muros, vanos, vigas U, pilares y nombres van
   al **nivel activo**: sirve para repetir la planta arriba. Losas, escaleras, madera y techos no cambian de nivel.
-- Una **abertura** sola se repite en el tramo libre más cercano del mismo muro (jambas de 25 cm).
+- Una **abertura** sola, con otro **muro elegido**, se pega en ese muro (mismo tipo y medidas, en el lugar libre más
+  cercano al centro; jambas de 25 cm). Sin elegir otro muro, se repite en el tramo libre más cercano del mismo muro.
+- Al elegir una abertura aparece junto a ella un **menú de tipo** (Puerta, Arcada, Ventana, Portón) para cambiarlo con
+  un clic; el resto de sus datos, en el panel.
 - `Ctrl+D` o el botón «Duplicar» de la barra de opciones hacen las dos cosas juntas.
 
 ## Propiedades por elemento

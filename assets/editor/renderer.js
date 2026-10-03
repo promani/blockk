@@ -1382,7 +1382,7 @@ export class Renderer {
                 ctx.lineTo(d[0], d[1]);
                 ctx.stroke();
                 ctx.setLineDash([]);
-            } else if (o.mode !== 'fixed') {
+            } else if (o.mode !== 'fixed' && o.mode !== 'open') {
                 // hoja de puerta abierta 90° + arco de giro, con la bisagra en el extremo elegido
                 const sign = o.flip ? -1 : 1;
                 const along = o.hingeEnd ? -1 : 1;

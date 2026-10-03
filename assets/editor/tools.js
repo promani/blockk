@@ -11,7 +11,7 @@ import { nextId } from '../lib/storage.js';
 import { ICONS } from './icons.js';
 import { moveWallLine, collinearChain, mirrorMove } from './wallmove.js';
 import { wallLines, nearestLine, anchorLines, nearestAnchor, snapWalls, ANCHOR_LABEL } from './snap.js';
-import { OPENING_TYPES, defaultMode, newOpening, commercialFor, commercialOf } from './openings.js';
+import { OPENING_TYPES, TYPE_CHOICES, typeOf, modeChoices, openingTitle, defaultMode, newOpening, commercialFor, commercialOf } from './openings.js';
 import { roomNamesList, roomTypeItems, nameForType } from './names.js';
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
 import { footprint, furnitureRect, furnitureGroups, furnitureOn } from './furniture.js';
@@ -487,7 +487,7 @@ export function createTools(app) {
             const o = store.level().openings.find((q) => q.id === s.id);
             if (!o) return false;
             clip = { opening: structuredClone(o), level: store.ui.level };
-            app.toast('Abertura copiada: Ctrl+V la repite en el mismo muro.');
+            app.toast('Abertura copiada: elegí un muro y Ctrl+V la pone ahí (sin elegir otro, la repite en el mismo muro).');
             return true;
         }
         const sel = selectionGroup();
@@ -541,30 +541,39 @@ export function createTools(app) {
         app.toast(`${n} elemento${n > 1 ? 's' : ''} copiado${n > 1 ? 's' : ''}: Ctrl+V para pegar.`);
         return true;
     };
-    /** Repite la abertura copiada en el tramo libre más cercano del mismo muro (jambas ≥ 25 cm, las del servidor). */
+    /**
+     * Pega la abertura copiada (mismo tipo y medidas) en el muro elegido, en el lugar libre más cercano al centro; si no
+     * hay otro muro elegido, la repite en el mismo muro, lo más cerca de la original. Jambas ≥ 25 cm (las del servidor).
+     */
     const pasteOpening = () => {
         const li = store.ui.level;
         const o = clip.opening;
-        const info = li === clip.level ? store.analysis?.levels?.[li]?.walls?.[o.wall] : null;
-        if (!info || !store.level().walls.some((w) => w.id === o.wall)) {
-            app.toast('El muro de la abertura copiada ya no está: copiala de nuevo.', 'error');
+        const s = store.ui.selection;
+        // el muro elegido, o el de la abertura elegida (así Ctrl+V seguidos van repitiendo en el último muro)
+        const pickedId = s?.type === 'wall' ? s.id : s?.type === 'opening' ? s.wall : null;
+        const picked = pickedId ? store.level().walls.find((w) => w.id === pickedId) : null;
+        const wall = picked ?? (li === clip.level ? store.level().walls.find((w) => w.id === o.wall) : null);
+        const info = wall ? store.analysis?.levels?.[li]?.walls?.[wall.id] : null;
+        if (!wall || !info) {
+            app.toast('Elegí el muro donde pegar la abertura y apretá Ctrl+V.', 'error');
             return;
         }
+        const desired = wall.id === o.wall ? o.pos : (wallLen(wall) - o.w) / 2;
         let best = null;
         for (const [from, to] of info.slots) {
             if (to - from < o.w) continue;
-            const pos = clamp(o.pos, from, to - o.w);
-            if (best === null || Math.abs(pos - o.pos) < Math.abs(best - o.pos)) best = pos;
+            const pos = clamp(Math.round(desired), from, to - o.w);
+            if (best === null || Math.abs(pos - desired) < Math.abs(best - desired)) best = pos;
         }
         if (best === null) {
-            app.toast(`No hay otro lugar libre de ${fmt(o.w * G, 1)} cm en ese muro.`, 'error');
+            app.toast(`No hay lugar libre de ${fmt(o.w * G, 1)} cm en ese muro.`, 'error');
             return;
         }
         let id = null;
-        store.commit('Duplicar abertura', (d) => {
+        store.commit(`Pegar ${openingTitle(o).toLowerCase()}`, (d) => {
             id = nextId(d, 'o');
-            d.levels[li].openings.push({ ...structuredClone(o), id, pos: best });
-        }).then(() => store.setUi({ selection: { type: 'opening', id, wall: o.wall } }));
+            d.levels[li].openings.push({ ...structuredClone(o), id, wall: wall.id, pos: best });
+        }).then(() => store.setUi({ selection: { type: 'opening', id, wall: wall.id } }));
     };
     /** Nivel donde se pegan muros, pilares y nombres si lo copiado es de un solo nivel y el activo es otro; si no, null. */
     const pasteTarget = () => (clip.single !== null && store.ui.level <= 1 && store.ui.level !== clip.single ? store.ui.level : null);
@@ -1387,10 +1396,12 @@ export function createTools(app) {
     };
 
     const openingState = { kind: 'door', w: OPENING_TYPES.door.w, mode: 'swing', sill: OPENING_TYPES.door.sill, custom: false };
-    const setOpeningKind = (kind) => {
+    /** Tipo de la herramienta: puerta, arcada (puerta sin hoja), ventana o portón. */
+    const setOpeningKind = (type) => {
+        const kind = type === 'arch' ? 'door' : type;
         openingState.kind = kind;
         openingState.w = OPENING_TYPES[kind].w;
-        openingState.mode = defaultMode(kind);
+        openingState.mode = type === 'arch' ? 'open' : defaultMode(kind);
         openingState.sill = OPENING_TYPES[kind].sill;
         openingState.custom = false;
     };
@@ -1399,16 +1410,17 @@ export function createTools(app) {
         T.opening = {
             hotkey: 'p',
             label: 'Abertura',
-            hint: 'Elegí el tipo (puerta, ventana o portón), la medida (de catálogo o a medida) y cómo abre; apuntá a un muro: el fantasma verde indica un lugar válido. Clic para colocar. Después se mueve arrastrándola.',
+            hint: 'Elegí el tipo (puerta, arcada, ventana o portón), la medida (de catálogo o a medida) y cómo abre; apuntá a un muro: el fantasma verde indica un lugar válido. Clic para colocar. Después se mueve arrastrándola.',
             setKind: (kind) => { setOpeningKind(kind); app.refreshOptions(); app.render(); },
             options: () => {
                 const t = OPENING_TYPES[openingState.kind];
                 // Medida comercial del catálogo (fija ancho, antepecho y apertura) o «A medida», con los controles libres.
-                const list = commercialFor(cfg, openingState.kind);
-                const match = openingState.custom ? null : commercialOf(cfg, openingState);
+                const arch = typeOf(openingState) === 'arch';
+                const list = arch ? [] : commercialFor(cfg, openingState.kind);
+                const match = openingState.custom || arch ? null : commercialOf(cfg, openingState);
                 const widths = t.widths.includes(openingState.w) ? t.widths : [...t.widths, openingState.w].sort((a, b) => a - b);
                 return h('span', { class: 'row' },
-                    selectT('Tipo', openingState.kind, Object.entries(OPENING_TYPES).map(([k, x]) => [k, x.label]), (v) => { setOpeningKind(v); app.refreshOptions(); app.render(); }),
+                    selectT('Tipo', typeOf(openingState), TYPE_CHOICES, (v) => { setOpeningKind(v); app.refreshOptions(); app.render(); }),
                     list.length ? selectT('Medida', match?.id ?? '', [...list.map((c) => [c.id, c.label]), ['', 'A medida']], (v) => {
                         const c = list.find((x) => x.id === v);
                         if (c) Object.assign(openingState, { w: c.w, sill: c.sill, mode: c.mode, custom: false });
@@ -1418,7 +1430,7 @@ export function createTools(app) {
                     }) : null,
                     match ? null : selectT('Ancho', openingState.w, widths.map((n) => [n, `${fmt(n * G, 1)} cm`]), (v) => { openingState.w = Number(v); app.render(); }),
                     !match && openingState.kind === 'window' ? selectT('Antepecho', openingState.sill, [0, 1, 2, 3, 4, 5, 6, 7].map((n) => [n, `${n * 25} cm del suelo`]), (v) => { openingState.sill = Number(v); app.render(); }) : null,
-                    selectT('Apertura', openingState.mode, t.modes, (v) => { openingState.mode = v; app.render(); }));
+                    arch ? null : selectT('Apertura', openingState.mode, modeChoices(openingState), (v) => { openingState.mode = v; app.render(); }));
             },
             reset() { ghost = null; },
             move(p) {
@@ -1434,7 +1446,7 @@ export function createTools(app) {
                 }
                 const g = ghost;
                 const st = { ...openingState };
-                store.commit(`Agregar ${OPENING_TYPES[st.kind].label.toLowerCase()}`, (d) => {
+                store.commit(`Agregar ${openingTitle(st).toLowerCase()}`, (d) => {
                     d.levels[store.ui.level].openings.push({ id: nextId(d, 'o'), wall: g.wall.id, pos: g.pos, ...newOpening(st.kind, cfg.openingTopCourse, st.w), sill: st.sill, h: cfg.openingTopCourse - st.sill, mode: st.mode });
                 });
             },

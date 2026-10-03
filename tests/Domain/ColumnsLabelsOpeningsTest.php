@@ -121,4 +121,15 @@ final class ColumnsLabelsOpeningsTest extends TestCase
 
         self::assertSame(['swing', 'swing'], array_column($ops, 'mode'));
     }
+
+    #[Test]
+    public function aDoorWithoutLeafIsAnArchwayAndOnlyDoorsCanBeOne(): void
+    {
+        $data = Fixtures::room()->opening(0, 'P87', 'x', 30, 6)->opening(0, 'V125', 'x', 0, 10)->build();
+        $data['levels'][0]['openings'][0]['mode'] = 'open';
+        $data['levels'][0]['openings'][1]['mode'] = 'open';
+        $ops = ProjectFactory::fromArray($data)->toArray()['levels'][0]['openings'];
+
+        self::assertSame(['open', 'swing'], array_column($ops, 'mode'));
+    }
 }

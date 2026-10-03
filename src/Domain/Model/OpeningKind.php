@@ -15,7 +15,8 @@ enum OpeningKind: string
     public function modes(): array
     {
         return match ($this) {
-            self::Door => ['swing', 'slide'],
+            // `open`: arcada, el vano sin hoja (paso entre ambientes).
+            self::Door => ['swing', 'slide', 'open'],
             self::Window => ['swing', 'slide', 'fixed'],
             self::Gate => ['overhead', 'slide'],
         };

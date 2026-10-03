@@ -53,7 +53,7 @@ trabajo en equipo).
 
 - **Muros ortogonales** sobre la retícula de 12,5 cm (el bloque entero de 50 cm es el paso). Herramientas: Habitación,
   Muro, Bloque suelto. Espesores del sistema: 10, 15 y 20 cm; alto de 50 cm a 3 m (hasta 4 m si no hay nada arriba).
-- **Aberturas**: una sola herramienta con **tipo** (puerta, ventana, portón), **ancho**, **alto** y **apertura**
+- **Aberturas**: una sola herramienta con **tipo** (puerta, arcada sin hoja, ventana, portón), **ancho**, **alto** y **apertura**
   (batiente con bisagra y lado, corrediza, fija, seccional); en las ventanas, el **antepecho** (distancia desde el suelo).
   Se colocan apuntando al muro (el verde marca lugar
   válido) y se mueven arrastrándolas, también a otro muro. Se eligen por **medida comercial** de carpintería (puerta
@@ -80,7 +80,7 @@ trabajo en equipo).
   el fondo de una habitación se escriben en el panel; la herramienta **Medir** da la distancia entre dos puntos,
   también entre caras de muros (luz libre).
 - **Copiar y pegar** (`Ctrl+C` / `Ctrl+V`, `Ctrl+D` duplica): un elemento o un grupo, también de un nivel al otro para
-  repetir la planta arriba.
+  repetir la planta arriba. Una abertura copiada se pega en el muro que se elija.
 - **Terreno** configurable (hasta 100 m por lado), norte que se orienta con una brújula, ciudad y huso horario.
 
 ### 3.2 Entender (vistas y revisión)

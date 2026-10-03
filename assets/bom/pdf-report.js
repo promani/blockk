@@ -200,11 +200,11 @@ export function drawPlan(pdf, level, analysis, area, north) {
         if (horizontal) {
             pdf.rect(X(from), Y(line - t / 2 - 0.2), len * s, (t + 0.4) * s, { fill: [255, 255, 255] });
             if (o.kind === 'window') for (const off of [-t / 4, 0, t / 4]) pdf.line(X(from), Y(line + off), X(from + len), Y(line + off), { width: 0.6 });
-            else swing(from, line, 0, (o.flip ? -1 : 1) * Math.PI / 2, len);
+            else if (o.mode !== 'open') swing(from, line, 0, (o.flip ? -1 : 1) * Math.PI / 2, len);
         } else {
             pdf.rect(X(line - t / 2 - 0.2), Y(from), (t + 0.4) * s, len * s, { fill: [255, 255, 255] });
             if (o.kind === 'window') for (const off of [-t / 4, 0, t / 4]) pdf.line(X(line + off), Y(from), X(line + off), Y(from + len), { width: 0.6 });
-            else swing(line, from, Math.PI / 2, o.flip ? Math.PI : 0, len);
+            else if (o.mode !== 'open') swing(line, from, Math.PI / 2, o.flip ? Math.PI : 0, len);
         }
     }
 
