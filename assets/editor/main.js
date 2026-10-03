@@ -358,6 +358,13 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         app.deleteSelection();
+    } else if (e.key.startsWith('Arrow')) {
+        // flechas: mueven la cámara (Mayús + flechas corren lo elegido, en la herramienta Elegir)
+        e.preventDefault();
+        const step = 80;
+        const [dx, dy] = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key] ?? [0, 0];
+        cam.pan(dx, dy, planeZ());
+        app.render();
     } else if (e.key === 'Escape') {
         store.setUi({ selection: null });
         setTool('select');

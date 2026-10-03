@@ -149,7 +149,7 @@ final class Hcca
     public const int MAX_ZONES = 30;
     public const int MAX_TREES = 60;
     /** Tipos de zona del terreno y tamaños de árbol. */
-    public const array ZONE_KINDS = ['pool', 'patio', 'garden', 'path'];
+    public const array ZONE_KINDS = ['pool', 'patio', 'garden', 'path', 'other'];
     public const array TREE_SIZES = ['S', 'M', 'L'];
     public const int MAX_COLUMNS_PER_LEVEL = 40;
     public const int MAX_LABELS_PER_LEVEL = 40;

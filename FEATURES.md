@@ -60,7 +60,7 @@ trabajo en equipo).
   80 × 200, ventana 120 × 110…), que fija el vano modular que la contiene, o **a medida**.
 - **Pilares** de hormigón armado (20 a 40 cm) y **nombres de ambiente** que se ven en la planta. El nombre es libre y
   se le puede elegir un **tipo** (dormitorio, baño, cocina…); si no se elige, se deduce del nombre.
-- **Terreno**: **zonas** rectangulares (pileta, patio o deck, jardín, camino) y **árboles** simples (tronco, copa y
+- **Terreno**: **zonas** rectangulares (pileta, patio o deck, jardín, camino o genérica) y **árboles** simples (tronco, copa y
   sombra, en tres tamaños). Sirven para pensar la disposición del espacio; no entran al cómputo ni a la Revisión.
   Sobre el **frente** del terreno (el lado se elige) se dibujan la vereda y la calle.
 - **Muebles simples** como gabarito de tamaño real (camas, placard, mesas con sillas, sillones, mesadas, artefactos de

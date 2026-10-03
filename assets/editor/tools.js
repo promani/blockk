@@ -986,7 +986,8 @@ export function createTools(app) {
                 return true;
             }
             const dir = { ArrowLeft: [-BU, 0], ArrowRight: [BU, 0], ArrowUp: [0, -BU], ArrowDown: [0, BU] }[e.key];
-            if (dir && multi.sel) {
+            if (dir && multi.sel && e.shiftKey) {
+                // Mayús + flechas corren lo elegido de a un bloque (las flechas solas mueven la cámara)
                 e.preventDefault();
                 moveMulti(dir[0], dir[1]);
                 return true;

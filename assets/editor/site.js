@@ -1,5 +1,5 @@
 /**
- * Terreno: zonas (pileta, patio, jardín, camino) y árboles. No son parte de la casa ni entran al cómputo: están para
+ * Terreno: zonas (pileta, patio, jardín, camino o genérica) y árboles. No son parte de la casa ni entran al cómputo: están para
  * pensar la disposición del espacio.
  */
 export const ZONE_KINDS = {
@@ -7,6 +7,8 @@ export const ZONE_KINDS = {
     patio: { label: 'Patio / deck', fill: 'rgba(214,190,150,.9)', stroke: '#9a7b4f', inner: 'rgba(120,90,50,.25)' },
     garden: { label: 'Jardín', fill: 'rgba(150,200,120,.9)', stroke: '#5b8f3a', inner: 'rgba(60,110,40,.2)' },
     path: { label: 'Camino', fill: 'rgba(196,201,210,.95)', stroke: '#7b8494', inner: 'rgba(255,255,255,.35)' },
+    // genérica: cualquier otro sector (huerta, parrilla, tendedero, estacionamiento…), con el nombre que se le ponga
+    other: { label: 'Zona genérica', fill: 'rgba(226,232,240,.75)', stroke: '#64748b', inner: 'rgba(100,116,139,.22)' },
 };
 
 /** Tamaños de árbol (cm): altura total, radio de la copa, grosor y altura del tronco. */
