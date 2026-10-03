@@ -836,8 +836,8 @@ store.addEventListener('ui', (e) => {
     if (k !== contextKey) {
         contextKey = k;
         panels.renderContext();
-        // Las opciones de Elegir dependen de lo elegido (botón «Duplicar»).
-        if (store.ui.tool === 'select' && store.ui.level !== ROOF_LEVEL) refreshOptions();
+        // Las opciones de Elegir dependen de lo elegido (botón «Duplicar») y, en la pestaña Techo, las del techo elegido.
+        if (store.ui.tool === 'select' || store.ui.level === ROOF_LEVEL) refreshOptions();
     }
     updateHistoryButtons();
     renderToolbar();

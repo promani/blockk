@@ -817,13 +817,27 @@ export class Renderer {
     /** Hastial de bloque: polígono con las hiladas y las juntas verticales del despiece del servidor. */
     drawGable(ctx, cam, gb, poly) {
         // Misma sombra que la cara de un muro con esa orientación (si no, el hastial se ve blanco, como un hueco).
-        const pal = PAL()[KIND.BLOCK];
+        const pal = PAL();
         const normal = gb.plane ? (gb.plane.axis === 'y' ? 'x' : 'y') : null;
-        const fill = normal && visibleFaces(cam.rot).xp.a === normal ? pal.xp : normal ? pal.yp : drawTheme().block;
-        poly(gb.pts, fill, 'rgba(30,41,59,.55)');
-        if (cam.zoom < 0.07 || !gb.plane) return;
+        const face = (kind) => (normal && visibleFaces(cam.rot).xp.a === normal ? pal[kind].xp : normal ? pal[kind].yp : drawTheme().block);
+        poly(gb.pts, face(KIND.BLOCK), 'rgba(30,41,59,.55)');
+        if (cam.zoom < 0.07 || !gb.plane || !gb.courses?.length) return;
+        // Bloque por bloque, como un muro: cada pieza con su contorno; las cortadas (más cortas o recortadas en diagonal por
+        // la pendiente) con el color de corte. Todo recortado al contorno del hastial.
         const { axis, at, z } = gb.plane;
         const P = (u, v) => (axis === 'y' ? cam.project(at, u, z + v) : cam.project(u, at, z + v));
+        const uv = gb.pts.map((pt) => [axis === 'y' ? pt[1] : pt[0], pt[2] - z]);
+        const topAt = (u) => {
+            let best = -Infinity;
+            for (let i = 0; i < uv.length; i++) {
+                const [a, c] = [uv[i], uv[(i + 1) % uv.length]];
+                if (u < Math.min(a[0], c[0]) - 1e-6 || u > Math.max(a[0], c[0]) + 1e-6) continue;
+                best = Math.max(best, a[0] === c[0] ? Math.max(a[1], c[1]) : a[1] + ((c[1] - a[1]) * (u - a[0])) / (c[0] - a[0]));
+            }
+            return best;
+        };
+        const lens = (gb.pieces ?? []).map((t) => t / 20); // ticks de 0,5 mm → cm
+        const full = Math.max(...lens, 0) - 0.5;
         ctx.save();
         ctx.beginPath();
         gb.pts.forEach((pt, i) => {
@@ -835,24 +849,41 @@ export class Renderer {
         ctx.clip();
         ctx.strokeStyle = 'rgba(30,41,59,.30)';
         ctx.lineWidth = 0.6;
-        ctx.beginPath();
-        const us = gb.pts.map((p) => (axis === 'y' ? p[1] : p[0]));
-        const uMin = Math.min(...us);
-        const uMax = Math.max(...us);
-        for (const c of gb.courses ?? []) {
-            const [ax, ay] = P(uMin, c.v0);
-            const [bx, by] = P(uMax, c.v0);
-            ctx.moveTo(ax, ay);
-            ctx.lineTo(bx, by);
-            for (const u of c.joints) {
-                const [px, py] = P(u, c.v0);
-                const [qx, qy] = P(u, c.v0 + 25);
-                ctx.moveTo(px, py);
-                ctx.lineTo(qx, qy);
+        ctx.lineJoin = 'round';
+        let k = 0;
+        for (const c of gb.courses) {
+            const n = c.joints.length + 1;
+            const cut = lens.slice(k, k + n);
+            k += n;
+            const ends = [c.u0, ...c.joints];
+            ends.push(c.u0 + cut.reduce((a, b2) => a + b2, 0));
+            const v0 = c.v0;
+            const v1 = v0 + 25;
+            for (let i = 0; i < ends.length - 1; i++) {
+                const [u0, u1] = [ends[i], ends[i + 1]];
+                const sloped = topAt(u0) < v1 - 0.5 || topAt(u1) < v1 - 0.5;
+                const kind = sloped || (cut[i] ?? full) < full ? KIND.CUT : KIND.BLOCK;
+                const q = [P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)];
+                ctx.beginPath();
+                q.forEach(([x, y], j) => (j ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+                ctx.closePath();
+                ctx.fillStyle = face(kind);
+                ctx.fill();
+                ctx.stroke();
             }
         }
-        ctx.stroke();
         ctx.restore();
+        // el borde de arriba (la pendiente) marcado como el contorno de un muro
+        ctx.beginPath();
+        gb.pts.forEach((pt, i) => {
+            const [x, y] = cam.project(pt[0], pt[1], pt[2]);
+            if (i) ctx.lineTo(x, y);
+            else ctx.moveTo(x, y);
+        });
+        ctx.closePath();
+        ctx.strokeStyle = 'rgba(30,41,59,.55)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
     }
 
     /** Picaporte: una barrita oscura sobre la cara visible de la hoja. */

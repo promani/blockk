@@ -1931,7 +1931,7 @@ export function createTools(app) {
                 onclick: () => set('Tipo de techo', { type: v, dir: v === 'shed' ? (['N', 'S', 'E', 'W'].includes(cur.dir) ? cur.dir : 'S') : (['x', 'y'].includes(cur.dir) ? cur.dir : longer) }),
             }, t)));
 
-        return h('span', { class: 'row' }, target ? h('span', { class: 'tag' }, `Techo ${target.id}`) : null, target ? h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: () => app.deleteSelection() }, 'Quitar techo') : null, types,
+        return h('span', { class: 'row' }, target ? h('span', { class: 'tag' }, `Techo ${target.id}`) : null, types,
             cur.type === 'gable'
                 ? selectT('Cumbrera', cur.dir, [['x', '↔ horizontal'], ['y', '↕ vertical']], (v) => set('Dirección de cumbrera', { dir: v }))
                 : selectT('Cae hacia', cur.dir, FALL_SIDES.map((d) => [d, sideLabel(d, store.project.north)]), (v) => set('Caída del techo', { dir: v })),

@@ -404,11 +404,12 @@ export function mountPanels(app) {
             card.open = true;
             card.dataset.auto = '';
         }
-        if (store.ui.level === 2) {
+        const s = store.ui.selection;
+        // En la pestaña Techo: el techo o hastial elegido (con «Eliminar», como cualquier pieza) o la lista de techos.
+        if (store.ui.level === 2 && s?.type !== 'roof' && s?.type !== 'gable') {
             renderRoofProps();
             return;
         }
-        const s = store.ui.selection;
         const lv = store.level();
         const delBtn = h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: deleteSelection }, 'Eliminar (Supr)');
 
