@@ -2,7 +2,8 @@
  * Mover un muro perpendicularmente a sí mismo ("agrandar/achicar la habitación").
  *
  * Se mueve toda la cadena de muros colineales que se tocan (un muro dividido por tabiques en T sigue siendo una pared),
- * y los muros perpendiculares que llegan a esa recta estiran o acortan su extremo. Los vanos y vigas U de los muros
+ * o, con `only`, sólo el tramo elegido: si queda un escalón con el tramo vecino de la misma recta, se cierra con un muro
+ * corto. Los muros perpendiculares que llegan a esa recta estiran o acortan su extremo. Los vanos y vigas U de los muros
  * estirados se reubican; los que quedan fuera del muro se descartan. Opera sobre un borrador (draft) de un nivel.
  */
 const axisOf = (w) => (w.y1 === w.y2 ? 'x' : 'y');
@@ -31,7 +32,7 @@ export function collinearChain(walls, wall) {
 }
 
 /** @returns {{ok: boolean, reason?: string, dropped?: number}} */
-export function moveWallLine(level, wallId, newLine, { maxLine = Infinity } = {}) {
+export function moveWallLine(level, wallId, newLine, { maxLine = Infinity, only = false } = {}) {
     const wall = level.walls.find((w) => w.id === wallId);
     if (!wall) return { ok: false, reason: 'Muro inexistente.' };
     const axis = axisOf(wall);
@@ -40,7 +41,7 @@ export function moveWallLine(level, wallId, newLine, { maxLine = Infinity } = {}
     if (delta === 0) return { ok: true, dropped: 0 };
     if (newLine < 0 || newLine > maxLine) return { ok: false, reason: 'El muro saldría del lote.' };
 
-    const chain = collinearChain(level.walls, wall);
+    const chain = only ? [wall] : collinearChain(level.walls, wall);
     const spanStart = Math.min(...chain.map(startOf));
     const spanEnd = Math.max(...chain.map(endOf));
     const chainIds = new Set(chain.map((w) => w.id));
@@ -106,6 +107,7 @@ export function moveWallLine(level, wallId, newLine, { maxLine = Infinity } = {}
         }
     }
     if (removed.size) level.walls = level.walls.filter((w) => !removed.has(w.id));
+    if (only) closeSteps(level, wall, axis, oldLine, newLine);
     return { ok: true, dropped };
 }
 
@@ -124,4 +126,23 @@ function within(v, _which, axis, a, b) {
 export function mirrorMove(otherLevel, wallBefore, newLine, opts) {
     const twin = otherLevel.walls.find((w) => axisOf(w) === axisOf(wallBefore) && lineOf(w) === lineOf(wallBefore) && startOf(w) < endOf(wallBefore) && endOf(w) > startOf(wallBefore));
     return twin ? moveWallLine(otherLevel, twin.id, newLine, opts) : { ok: true, dropped: 0 };
+}
+
+/**
+ * Con un solo tramo movido: en cada extremo donde seguía otro tramo de la misma recta, si ningún muro perpendicular
+ * cubre el escalón entre la recta vieja y la nueva, se agrega un muro corto (mismo espesor) que lo cierra.
+ */
+function closeSteps(level, wall, axis, oldLine, newLine) {
+    const [lo, hi] = [Math.min(oldLine, newLine), Math.max(oldLine, newLine)];
+    for (const p of [startOf(wall), endOf(wall)]) {
+        const neighbour = level.walls.some((w) => w !== wall && axisOf(w) === axis && lineOf(w) === oldLine && (startOf(w) === p || endOf(w) === p));
+        if (!neighbour) continue;
+        // ¿ya hay un muro perpendicular en p que cubra de la recta vieja a la nueva?
+        const covered = level.walls.some((v) => axisOf(v) !== axis && lineOf(v) === p && startOf(v) <= lo && endOf(v) >= hi);
+        if (covered) continue;
+        let n = 1;
+        while (level.walls.some((w) => w.id === `${wall.id}e${n}`)) n++;
+        const seg = axis === 'x' ? { x1: p, y1: lo, x2: p, y2: hi } : { x1: lo, y1: p, x2: hi, y2: p };
+        level.walls.push({ ...structuredClone(wall), ...seg, id: `${wall.id}e${n}` });
+    }
 }

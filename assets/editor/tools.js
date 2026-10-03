@@ -110,22 +110,23 @@ export function createTools(app) {
     };
 
     // ---------------- mover un muro (agrandar / achicar la habitación) ----------------
-    const wallMoveCommit = (wallId, newLine) => {
+    const wallMoveCommit = (wallId, newLine, only = false) => {
         const li = store.ui.level;
         const probe = structuredClone(store.level());
         const wall = probe.walls.find((w) => w.id === wallId);
         if (!wall) return false;
+        // antes de probar el movimiento en la copia (que corre el muro): con esta posición se busca el de arriba
+        const before = structuredClone(wall);
         const maxLine = wall.y1 === wall.y2 ? lot().d : lot().w;
-        const test = moveWallLine(probe, wallId, newLine, { maxLine });
+        const test = moveWallLine(probe, wallId, newLine, { maxLine, only });
         if (!test.ok) {
             app.toast(test.reason, 'error');
             return false;
         }
-        const before = structuredClone(wall);
         store.commit('Mover muro', (d) => {
-            moveWallLine(d.levels[li], wallId, newLine, { maxLine });
+            moveWallLine(d.levels[li], wallId, newLine, { maxLine, only });
             // Un muro de Planta Baja arrastra al muro que tiene encima (misma recta) para que sigan alineados.
-            if (li === 0 && d.upper) mirrorMove(d.levels[1], before, newLine, { maxLine });
+            if (li === 0 && d.upper) mirrorMove(d.levels[1], before, newLine, { maxLine, only });
         });
         if (test.dropped) app.toast(`${test.dropped} vano(s) o viga(s) quedaron fuera del muro estirado y se quitaron.`);
         return true;
@@ -249,10 +250,10 @@ export function createTools(app) {
     };
 
     /** Fantasma de una cadena de muros colineales corrida a otra recta. */
-    const ghostChain = (ctx, cam, wall, newLine) => {
+    const ghostChain = (ctx, cam, wall, newLine, only = false) => {
         const horizontal = wall.y1 === wall.y2;
         const z = base();
-        for (const w of collinearChain(store.level().walls, wall)) {
+        for (const w of only ? [wall] : collinearChain(store.level().walls, wall)) {
             const t = w.t / 2;
             const box = horizontal
                 ? { x0: w.x1 * G, x1: w.x2 * G, y0: newLine * G - t, y1: newLine * G + t, z0: z, z1: z + cfg.levelHeight }
@@ -939,7 +940,8 @@ export function createTools(app) {
             } else if (d.kind === 'shift') {
                 if (d.dx || d.dy) guardedMove(d.sel, d.dx, d.dy);
             } else if (d.kind === 'wall') {
-                if (d.line !== d.line0) wallMoveCommit(d.w.id, d.line);
+                // arrastrar un muro corre sólo ese tramo (los vecinos de la misma recta quedan donde están)
+                if (d.line !== d.line0) wallMoveCommit(d.w.id, d.line, true);
             } else if (d.kind === 'corner') {
                 if (d.nx !== d.vx || d.ny !== d.vy) cornerMoveCommit(d.vx, d.vy, d.nx, d.ny);
             } else if (d.kind === 'rside') {
@@ -1049,8 +1051,8 @@ export function createTools(app) {
                 if (drag.kind === 'wall') {
                     const horizontal = drag.w.y1 === drag.w.y2;
                     const delta = drag.line - drag.line0;
-                    ghostChain(ctx, cam, drag.w, drag.line);
-                    const chain = collinearChain(store.level().walls, drag.w);
+                    ghostChain(ctx, cam, drag.w, drag.line, true);
+                    const chain = [drag.w];
                     const span = horizontal ? [Math.min(...chain.map((w) => w.x1)), Math.max(...chain.map((w) => w.x2))] : [Math.min(...chain.map((w) => w.y1)), Math.max(...chain.map((w) => w.y2))];
                     drawAnchors(ctx, cam, horizontal ? drag.ay : drag.ax, horizontal ? 'ay' : 'ax', drag.line, span[0], span[1], z);
                     const mid = chain[Math.floor(chain.length / 2)];
