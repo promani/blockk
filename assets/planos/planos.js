@@ -259,13 +259,17 @@ function gablesOn(analysis, w) {
             // largo de cada pieza (ticks de 0,5 mm → cm), repartidas en orden por hilada
             const lens = (g.pieces ?? []).map((p) => p / 20);
             let k = 0;
+            // piezas [u0, u1, tipo] de cada hilada: las del servidor (con vanos y dinteles) o armadas desde las juntas
             const courses = (g.courses ?? []).map((c) => {
+                if (c.spans) return { v0: c.v0, pieces: c.spans };
                 const n = c.joints.length + 1;
-                const total = lens.slice(k, k + n).reduce((a, b) => a + b, 0);
+                const len = lens.slice(k, k + n);
                 k += n;
-                return { v0: c.v0, a: c.u0, b: c.u0 + total, joints: c.joints };
+                const ends = [c.u0, ...c.joints, c.u0 + len.reduce((a, b) => a + b, 0)];
+                return { v0: c.v0, pieces: ends.slice(0, -1).map((a, i) => [a, ends[i + 1], 0]) };
             });
-            out.push({ pts, courses, topAt, top: Math.max(...pts.map((q) => q[1])), blocks: g.blocks ?? 0, cutPieces: g.cutPieces ?? 0 });
+            const windows = (g.windows ?? []).filter((x) => x.ok).map((x) => ({ u0: x.u0, u1: x.u1, v0: x.z0 - z0, v1: x.z1 - z0 }));
+            out.push({ pts, courses, windows, topAt, top: Math.max(...pts.map((q) => q[1])), blocks: (g.blocks ?? 0) + (g.uPieces?.length ?? 0), cutPieces: g.cutPieces ?? 0 });
         }
     }
     return out;
@@ -310,11 +314,20 @@ function wallPage(pdf, project, analysis, config, w) {
         pdf.polygon(g.pts.map(([u, v]) => [X(u), Z(v)]), { fill: rgb(mix(t.cut, '#ffffff', 0.45)), stroke: GRAPHITE, lineWidth: 0.6 });
         for (const k of g.courses) {
             const v1 = k.v0 + 25;
-            pdf.line(X(k.a), Z(k.v0), X(k.b), Z(k.v0), { width: 0.35 });
-            for (const j of k.joints) pdf.line(X(j), Z(k.v0), X(j), Z(Math.min(v1, g.topAt(j))), { width: 0.35 });
+            for (const [a, b, type] of k.pieces) {
+                // cada pieza recortada por la pendiente; los U del dintel en su color
+                const q = [[a, k.v0], [b, k.v0], [b, Math.min(v1, g.topAt(b))], [a, Math.min(v1, g.topAt(a))]];
+                pdf.polygon(q.map(([u, v]) => [X(u), Z(v)]), { fill: type === 2 ? fills[2] : null, stroke: GRAPHITE, lineWidth: 0.35 });
+            }
         }
-        const cx = g.pts.reduce((a, q) => a + q[0], 0) / g.pts.length;
-        pdf.text(X(cx), Z(g.top * 0.3) + 3, `hastial · ${g.blocks} bloques`, { size: 6.5, align: 'center' });
+        for (const v of g.windows) {
+            pdf.rect(X(v.u0), Z(v.v1), (v.u1 - v.u0) * s, (v.v1 - v.v0) * s, { fill: [255, 255, 255], stroke: GRAPHITE, lineWidth: 0.6 });
+            pdf.text(X((v.u0 + v.u1) / 2), Z((v.v0 + v.v1) / 2) + 2, `ventana ${fmt((v.u1 - v.u0) / 100, 2)} m`, { size: 6, color: MUTED, align: 'center' });
+        }
+        // la leyenda va al centro o, si hay ventanas, a un costado (en la mitad libre del hastial)
+        const us = g.pts.map((q) => q[0]);
+        const cx = g.windows.length ? Math.min(...us) + (Math.max(...us) - Math.min(...us)) * 0.27 : (Math.min(...us) + Math.max(...us)) / 2;
+        pdf.text(X(cx), Z(Math.min(g.top * 0.3, g.topAt(cx) * 0.4)) + 3, `hastial · ${g.blocks} bloques`, { size: 6.5, align: 'center' });
     }
     // cota total y ubicación de los vanos (de la primera hilada que los tenga)
     const dimY = base + 16;

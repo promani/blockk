@@ -665,6 +665,7 @@ export function mountPanels(app) {
                 h('div', { class: 'kv-title' }, side === 'H' ? 'Muro alto del techo' : `Hastial ${side} del ${roofName(rid).toLowerCase()}`),
                 field('Espesor', sel(r.gableT, [10, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.gableT = Number(v); }))),
                 h('dl', { class: 'dl' }, h('dt', {}, 'Superficie'), h('dd', {}, m2(gb.areaM2)), h('dt', {}, 'Hiladas'), h('dd', {}, int(gb.courses?.length ?? 0)), h('dt', {}, 'Piezas'), h('dd', {}, `${int(gb.fullBlocks)} enteras + ${int(gb.cutPieces)} cortadas`)),
+                gableWindows(r, gb, side, upd),
                 h('div', { class: 'actions-row' },
                     side === 'H' ? null : h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: deleteSelection }, 'Quitar hastial (Supr)'),
                     h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.setUi({ selection: { type: 'roof', id: rid } }) }, 'Ver techo')));
@@ -762,6 +763,55 @@ export function mountPanels(app) {
                     h('button', { class: 'btn btn-danger btn-sm', type: 'button', title: `Quitar el ${roofName(r.id).toLowerCase()}`, 'aria-label': `Quitar el ${roofName(r.id).toLowerCase()}`, onclick: () => store.commit('Quitar techo', (d) => { d.roofs = d.roofs.filter((x) => x.id !== r.id); }) }, '✕'))),
                     roofs.length > 1 ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => store.commit('Quitar todos los techos', (d) => { d.roofs = []; }) }, 'Quitar todos') : null)
                 : h('p', { class: 'empty-note' }, 'Sin techos.'));
+    }
+
+    /**
+     * Ventanas de un hastial: se agregan centradas (con la altura que entra debajo de la pendiente, jambas de 25 cm y el
+     * dintel) y se corren o se quitan con botones. El servidor las cala y avisa si alguna no entra.
+     */
+    function gableWindows(r, gb, side, upd) {
+        const list = (r.windows ?? []).filter((w) => w.side === side);
+        const axis = gb.plane.axis;
+        const uv = gb.pts.map((p) => [axis === 'y' ? p[1] : p[0], p[2] - gb.plane.z]);
+        const us = uv.map((p) => p[0]);
+        const topAt = (u) => Math.max(-Infinity, ...uv.flatMap((a, i) => {
+            const c = uv[(i + 1) % uv.length];
+            if (u < Math.min(a[0], c[0]) - 1e-6 || u > Math.max(a[0], c[0]) + 1e-6) return [];
+            return [a[0] === c[0] ? Math.max(a[1], c[1]) : a[1] + ((c[1] - a[1]) * (u - a[0])) / (c[0] - a[0])];
+        }));
+        const mid = (Math.min(...us) + Math.max(...us)) / 2;
+        const status = new Map((gb.windows ?? []).map((w) => [w.id, w.ok]));
+        const edit = (id, fn) => upd((x) => fn((x.windows ?? []).find((w) => w.id === id), x));
+        let width = 8;
+        const add = () => {
+            const sill = 1;
+            const half = (width * G) / 2 + 25;
+            const room = Math.min(topAt(mid - half), topAt(mid + half)); // alto disponible en las jambas
+            const h = Math.min(4, Math.floor(room / 25) - sill - 1);
+            if (!Number.isFinite(h) || h < 2) {
+                app.toast('El hastial es muy bajo para una ventana de ese ancho: probá con una más angosta o subí la pendiente.', 'error');
+                return;
+            }
+            upd((x) => {
+                x.windows ??= [];
+                let n = x.windows.length + 1;
+                while (x.windows.some((w) => w.id === `v${n}`)) n++;
+                x.windows.push({ id: `v${n}`, side, pos: Math.round(mid / G - width / 2), w: width, sill, h });
+            });
+        };
+        return h('div', {},
+            h('div', { class: 'kv-title' }, 'Ventanas'),
+            list.map((w, i) => h('div', { class: 'roof-row' },
+                h('span', { class: status.get(w.id) === false ? 'ai-err small' : 'small' }, `Ventana ${i + 1} · ${fmt((w.w * G) / 100)} × ${fmt((w.h * 25) / 100)} m${status.get(w.id) === false ? ' · no entra' : ''}`),
+                h('span', { class: 'row' },
+                    h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: 'Correr', onclick: () => edit(w.id, (x) => { x.pos -= 2; }) }, '◀'),
+                    h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: 'Correr', onclick: () => edit(w.id, (x) => { x.pos += 2; }) }, '▶'),
+                    h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: 'Bajar una hilada', onclick: () => edit(w.id, (x) => { x.sill = Math.max(0, x.sill - 1); }) }, '▼'),
+                    h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: 'Subir una hilada', onclick: () => edit(w.id, (x) => { x.sill += 1; }) }, '▲'),
+                    h('button', { class: 'btn btn-danger btn-sm', type: 'button', title: 'Quitar la ventana', onclick: () => upd((x) => { x.windows = x.windows.filter((q) => q.id !== w.id); }) }, '✕')))),
+            h('div', { class: 'actions-row' },
+                sel(width, [[6, '75 cm'], [8, '100 cm'], [12, '150 cm']], (v) => { width = Number(v); }),
+                h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: add }, 'Agregar ventana')));
     }
 
     // ------------------------------------------------------------------ validación

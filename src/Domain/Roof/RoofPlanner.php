@@ -19,6 +19,9 @@ use App\Domain\Model\Wall;
  */
 final class RoofPlanner
 {
+    /** Tipo de pieza de hastial: bloque U (dintel de una ventana); 0 es bloque común. */
+    private const int U = 2;
+
     private const int BATTEN_SPACING_CM = 40;
 
     /** @param list<LevelAnalysis> $levels */
@@ -36,6 +39,18 @@ final class RoofPlanner
         }
         if (count($parts) > 1) {
             $parts = $this->resolveOverlaps($project, $parts);
+        }
+        // Ventanas de hastial que no entran debajo de la pendiente (con sus jambas y el dintel): no se calan.
+        foreach ($parts as $p) {
+            foreach ($p['geometry']['gables'] as $g) {
+                foreach ($g['enabled'] ? $g['windows'] ?? [] : [] as $w) {
+                    if (!$w['ok']) {
+                        $at = $g['plane']['at'] / Hcca::GRID_CM;
+                        $mid = ($w['u0'] + $w['u1']) / 2 / Hcca::GRID_CM;
+                        $issues[] = ['severity' => 'warn', 'code' => 'gable.window', 'message' => 'Una ventana del hastial no entra debajo de la pendiente (con jambas de 25 cm y su dintel): bajala, achicala o correla hacia el centro.', 'level' => 2, 'ref' => $p['id'], 'x' => (int) round('x' === $g['plane']['axis'] ? $mid : $at), 'y' => (int) round('x' === $g['plane']['axis'] ? $at : $mid)];
+                    }
+                }
+            }
         }
 
         return new RoofPlan($parts, $issues);
@@ -416,8 +431,19 @@ final class RoofPlanner
     private function gable(RoofPart $roof, string $side, array $pts, float $areaCm2, bool $fixed = false, ?\Closure $hidden = null): array
     {
         $enabled = $fixed || ('A' === $side ? $roof->gableA : $roof->gableB);
-        $layout = $this->layGable($pts, $hidden);
-        $pieces = $enabled ? array_merge(...array_map(static fn (array $c): array => $c['pieces'], $layout['courses'] ?: [['pieces' => []]])) : [];
+        $windows = array_values(array_filter($roof->windows, static fn (array $w): bool => $w['side'] === $side));
+        $layout = $this->layGable($pts, $hidden, $enabled ? $windows : []);
+        $pieces = [];
+        $uPieces = [];
+        foreach ($enabled ? $layout['courses'] : [] as $c) {
+            foreach ($c['pieces'] as $i => $len) {
+                if (self::U === ($c['kinds'][$i] ?? 0)) {
+                    $uPieces[] = $len;
+                } else {
+                    $pieces[] = $len;
+                }
+            }
+        }
         $full = count(array_filter($pieces, static fn (int $l): bool => $l >= Hcca::blockL()));
 
         return [
@@ -430,8 +456,11 @@ final class RoofPlanner
             'thickness' => $roof->gableT,
             // Despiece por hilada (para dibujar las juntas y para el cómputo): u a lo largo del hastial, v desde el coronamiento.
             'plane' => $layout['plane'],
-            'courses' => array_map(static fn (array $c): array => ['v0' => $c['v0'], 'u0' => $c['u0'], 'joints' => $c['joints']], $layout['courses']),
+            // spans: cada pieza [u0, u1, tipo] en cm (0 bloque, 2 U del dintel de una ventana); entre ellas puede haber huecos
+            'courses' => array_map(static fn (array $c): array => ['v0' => $c['v0'], 'u0' => $c['u0'], 'joints' => $c['joints'], 'spans' => $c['spans']], $layout['courses']),
+            'windows' => $layout['windows'],
             'pieces' => $pieces,
+            'uPieces' => $uPieces,
             'blocks' => count($pieces),
             'fullBlocks' => $full,
             'cutPieces' => count($pieces) - $full,
@@ -448,7 +477,7 @@ final class RoofPlanner
      *
      * @return array{plane: array{axis: string, at: float, z: float}, courses: list<array{v0: float, u0: float, joints: list<float>, pieces: list<int>}>}
      */
-    private function layGable(array $pts, ?\Closure $hidden = null): array
+    private function layGable(array $pts, ?\Closure $hidden = null, array $windows = []): array
     {
         $alongY = abs($pts[0][0] - $pts[1][0]) < 0.01 && abs($pts[1][0] - $pts[2][0]) < 0.01;
         $z0 = min(array_column($pts, 2));
@@ -458,6 +487,27 @@ final class RoofPlanner
         // Origen de la grilla de juntas: el arranque del hastial (su cara inferior, la más ancha).
         $origin = ($this->spanAt($poly, 0.0) ?? [min(array_column($poly, 0))])[0];
         $blockL = Hcca::blockL();
+        // Ventanas: el vano (con jambas de 25 cm a cada lado) y su dintel de bloques U tienen que quedar debajo de la
+        // pendiente; las que no entran no se calan y se informan.
+        $wins = [];
+        $winOut = [];
+        foreach ($windows as $w) {
+            $u0 = $w['pos'] * Hcca::GRID_CM;
+            $u1 = ($w['pos'] + $w['w']) * Hcca::GRID_CM;
+            $k0 = $w['sill'];
+            $k1 = $w['sill'] + $w['h']; // primera hilada sobre el vano: el dintel
+            $fits = true;
+            foreach ([$k0 * 25.0, ($k1 + 1) * 25.0 - 0.01] as $v) {
+                $span = $this->spanAt($poly, $v);
+                if (null === $span || $span[0] > $u0 - 25 + 0.01 || $span[1] < $u1 + 25 - 0.01) {
+                    $fits = false;
+                }
+            }
+            $winOut[] = ['id' => $w['id'], 'u0' => $u0, 'u1' => $u1, 'z0' => $z0 + $k0 * 25, 'z1' => $z0 + $k1 * 25, 'ok' => $fits];
+            if ($fits) {
+                $wins[] = ['u0' => $u0, 'u1' => $u1, 'k0' => $k0, 'k1' => $k1];
+            }
+        }
         for ($k = 0; $k * 25 < $vMax - 0.5; ++$k) {
             $v0 = $k * 25.0;
             $span = $this->spanAt($poly, $v0);
@@ -486,8 +536,30 @@ final class RoofPlanner
                     $segs[] = [$open, $uR];
                 }
             }
+            // Los vanos de las ventanas no llevan bloques en las hiladas que ocupan.
+            foreach ($wins as $w) {
+                if ($k < $w['k0'] || $k >= $w['k1']) {
+                    continue;
+                }
+                $cut = [];
+                foreach ($segs as [$a, $b]) {
+                    if ($w['u1'] <= $a || $w['u0'] >= $b) {
+                        $cut[] = [$a, $b];
+                        continue;
+                    }
+                    if ($w['u0'] > $a) {
+                        $cut[] = [$a, $w['u0']];
+                    }
+                    if ($w['u1'] < $b) {
+                        $cut[] = [$w['u1'], $b];
+                    }
+                }
+                $segs = $cut;
+            }
             $pieces = [];
             $joints = [];
+            $spans = [];
+            $kinds = [];
             foreach ($segs as [$sL, $sR]) {
                 $widthTicks = (int) round(($sR - $sL) * Hcca::TICKS_PER_CM);
                 if ($widthTicks < 50) {
@@ -501,18 +573,29 @@ final class RoofPlanner
                 while ($pos < $widthTicks) {
                     $cut = $next - $startTicks;
                     $len = min(max($cut - $pos, 1), $widthTicks - $pos);
+                    $a = $sL + $pos / Hcca::TICKS_PER_CM;
                     $pieces[] = $len;
                     $pos += $len;
                     $next += $blockL;
+                    $b = $sL + $pos / Hcca::TICKS_PER_CM;
+                    // Dintel: en la hilada de arriba de una ventana, las piezas que la cubren (con 20 cm de apoyo a cada lado) son U.
+                    $kind = 0;
+                    foreach ($wins as $w) {
+                        if ($k === $w['k1'] && $b > $w['u0'] - 20 + 0.01 && $a < $w['u1'] + 20 - 0.01) {
+                            $kind = self::U;
+                        }
+                    }
+                    $kinds[] = $kind;
+                    $spans[] = [round($a, 2), round($b, 2), $kind];
                     if ($pos < $widthTicks) {
-                        $joints[] = round($sL + $pos / Hcca::TICKS_PER_CM, 2);
+                        $joints[] = round($b, 2);
                     }
                 }
             }
-            $courses[] = ['v0' => $v0, 'u0' => round($uL, 2), 'joints' => $joints, 'pieces' => $pieces];
+            $courses[] = ['v0' => $v0, 'u0' => round($uL, 2), 'joints' => $joints, 'pieces' => $pieces, 'kinds' => $kinds, 'spans' => $spans];
         }
 
-        return ['plane' => ['axis' => $alongY ? 'y' : 'x', 'at' => $alongY ? $pts[0][0] : $pts[0][1], 'z' => $z0], 'courses' => $courses];
+        return ['plane' => ['axis' => $alongY ? 'y' : 'x', 'at' => $alongY ? $pts[0][0] : $pts[0][1], 'z' => $z0], 'courses' => $courses, 'windows' => $winOut];
     }
 
     /**

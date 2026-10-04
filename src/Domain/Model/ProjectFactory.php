@@ -367,7 +367,38 @@ final class ProjectFactory
             (bool) ($r['gableA'] ?? true),
             (bool) ($r['gableB'] ?? true),
             in_array($gableT, RoofPart::GABLE_THICKNESSES, true) ? $gableT : 20,
+            $this->gableWindows($r['windows'] ?? [], $path),
         );
+    }
+
+    /**
+     * Ventanas de los hastiales de un techo.
+     *
+     * @return list<array{id: string, side: string, pos: int, w: int, sill: int, h: int}>
+     */
+    private function gableWindows(mixed $list, string $path): array
+    {
+        if (!is_array($list)) {
+            return [];
+        }
+        $out = [];
+        $seen = [];
+        foreach (array_slice(array_values($list), 0, RoofPart::MAX_WINDOWS) as $i => $w) {
+            if (!is_array($w) || !in_array($w['side'] ?? null, ['A', 'B', 'H'], true)) {
+                $this->errors[] = "$path.windows[$i] inválida";
+                continue;
+            }
+            $out[] = [
+                'id' => $this->id($w['id'] ?? 'v'.($i + 1), "$path.windows[$i].id", $seen),
+                'side' => $w['side'],
+                'pos' => $this->coord($w['pos'] ?? null, "$path.windows[$i].pos"),
+                'w' => $this->intInRange($w['w'] ?? 8, 2, 40, "$path.windows[$i].w"),
+                'sill' => $this->intInRange($w['sill'] ?? 0, 0, 40, "$path.windows[$i].sill"),
+                'h' => $this->intInRange($w['h'] ?? 3, 1, 20, "$path.windows[$i].h"),
+            ];
+        }
+
+        return $out;
     }
 
     /** @param array<string, mixed> $s */

@@ -73,7 +73,7 @@ trabajo en equipo).
 - **Dos niveles + techo**: Nivel 1, Nivel 2 (con piso: losa de hormigón o entrepiso de madera) y pestaña Techo.
 - **Escaleras**: recta, en L y en U, con ancho, huella y giro; abren el hueco en el piso de arriba.
 - **Techos** rectangulares a dos aguas o a un agua, que se apoyan solos en los muros, se cruzan y se cortan entre sí
-  (limahoya); alero, pendiente, cabios y hastiales de bloque despiezados.
+  (limahoya); alero, pendiente, cabios y hastiales de bloque despiezados (como muros, con ventanas y su dintel U); los techos se pueden ocultar para ver la mampostería.
 - **Imán y guías** al dibujar, mover muros arrastrando (el resto se estira), selección múltiple con rectángulo y
   movimiento en grupo, deshacer y rehacer ilimitado, guía «Próximo paso».
 - **Medidas exactas**: la cota se ve mientras se dibuja; en un muro se puede **escribir el largo** y Enter; el ancho y

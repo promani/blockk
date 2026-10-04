@@ -9,10 +9,13 @@ namespace App\Domain\Model;
  * Se dibuja como una habitación: rectángulo a ejes de muros (x, y, w, h en unidades de 12,5 cm) al que se le configura tipo y pendiente.
  * dir: a dos aguas = eje de la cumbrera ('x' | 'y'); a un agua = lado hacia el que cae ('N' | 'S' | 'E' | 'W').
  * gableA / gableB: hastiales de bloque en los extremos (se pueden quitar); gableT: espesor de esos muros en cm.
+ * windows: ventanas en los hastiales: lado ('A' | 'B' | 'H', el muro alto de un techo a un agua), pos (inicio, en unidades
+ * de 12,5 cm sobre el eje del hastial, absoluto), w (ancho, unidades), sill (hiladas sobre el arranque del hastial), h (hiladas).
  */
 final readonly class RoofPart
 {
     public const array GABLE_THICKNESSES = [10, 15, 20];
+    public const int MAX_WINDOWS = 8;
 
     public function __construct(
         public string $id,
@@ -30,6 +33,8 @@ final readonly class RoofPart
         public bool $gableA = true,
         public bool $gableB = true,
         public int $gableT = 20,
+        /** @var list<array{id: string, side: string, pos: int, w: int, sill: int, h: int}> */
+        public array $windows = [],
     ) {
     }
 
@@ -52,6 +57,7 @@ final readonly class RoofPart
             'gableA' => $this->gableA,
             'gableB' => $this->gableB,
             'gableT' => $this->gableT,
+            'windows' => $this->windows,
         ];
     }
 }

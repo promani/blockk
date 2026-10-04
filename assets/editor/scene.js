@@ -359,23 +359,24 @@ function buildGables(roof) {
             const full = Math.max(...lens, 0) - 0.5;
             const uv = gb.pts.map((p) => [axis === 'y' ? p[1] : p[0], p[2] - z]);
             const clip = { axis, at, half, pts: gb.pts };
-            // tramos de cada hilada, para saber qué caras de arriba tapa la siguiente
-            const spans = [];
+            // Piezas de cada hilada [u0, u1, tipo]: las da el servidor (con los vanos de las ventanas y sus dinteles U);
+            // si no, se arman desde el arranque y las juntas.
             let k = 0;
-            for (const c of gb.courses) {
+            const courses = gb.courses.map((c) => {
+                if (c.spans) return { v0: c.v0, pieces: c.spans };
                 const n = c.joints.length + 1;
                 const len = lens.slice(k, k + n);
                 k += n;
                 const ends = [c.u0, ...c.joints, c.u0 + len.reduce((a, b) => a + b, 0)];
-                spans.push({ v0: c.v0, ends, len });
-            }
-            spans.forEach((sp, ci) => {
-                const above = spans[ci + 1];
+                return { v0: c.v0, pieces: ends.slice(0, -1).map((a, i) => [a, ends[i + 1], 0]) };
+            });
+            const coveredBy = (c, a, b) => c?.pieces.some(([p0, p1]) => p0 <= a + 0.01 && p1 >= b - 0.01);
+            courses.forEach((sp, ci) => {
                 const z0 = z + sp.v0;
-                for (let i = 0; i < sp.ends.length - 1; i++) {
-                    const [a, b] = [sp.ends[i], sp.ends[i + 1]];
+                sp.pieces.forEach(([a, b, type], i) => {
                     const sloped = topAt(uv, a) < sp.v0 + 25 - 0.5 || topAt(uv, b) < sp.v0 + 25 - 0.5;
-                    const covered = above && above.ends[0] <= a + 0.01 && above.ends.at(-1) >= b - 0.01;
+                    const cut = sloped || b - a < full;
+                    const kind = type === 2 ? (cut ? KIND.UCUT : KIND.U) : cut ? KIND.CUT : KIND.BLOCK;
                     boxes.push({
                         x0: axis === 'x' ? a : at - half,
                         x1: axis === 'x' ? b : at + half,
@@ -384,17 +385,32 @@ function buildGables(roof) {
                         z0,
                         z1: z0 + COURSE_H,
                         zs: z0,
-                        kind: sloped || (sp.len[i] ?? full) < full ? KIND.CUT : KIND.BLOCK,
+                        kind,
                         axis,
-                        adjA: i > 0,
-                        adjB: i < sp.ends.length - 2,
-                        top: !covered,
+                        adjA: i > 0 && Math.abs(sp.pieces[i - 1][1] - a) < 0.05,
+                        adjB: i < sp.pieces.length - 1 && Math.abs(sp.pieces[i + 1][0] - b) < 0.05,
+                        top: !coveredBy(courses[ci + 1], a, b),
                         level: 2,
                         gable: gb.id,
                         clip,
                     });
-                }
+                });
             });
+            // Ventanas del hastial: marco y vidrio en el vano, al medio del espesor (como las de los muros).
+            for (const w of gb.windows ?? []) {
+                if (!w.ok) continue;
+                const F = 5;
+                const pane = (u0, u1, z0, z1, d, kind) => boxes.push({
+                    x0: axis === 'x' ? u0 : at - d, x1: axis === 'x' ? u1 : at + d,
+                    y0: axis === 'x' ? at - d : u0, y1: axis === 'x' ? at + d : u1,
+                    z0, z1, zs: z0, kind, axis, adjA: false, adjB: false, top: true, level: 2, gable: gb.id, flat: kind === KIND.GLASS,
+                });
+                pane(w.u0, w.u1, w.z0, w.z0 + F, half, KIND.FRAME);
+                pane(w.u0, w.u1, w.z1 - F, w.z1, half, KIND.FRAME);
+                pane(w.u0, w.u0 + F, w.z0 + F, w.z1 - F, half, KIND.FRAME);
+                pane(w.u1 - F, w.u1, w.z0 + F, w.z1 - F, half, KIND.FRAME);
+                pane(w.u0 + F, w.u1 - F, w.z0 + F, w.z1 - F, 0.9, KIND.GLASS);
+            }
         }
     }
     return boxes;

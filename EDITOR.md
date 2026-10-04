@@ -168,7 +168,9 @@ primera. El cómputo está en la pestaña
   usar el enlace.
 - **Hastiales**: son mampostería como los muros: cada pieza del despiece del servidor se dibuja como un bloque (con sus
   juntas y los cortes en amarillo) y se recorta en diagonal con la pendiente. «Techos» (en Configuraciones generales)
-  oculta los faldones para verlos.
+  oculta los faldones para verlos. Con un hastial elegido, el panel agrega **ventanas** (75, 100 o 150 cm, con la altura
+  que entra debajo de la pendiente) y las corre o las quita; el servidor cala el vano, pone un dintel de bloques U
+  encima (suma U, hormigón y hierro al cómputo) y avisa si alguna no entra con sus jambas de 25 cm.
 - **Colores**: todos en `assets/styles/tema.css` (interfaz y dibujo, variables `--dibujo-*` que lee
   `assets/lib/theme.js`). Se edita el archivo y se recarga; las miniaturas de la Galería se regeneran con
   `composer miniaturas`.

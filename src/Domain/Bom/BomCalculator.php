@@ -64,7 +64,7 @@ final class BomCalculator
      *
      * @return array<string, mixed>
      */
-    /** @param list<array{level: int, t: int, pieces: list<int>}> $gables */
+    /** @param list<array{level: int, t: int, pieces: list<int>, uPieces?: list<int>}> $gables */
     private function scope(array $models, array $topologies, int $reservePct, bool $used, array $gables = []): array
     {
         /** @var array<string, array{kind: PieceKind, t: int, full: int, cuts: list<int>, groups: array<int, list<int>>, lengthTicks: int}> $stats */
@@ -119,6 +119,24 @@ final class BomCalculator
                 } else {
                     $stats[$key]['cuts'][] = $len;
                     $stats[$key]['groups']['roof'.$g['level']][] = $len;
+                    ++$cutPieceCount;
+                }
+            }
+            // Dintel de las ventanas del hastial: bloques U con hormigón y dos hierros de 8, como un dintel de muro.
+            $uKey = PieceKind::U->value.':'.$g['t'];
+            foreach ($g['uPieces'] ?? [] as $len) {
+                $stats[$uKey] ??= ['kind' => PieceKind::U, 't' => $g['t'], 'full' => 0, 'cuts' => [], 'groups' => [], 'lengthTicks' => 0];
+                ++$pieceCount;
+                $stats[$uKey]['lengthTicks'] += $len;
+                $areaByT[$g['t']] = ($areaByT[$g['t']] ?? 0) + $len * Hcca::BLOCK_H;
+                [$uw, $uh] = Hcca::uChannel($g['t']);
+                $concreteM3 += ($len / 2000) * ($uw / 100) * ($uh / 100);
+                $d8M += 2 * $len / 2000;
+                if ($len >= Hcca::blockL()) {
+                    ++$stats[$uKey]['full'];
+                } else {
+                    $stats[$uKey]['cuts'][] = $len;
+                    $stats[$uKey]['groups']['roof'.$g['level']][] = $len;
                     ++$cutPieceCount;
                 }
             }

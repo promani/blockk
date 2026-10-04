@@ -376,4 +376,41 @@ final class RoofFloorTest extends TestCase
         $lowPart = array_values(array_filter($parts, static fn (array $r): bool => 0 === $r['level']))[0];
         self::assertSame(100.0, (float) $lowPart['bom']['visiblePct']);
     }
+
+    #[Test]
+    public function aWindowInAGableLeavesItsOpeningAndAULintelAbove(): void
+    {
+        // Casa de 5 × 6 m, dos aguas con la cumbrera a lo largo de x (hastiales en los extremos x): 60 % de pendiente,
+        // 1,80 m de altura. Ventana de 1 m centrada (y de 2,50 a 3,50 m), una hilada sobre el arranque y tres de alto.
+        $window = ['id' => 'v1', 'side' => 'A', 'pos' => 20, 'w' => 8, 'sill' => 1, 'h' => 3];
+        $with = $this->analyze(Fixtures::room(40, 48)->roofPart(0, 0, 0, 40, 48, 'gable', 'x', 60, more: ['windows' => [$window]]));
+        $without = $this->analyze(Fixtures::room(40, 48)->roofPart(0, 0, 0, 40, 48, 'gable', 'x', 60));
+        $g = $with['roof']['parts'][0]['geometry']['gables'][0];
+
+        self::assertSame('A', $g['side']);
+        self::assertTrue($g['windows'][0]['ok']);
+        foreach ($g['courses'] as $k => $c) {
+            foreach ($c['spans'] as [$a, $b, $kind]) {
+                if ($k >= 1 && $k <= 3) {
+                    self::assertTrue($b <= 250.1 || $a >= 349.9, "hilada $k: ninguna pieza dentro del vano ($a–$b)");
+                }
+            }
+        }
+        $lintel = array_filter($g['courses'][4]['spans'], static fn (array $s): bool => 2 === $s[2]);
+        self::assertNotEmpty($lintel, 'la hilada de arriba de la ventana lleva bloques U');
+        self::assertLessThanOrEqual(230.0, min(array_column($lintel, 0)), 'el dintel apoya al menos 20 cm a cada lado');
+        self::assertGreaterThanOrEqual(370.0, max(array_column($lintel, 1)));
+        self::assertNotEmpty($g['uPieces']);
+        self::assertLessThan(array_sum($this->analyze(Fixtures::room(40, 48)->roofPart(0, 0, 0, 40, 48, 'gable', 'x', 60))['roof']['parts'][0]['geometry']['gables'][0]['pieces']), array_sum($g['pieces']), 'menos bloques comunes: el vano y el dintel');
+
+        $u = static fn (array $a): int => array_sum(array_map(static fn (array $b): int => 'U' === ($b['kind'] ?? '') ? $b['order'] : 0, $a['bom']['total']['blocks']));
+        self::assertGreaterThan($u($without), $u($with), 'el dintel suma bloques U al cómputo');
+        self::assertNotContains('gable.window', $this->codes($with));
+
+        // Una ventana que no entra debajo de la pendiente no se cala y se avisa.
+        $tooHigh = ['id' => 'v2', 'side' => 'B', 'pos' => 20, 'w' => 8, 'sill' => 5, 'h' => 3];
+        $bad = $this->analyze(Fixtures::room(40, 48)->roofPart(0, 0, 0, 40, 48, 'gable', 'x', 60, more: ['windows' => [$tooHigh]]));
+        self::assertContains('gable.window', $this->codes($bad));
+        self::assertFalse($bad['roof']['parts'][0]['geometry']['gables'][1]['windows'][0]['ok']);
+    }
 }
