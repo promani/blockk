@@ -310,7 +310,7 @@ function buildTimber(timber, config) {
             adjA: false,
             adjB: false,
             top: true,
-            level: 1,
+            level: 0, // apoya sobre los muros del Nivel 1: se ve desde esa pestaña
             beam: b.id,
         });
     }

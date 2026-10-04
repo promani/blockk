@@ -616,10 +616,11 @@ export class Renderer {
             const [px, py] = cam.project((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
             const reach = (Math.max(b.x1 - b.x0, b.y1 - b.y0) + (b.z1 - b.z0)) * cam.zoom;
             if (px + reach < -margin || px - reach > cam.w + margin || py + reach < -margin || py - reach > cam.h + margin) continue;
-            if (b.level === activeLevel && b.course !== undefined && b.kind <= KIND.UCUT && ui.cut < 12 && b.course >= ui.cut) continue;
-            if (b.opening) {
-                if (b.level === activeLevel && ui.cut < 12 && b.course >= ui.cut) continue;
-            }
+            const cut = b.level === activeLevel && ui.cut < 12;
+            if (cut && b.course !== undefined && b.kind <= KIND.UCUT && b.course >= ui.cut) continue;
+            if (cut && b.opening && b.course >= ui.cut) continue;
+            // con los muros recortados, la viga que apoya arriba quedaría flotando
+            if (cut && b.kind === KIND.BEAM) continue;
             (b.kind === KIND.TREE ? trees : drawn).push(it);
             this.drawBox(ctx, cam, it, strokeOn);
         }
@@ -947,8 +948,26 @@ export class Renderer {
         sctx.fillStyle = '#0f172a';
         const levelH = 300;
         const maxLevel = ui.level;
+        // Sombra de un prisma recto: envolvente de la base y de la tapa corridas por el sol, sobre el suelo.
+        const prism = ([rx0, ry0, rx1, ry1], zBase) => {
+            const pts = [];
+            for (const [px, py] of [[rx0, ry0], [rx1, ry0], [rx1, ry1], [rx0, ry1]]) {
+                const d0 = disp(zBase);
+                const d1 = disp(zBase + levelH);
+                pts.push([px + d0[0], py + d0[1]], [px + d1[0], py + d1[1]]);
+            }
+            const hull = convexHull(pts).map(([x, y]) => cam.project(x, y, 0));
+            sctx.beginPath();
+            hull.forEach(([x, y], i) => (i ? sctx.lineTo(x, y) : sctx.moveTo(x, y)));
+            sctx.closePath();
+            sctx.fill();
+        };
         for (let li = 0; li <= maxLevel; li++) {
             const zBase = li * levelH;
+            for (const c of project.levels[li]?.columns ?? []) {
+                const half = c.size / 2;
+                prism([c.x * G - half, c.y * G - half, c.x * G + half, c.y * G + half], zBase);
+            }
             const seen = new Set();
             for (const c of [0, 1]) {
                 for (const run of analysis.levels[li]?.courses?.[c] ?? []) {
@@ -957,18 +976,7 @@ export class Renderer {
                     const key = rect.join(',');
                     if (seen.has(key)) continue;
                     seen.add(key);
-                    const [rx0, ry0, rx1, ry1] = rect;
-                    const pts = [];
-                    for (const [px, py] of [[rx0, ry0], [rx1, ry0], [rx1, ry1], [rx0, ry1]]) {
-                        const d0 = disp(zBase);
-                        const d1 = disp(zBase + levelH);
-                        pts.push([px + d0[0], py + d0[1]], [px + d1[0], py + d1[1]]);
-                    }
-                    const hull = convexHull(pts).map(([x, y]) => cam.project(x, y, 0));
-                    sctx.beginPath();
-                    hull.forEach(([x, y], i) => (i ? sctx.lineTo(x, y) : sctx.moveTo(x, y)));
-                    sctx.closePath();
-                    sctx.fill();
+                    prism(rect, zBase);
                 }
             }
         }
@@ -1015,6 +1023,7 @@ export class Renderer {
             if (li === 1 && !ghost) this.drawPlanTimber(f, false);
             if (li === 0) this.drawPlanStairs(f, ghost);
             if (li === 1) this.drawPlanSlabs(f);
+            if (li === 1 && !ghost) this.drawPlanBeams(f);
         }
         this.drawZoneLabels(f);
         this.drawTreeShadows(f);
@@ -1424,16 +1433,31 @@ export class Renderer {
                 ctx.fillText(label, sx, sy);
             }
         }
-        ctx.strokeStyle = '#8a5a1f';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        for (const b of timber.beams ?? []) {
-            const p = cam.project(b.x1, b.y1, 0);
-            const q = cam.project(b.x2, b.y2, 0);
-            ctx.moveTo(p[0], p[1]);
-            ctx.lineTo(q[0], q[1]);
+    }
+
+    /** Vigas de madera en planta: encima de losas y tirantes, con el ancho de su sección y un borde oscuro. */
+    drawPlanBeams(f) {
+        const { ctx } = this;
+        const { cam, scene } = f;
+        const beams = (scene?.timber.boxes ?? []).filter((b) => b.kind === KIND.BEAM);
+        if (!beams.length) return;
+        ctx.save();
+        ctx.lineCap = 'butt';
+        for (const [color, extra] of [['#5c3a12', 2], ['#c48a45', 0]]) {
+            ctx.strokeStyle = color;
+            for (const b of beams) {
+                const alongX = b.axis === 'x';
+                const mid = alongX ? (b.y0 + b.y1) / 2 : (b.x0 + b.x1) / 2;
+                const p = alongX ? cam.project(b.x0, mid, 0) : cam.project(mid, b.y0, 0);
+                const q = alongX ? cam.project(b.x1, mid, 0) : cam.project(mid, b.y1, 0);
+                ctx.lineWidth = Math.max(3, (alongX ? b.y1 - b.y0 : b.x1 - b.x0) * cam.zoom) + extra;
+                ctx.beginPath();
+                ctx.moveTo(p[0], p[1]);
+                ctx.lineTo(q[0], q[1]);
+                ctx.stroke();
+            }
         }
-        ctx.stroke();
+        ctx.restore();
     }
 
     // ---------- rosa de los vientos y sol ----------
