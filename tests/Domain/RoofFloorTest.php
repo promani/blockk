@@ -293,16 +293,18 @@ final class RoofFloorTest extends TestCase
     {
         Hcca::useSystem('generico'); // números del módulo de 62,5 cm (y espesor de 7,5)
         // Luz 3,75 m, pendiente 30 %: altura 56,25 cm + 4 cm de apoyo de los cabios sobre el borde exterior del muro →
-        // 3 hiladas de ancho 375 / 235 / 68,3 cm, con traba de medio bloque.
+        // 3 hiladas de ancho 375 / 235 / 68,3 cm, con traba de medio bloque sobre una misma grilla desde el arranque (como un
+        // muro): la 2.ª empieza cortada para caer medio bloque corrida y la 3.ª se parte en la junta de la grilla.
         $with = $this->analyze(Fixtures::room(40, 30)->roofPart(0, 0, 0, 40, 30, 'gable', 'x'));
         $without = $this->analyze(Fixtures::room(40, 30)->roofPart(0, 0, 0, 40, 30, 'gable', 'x', more: ['gableA' => false, 'gableB' => false]));
         $g = $with['roof']['parts'][0]['geometry']['gables'][0];
 
         self::assertCount(3, $g['courses']);
         self::assertSame([1250, 1250, 1250, 1250, 1250, 1250], $g['courses'] === [] ? [] : array_slice($g['pieces'], 0, 6));
-        self::assertSame([625, 1250, 1250, 1250, 325, 1250, 117], array_slice($g['pieces'], 6));
-        self::assertSame(10, $g['fullBlocks']);
-        self::assertSame(3, $g['cutPieces']);
+        self::assertSame([475, 1250, 1250, 1250, 475, 683, 684], array_slice($g['pieces'], 6));
+        self::assertSame([93.75, 156.25, 218.75, 281.25], $g['courses'][1]['joints'], 'juntas de la 2.ª hilada: medio bloque corridas de las de la 1.ª (62,5 · n)');
+        self::assertSame(9, $g['fullBlocks']);
+        self::assertSame(4, $g['cutPieces']);
 
         $stock = static fn (array $a): int => $a['bom']['total']['stock'];
         self::assertGreaterThanOrEqual(20, $stock($with) - $stock($without), 'Dos hastiales: al menos sus 20 bloques enteros (los cortes pueden salir de sobrantes de los muros)');

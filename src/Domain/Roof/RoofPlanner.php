@@ -439,9 +439,10 @@ final class RoofPlanner
     }
 
     /**
-     * Traba de un hastial (o del muro alto de un techo a un agua): hiladas de 25 cm desde el coronamiento; en cada hilada se cubre
-     * el ancho del polígono en su cara inferior (la más ancha) con bloques enteros corridos medio bloque en hiladas alternas.
-     * Las piezas de los extremos se cortan en diagonal siguiendo la pendiente; se computan por su largo inferior.
+     * Traba de un hastial (o del muro alto de un techo a un agua): hiladas de 25 cm desde el coronamiento, como un muro: las
+     * juntas siguen una misma grilla desde el arranque del hastial y se corren medio bloque en hiladas alternas, así cada
+     * bloque monta mitad y mitad sobre los dos de abajo. Las piezas de los extremos se cortan en diagonal siguiendo la
+     * pendiente; se computan por su largo inferior.
      *
      * @param list<array{float, float, float}> $pts
      *
@@ -454,6 +455,9 @@ final class RoofPlanner
         $poly = array_map(static fn (array $p): array => [$alongY ? $p[1] : $p[0], $p[2] - $z0], $pts);
         $vMax = max(array_column($poly, 1));
         $courses = [];
+        // Origen de la grilla de juntas: el arranque del hastial (su cara inferior, la más ancha).
+        $origin = ($this->spanAt($poly, 0.0) ?? [min(array_column($poly, 0))])[0];
+        $blockL = Hcca::blockL();
         for ($k = 0; $k * 25 < $vMax - 0.5; ++$k) {
             $v0 = $k * 25.0;
             $span = $this->spanAt($poly, $v0);
@@ -489,12 +493,17 @@ final class RoofPlanner
                 if ($widthTicks < 50) {
                     continue;
                 }
+                // Juntas en origen + medio bloque en hiladas impares + n bloques (en ticks, relativas al tramo).
+                $phase = 1 === $k % 2 ? intdiv($blockL, 2) : 0;
+                $startTicks = (int) round(($sL - $origin) * Hcca::TICKS_PER_CM);
+                $next = $phase + (int) (ceil(($startTicks - $phase + 1) / $blockL) * $blockL);
                 $pos = 0;
-                $first = 1 === $k % 2 ? intdiv(Hcca::blockL(), 2) : Hcca::blockL();
                 while ($pos < $widthTicks) {
-                    $len = min(0 === $pos ? $first : Hcca::blockL(), $widthTicks - $pos);
+                    $cut = $next - $startTicks;
+                    $len = min(max($cut - $pos, 1), $widthTicks - $pos);
                     $pieces[] = $len;
                     $pos += $len;
+                    $next += $blockL;
                     if ($pos < $widthTicks) {
                         $joints[] = round($sL + $pos / Hcca::TICKS_PER_CM, 2);
                     }
