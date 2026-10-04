@@ -949,8 +949,26 @@ export class Renderer {
         sctx.fillStyle = '#0f172a';
         const levelH = 300;
         const maxLevel = ui.level;
+        // Sombra de un prisma recto: envolvente de la base y de la tapa corridas por el sol, sobre el suelo.
+        const prism = ([rx0, ry0, rx1, ry1], zBase) => {
+            const pts = [];
+            for (const [px, py] of [[rx0, ry0], [rx1, ry0], [rx1, ry1], [rx0, ry1]]) {
+                const d0 = disp(zBase);
+                const d1 = disp(zBase + levelH);
+                pts.push([px + d0[0], py + d0[1]], [px + d1[0], py + d1[1]]);
+            }
+            const hull = convexHull(pts).map(([x, y]) => cam.project(x, y, 0));
+            sctx.beginPath();
+            hull.forEach(([x, y], i) => (i ? sctx.lineTo(x, y) : sctx.moveTo(x, y)));
+            sctx.closePath();
+            sctx.fill();
+        };
         for (let li = 0; li <= maxLevel; li++) {
             const zBase = li * levelH;
+            for (const c of project.levels[li]?.columns ?? []) {
+                const half = c.size / 2;
+                prism([c.x * G - half, c.y * G - half, c.x * G + half, c.y * G + half], zBase);
+            }
             const seen = new Set();
             for (const c of [0, 1]) {
                 for (const run of analysis.levels[li]?.courses?.[c] ?? []) {
@@ -959,18 +977,7 @@ export class Renderer {
                     const key = rect.join(',');
                     if (seen.has(key)) continue;
                     seen.add(key);
-                    const [rx0, ry0, rx1, ry1] = rect;
-                    const pts = [];
-                    for (const [px, py] of [[rx0, ry0], [rx1, ry0], [rx1, ry1], [rx0, ry1]]) {
-                        const d0 = disp(zBase);
-                        const d1 = disp(zBase + levelH);
-                        pts.push([px + d0[0], py + d0[1]], [px + d1[0], py + d1[1]]);
-                    }
-                    const hull = convexHull(pts).map(([x, y]) => cam.project(x, y, 0));
-                    sctx.beginPath();
-                    hull.forEach(([x, y], i) => (i ? sctx.lineTo(x, y) : sctx.moveTo(x, y)));
-                    sctx.closePath();
-                    sctx.fill();
+                    prism(rect, zBase);
                 }
             }
         }
