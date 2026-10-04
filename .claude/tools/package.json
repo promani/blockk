@@ -1,0 +1,9 @@
+{
+  "name": "blockk-herramientas-de-prueba",
+  "private": true,
+  "description": "Playwright y ESLint para las skills verificar y capturas (se instalan con .claude/tools/preparar.sh).",
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "playwright": "1.62.0"
+  }
+}

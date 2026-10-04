@@ -14,10 +14,9 @@ mirar los PNG. Todo corre en local: `php -S` sirve la app y Chromium (sin pantal
    ```bash
    .claude/skills/capturas/scripts/servidor.sh
    ```
-2. Sacá las capturas. `NODE_PATH` tiene que apuntar a donde esté instalado `playwright`
-   (`export NODE_PATH=$(npm root -g)` si está global):
+2. Sacá las capturas. Playwright está en `.claude/tools/node_modules` (si falta, `.claude/tools/preparar.sh`):
    ```bash
-   node .claude/skills/capturas/scripts/capturas.cjs --slug casa-en-l --out <carpeta>
+   NODE_PATH=.claude/tools/node_modules node .claude/skills/capturas/scripts/capturas.cjs --slug casa-en-l --out <carpeta>
    ```
    Opciones:
    - `--slug <plantilla>`: abre una plantilla de la Galería (ver `GET /api/templates`).

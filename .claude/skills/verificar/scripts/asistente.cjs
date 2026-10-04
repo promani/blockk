@@ -76,8 +76,8 @@ const log = (ok, msg) => { console.log(`${ok ? 'ok  ' : 'FALLA'} ${msg}`); if (!
     await page.click('#ai-dialog .ai-chip:has-text("Sumá un dormitorio")');
     await idle();
     await page.waitForSelector('#ai-dialog :text("✓ Aplicado")', { timeout: 30000 });
-    const label = await page.evaluate(() => window.blockk.store.history.at(-1)?.label);
-    log(label === 'Cambio del asistente', 'el cambio se aplicó al editor como un paso deshacible');
+    const labels = await page.evaluate(() => window.blockk.store.history.map((h) => h.label));
+    log(labels.at(-1) === 'Cambio del asistente', `el cambio se aplicó al editor como un paso deshacible (${labels.slice(-3).join(' › ') || 'sin historial'})`);
     await shot('ia-editor-aplicado');
     await page.click('#ai-dialog button:has-text("Deshacer este cambio")');
     await page.waitForSelector('#ai-dialog :text("↶ Deshecho")', { timeout: 30000 });

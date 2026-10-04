@@ -29,8 +29,8 @@ Termina con `VERIFICACIÓN OK` o `VERIFICACIÓN CON FALLAS` (código de salida 0
 - **Humo con timeouts**: casi siempre es el servidor caído o un selector que cambió en la UI (`.tool`,
   `.level-tab`, `[data-view]`, `.tcard[data-slug]`). Si cambiaste la UI a propósito, actualizá `humo.cjs` en el
   mismo commit.
-- Requisitos: PHP 8.4 con `vendor/` instalado, Node con `playwright` y `eslint` accesibles por `NODE_PATH`
-  (`npm root -g`), y Chromium para Playwright.
+- Requisitos: PHP 8.4+ y Node. `.claude/tools/preparar.sh` instala lo demás (`vendor/`, Playwright y ESLint en
+  `.claude/tools/node_modules`, Chromium); `verificar.sh` lo corre solo si falta. Anda en Linux y en macOS.
 
 ## Probar contra el Kimi real
 

@@ -36,5 +36,6 @@ diseñador), [docs/DESIGN.md](docs/DESIGN.md). Qué hace la app y qué no: [FEAT
 - `.mcp.json` declara `lab-mcp` (token en `LAB_MCP_TOKEN`): deploy, variables, logs, Redis del laboratorio.
 - En las sesiones en la nube la API de Kimi puede estar bloqueada por la red; para probar el modelo real, conversar con
   la API de la app desplegada y leer los logs (`ver_logs_dokploy`, líneas `[asistente]`).
+- Primera vez en una máquina: `.claude/tools/preparar.sh` (Composer, Playwright, ESLint y Chromium para las skills).
 - Servidor local: `composer start`; con el asistente contra Kimi simulado: `.claude/skills/verificar/scripts/servidor-ia.sh`
   (puerto 8091).

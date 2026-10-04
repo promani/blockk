@@ -20,3 +20,6 @@
 ###< phpunit/phpunit ###
 
 /.idea
+
+# herramientas de prueba de las skills (.claude/tools/preparar.sh)
+/.claude/tools/node_modules/

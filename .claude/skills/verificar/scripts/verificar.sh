@@ -5,7 +5,10 @@ set -uo pipefail
 ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
-export NODE_PATH="${NODE_PATH:-$(npm root -g 2>/dev/null)}"
+TOOLS="$ROOT/.claude/tools/node_modules"
+# Playwright y ESLint viven en .claude/tools (ignorado por git); la primera vez se instalan solos.
+[ -x "$TOOLS/.bin/eslint" ] && [ -d "$TOOLS/playwright" ] || "$ROOT/.claude/tools/preparar.sh"
+export NODE_PATH="${NODE_PATH:-$TOOLS}"
 fail=0
 step() { printf '\n== %s\n' "$1"; }
 
@@ -27,11 +30,7 @@ done
 echo "ok"
 
 step "ESLint (assets/)"
-if command -v eslint > /dev/null; then
-    eslint -c "$HERE/../eslint.config.mjs" assets --ignore-pattern 'assets/vendor/**' && echo "ok" || fail=1
-else
-    echo "eslint no está instalado (npm i -g eslint): se omite"
-fi
+"$TOOLS/.bin/eslint" -c "$HERE/../eslint.config.mjs" assets --ignore-pattern 'assets/vendor/**' && echo "ok" || fail=1
 
 if [ "${1:-}" != "--rapido" ]; then
     step "Navegador: prueba de humo"
