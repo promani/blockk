@@ -13,7 +13,7 @@ use App\Domain\Hcca;
  */
 final class TemplateImages
 {
-    public const string VERSION = '13';
+    public const string VERSION = '14';
     public const string DIR = 'img/plantillas';
     public const array VIEWS = ['plan', 'iso'];
 

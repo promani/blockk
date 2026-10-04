@@ -20,6 +20,7 @@ import { mountHouses } from './houses.js';
 import { mountBackdrop } from './backdrop.js';
 import { linkHouse } from '../lib/houses.js';
 import { TYPE_CHOICES, typeOf, applyType } from './openings.js';
+import { findGable, windowBox } from './gables.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
 const store = new Store(config);
@@ -37,7 +38,7 @@ const ROOF_LEVEL = 2;
 const TOOLSETS = {
     0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['measure', 'furniture', 'block', 'ubeam', 'zone', 'tree'] },
     1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['measure', 'furniture', 'block', 'ubeam', 'beam', 'zone', 'tree'] },
-    2: { main: ['select', 'roof', 'measure'], more: [] },
+    2: { main: ['select', 'roof', 'opening', 'measure'], more: [] },
 };
 /** Muebles y árboles se pueden apagar («Configuraciones generales»): su herramienta sale de la barra y su atajo no hace nada. */
 const toolHidden = (id) => (id === 'furniture' && !furnitureOn(store.ui)) || (id === 'tree' && !treesOn(store.ui));
@@ -417,7 +418,7 @@ function setTool(id) {
 function toolDisabled(tool) {
     if (tool.id === 'roof' || tool.id === 'measure') return null;
     if (tool.free) return tool.disabled?.() ?? null; // las del plano de fondo valen en cualquier pestaña
-    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select') return 'En la pestaña Techo solo se dibujan y editan techos: volvé a un nivel para dibujar muros, losas o escaleras.';
+    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select' && tool.id !== 'opening') return 'En la pestaña Techo solo se dibujan y editan techos y las ventanas de los hastiales: volvé a un nivel para dibujar muros, losas o escaleras.';
     return tool.disabled?.() ?? null;
 }
 
@@ -425,7 +426,7 @@ function refreshOptions() {
     const tool = activeTool();
     // En la pestaña Techo, tanto Elegir como Techo muestran las opciones del techo (elegido o de los nuevos), salvo que
     // haya un grupo elegido con un rectángulo: ahí van las de Elegir.
-    const roofOpts = store.ui.level === ROOF_LEVEL && tool.id !== 'measure' && !tool.free && !(tool.id === 'select' && app.multiCount());
+    const roofOpts = store.ui.level === ROOF_LEVEL && tool.id !== 'measure' && tool.id !== 'opening' && !tool.free && !(tool.id === 'select' && app.multiCount());
     const opts = roofOpts ? app.roofOptions() : tool.options?.();
     const title = roofOpts ? 'Techo' : tool.label;
     add(clear($('#tooloptions')), h('span', { class: 'title' }, title), opts);
@@ -624,6 +625,12 @@ function selectionBox(sel) {
         const o = lv.openings.find((x) => x.id === sel.id);
         const w = o && lv.walls.find((x) => x.id === o.wall);
         return o && w ? openingBox(w, o.pos, o.w, o.sill, o.h, base) : null;
+    }
+    if (sel.type === 'gwindow') {
+        const g = findGable(store, sel.gable);
+        const [rid, wid] = String(sel.id).split(':');
+        const w = store.project.roofs?.find((r) => r.id === rid)?.windows?.find((q) => q.id === wid);
+        return g && w ? windowBox(g.gb, w) : null;
     }
     if (sel.type === 'tree') {
         const t = (store.project.trees ?? []).find((x) => x.id === sel.id);

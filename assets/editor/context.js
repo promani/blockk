@@ -23,6 +23,7 @@ export function contextOf(store) {
         if (sel.type === 'wall') return { kind: 'wall', id: sel.id };
         if (sel.type === 'room') return { kind: 'room', id: sel.id };
         if (sel.type === 'roof' || sel.type === 'gable') return { kind: 'roof', id: sel.id };
+        if (sel.type === 'gwindow') return { kind: 'roof', id: sel.gable };
         if (['slab', 'stair', 'timber'].includes(sel.type)) return { kind: 'floor', id: sel.id };
     }
     if (store.ui.level === 2) return { kind: 'roof' };

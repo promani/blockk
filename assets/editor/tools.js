@@ -5,7 +5,8 @@
 import { h } from '../lib/dom.js';
 import { fmt } from '../lib/format.js';
 import { sideLabel } from '../lib/orient.js';
-import { pickAt, pickWall, alongPosition, wallRect, G } from './pick.js';
+import { pickAt, pickWall, alongPosition, wallRect, inPoly, G } from './pick.js';
+import { gableAt, gableSpot, findGable, uvAt, windowBox } from './gables.js';
 import { outlineRect, ghostBox, label, nodeMarker } from './overlay.js';
 import { nextId } from '../lib/storage.js';
 import { ICONS } from './icons.js';
@@ -771,6 +772,13 @@ export function createTools(app) {
                 if (type === 'opening') {
                     const o = lv.openings.find((q) => q.id === id);
                     if (o) drag = { kind: 'opening', o: { ...o }, spot: null };
+                } else if (type === 'gwindow') {
+                    const [rid, wid] = id.split(':');
+                    const w = store.project.roofs?.find((r) => r.id === rid)?.windows?.find((q) => q.id === wid);
+                    const g = findGable(store, press.item.gable);
+                    const at = g && uvAt(app.cam, g.gb, press.sx, press.sy);
+                    // se agarra de donde se apretó: el centro de la ventana sigue al puntero con ese desfase
+                    if (w && at) drag = { kind: 'gwindow', rid, w: { ...w }, g, off: [at.u - (w.pos + w.w / 2) * G, at.v - (w.sill + w.h / 2) * 25], spot: null };
                 } else if (type === 'column') {
                     const c = lv.columns?.find((q) => q.id === id);
                     if (c) drag = { kind: 'column', c: { ...c }, nx: c.x, ny: c.y };
@@ -803,7 +811,7 @@ export function createTools(app) {
                     if (box) drag = { kind: 'shift', sel, box, dx: 0, dy: 0, x0: press.wx, y0: press.wy, z };
                 }
                 if (drag) {
-                    store.setUi({ selection: type === 'opening' ? { type, id, wall: drag.o.wall } : { type, id } });
+                    store.setUi({ selection: type === 'opening' ? { type, id, wall: drag.o.wall } : type === 'gwindow' ? { type, id, gable: press.item.gable } : { type, id } });
                     app.canvas.style.cursor = 'grabbing';
                 }
             }
@@ -819,6 +827,10 @@ export function createTools(app) {
             }
             if (drag) {
                 if (drag.kind === 'opening') drag.spot = openingSpot(p, drag.o.w, drag.o) ?? drag.spot; // fuera de un muro queda el último lugar
+                else if (drag.kind === 'gwindow') {
+                    const at = uvAt(app.cam, drag.g.gb, p.sx, p.sy);
+                    if (at) drag.spot = gableSpot(store, drag.g, { u: at.u - drag.off[0], v: at.v - drag.off[1] }, drag.w.w, drag.w.h, drag.w, true);
+                }
                 else if (drag.kind === 'column') {
                     drag.nx = Math.round(p.wx / G);
                     drag.ny = Math.round(p.wy / G);
@@ -907,7 +919,7 @@ export function createTools(app) {
             // Las piezas sueltas se arrastran directo; un muro, una losa, un entrepiso o un techo, sólo si ya está elegido
             // (son grandes: apretar sobre ellos y arrastrar sigue siendo el rectángulo de selección).
             const chosen = store.ui.selection;
-            const grab = ['opening', 'column', 'label', 'tree', 'zone', 'furniture', 'stair'].includes(under?.type)
+            const grab = ['opening', 'gwindow', 'column', 'label', 'tree', 'zone', 'furniture', 'stair'].includes(under?.type)
                 || (['wall', 'slab', 'timber', 'roof'].includes(under?.type) && chosen?.type === under.type && chosen.id === under.id);
             multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: grab ? under : null };
         },
@@ -944,7 +956,13 @@ export function createTools(app) {
             const d = drag;
             drag = null;
             app.canvas.style.cursor = '';
-            if (d.kind === 'opening') {
+            if (d.kind === 'gwindow') {
+                const sp = d.spot;
+                if (sp && !sp.ok) app.toast(sp.reason, 'error');
+                else if (sp && (sp.pos !== d.w.pos || sp.sill !== d.w.sill)) {
+                    store.commit('Mover ventana del hastial', (dr) => Object.assign(dr.roofs.find((r) => r.id === d.rid).windows.find((q) => q.id === d.w.id), { pos: sp.pos, sill: sp.sill }));
+                }
+            } else if (d.kind === 'opening') {
                 const sp = d.spot;
                 if (sp && !sp.ok) app.toast(sp.reason, 'error');
                 else if (sp && (sp.wall.id !== d.o.wall || sp.pos !== d.o.pos)) {
@@ -1038,6 +1056,11 @@ export function createTools(app) {
             drawMulti(ctx, cam);
             if (drag) {
                 const z = base();
+                if (drag.kind === 'gwindow') {
+                    const sp = drag.spot;
+                    if (sp) ghostBox(ctx, cam, windowBox(sp.g.gb, sp), sp.ok ? { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' } : { fill: 'rgba(180,35,24,.35)', stroke: '#b42318' });
+                    return;
+                }
                 if (drag.kind === 'opening') {
                     const sp = drag.spot;
                     if (sp) ghostBox(ctx, cam, openingBox(sp.wall, sp.pos, drag.o.w, drag.o.sill, drag.o.h, z), sp.ok ? { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' } : { fill: 'rgba(180,35,24,.35)', stroke: '#b42318' });
@@ -1425,6 +1448,14 @@ export function createTools(app) {
             : { wall, pos: clamp(desired, 0, Math.max(0, wallLen(wall) - w)), ok: false, w, reason: `No hay lugar libre de ${fmt(w * G, 1)} cm en este muro (jambas ≥ 25 cm respecto de esquinas, muros y otras aberturas).` };
     };
 
+    /** Pestaña Techo: la herramienta Abertura pone ventanas en los hastiales. */
+    const onRoof = () => store.ui.level === 2;
+    const gableState = { w: 8, h: 4 };
+    /** Lugar de una ventana nueva en el hastial bajo el puntero (o null si no hay hastial). */
+    const gableGhost = (p) => {
+        const hit = gableAt(store, app.cam, p.sx, p.sy, inPoly);
+        return hit ? gableSpot(store, hit.g, hit.p, gableState.w, gableState.h) : null;
+    };
     const openingState = { kind: 'door', w: OPENING_TYPES.door.w, mode: 'swing', sill: OPENING_TYPES.door.sill, custom: false };
     /** Tipo de la herramienta: puerta, arcada (puerta sin hoja), ventana o portón. */
     const setOpeningKind = (type) => {
@@ -1440,9 +1471,18 @@ export function createTools(app) {
         T.opening = {
             hotkey: 'p',
             label: 'Abertura',
-            hint: 'Elegí el tipo (puerta, arcada, ventana o portón), la medida (de catálogo o a medida) y cómo abre; apuntá a un muro: el fantasma verde indica un lugar válido. Clic para colocar. Después se mueve arrastrándola.',
+            hint: 'Elegí el tipo (puerta, arcada, ventana o portón), la medida (de catálogo o a medida) y cómo abre; apuntá a un muro: el fantasma verde indica un lugar válido. Clic para colocar. Después se mueve arrastrándola. En la pestaña Techo pone ventanas en los hastiales, a la altura donde apuntás.',
             setKind: (kind) => { setOpeningKind(kind); app.refreshOptions(); app.render(); },
             options: () => {
+                if (onRoof()) {
+                    // en los hastiales sólo van ventanas: ancho y alto; el antepecho lo da dónde se apunta
+                    const t = OPENING_TYPES.window;
+                    const widths = t.widths.includes(gableState.w) ? t.widths : [...t.widths, gableState.w].sort((a, b) => a - b);
+                    return h('span', { class: 'row' },
+                        h('span', { class: 'tag' }, 'Ventana en hastial'),
+                        selectT('Ancho', gableState.w, widths.map((n) => [n, `${fmt(n * G, 1)} cm`]), (v) => { gableState.w = Number(v); app.render(); }),
+                        selectT('Alto', gableState.h, [2, 3, 4, 5, 6].map((n) => [n, `${n * 25} cm`]), (v) => { gableState.h = Number(v); app.render(); }));
+                }
                 const t = OPENING_TYPES[openingState.kind];
                 // Medida comercial del catálogo (fija ancho, antepecho y apertura) o «A medida», con los controles libres.
                 const arch = typeOf(openingState) === 'arch';
@@ -1464,10 +1504,26 @@ export function createTools(app) {
             },
             reset() { ghost = null; },
             move(p) {
-                ghost = openingSpot(p, openingState.w);
+                ghost = onRoof() ? gableGhost(p) : openingSpot(p, openingState.w);
                 app.render();
             },
             down(p) {
+                if (onRoof()) {
+                    ghost = gableGhost(p);
+                    if (!ghost) return app.toast('Apuntá a un hastial (o al muro alto de un techo a un agua) para poner la ventana.', 'error');
+                    if (!ghost.ok) return app.toast(ghost.reason, 'error');
+                    const g = ghost;
+                    let id = '';
+                    store.commit('Agregar ventana al hastial', (d) => {
+                        const r = d.roofs.find((x) => x.id === g.roof);
+                        r.windows ??= [];
+                        let n = r.windows.length + 1;
+                        while (r.windows.some((w) => w.id === `v${n}`)) n++;
+                        id = `v${n}`;
+                        r.windows.push({ id, side: g.side, pos: g.pos, w: g.w, sill: g.sill, h: g.h });
+                    }).then(() => store.setUi({ selection: { type: 'gwindow', id: `${g.roof}:${id}`, gable: g.g.gb.id } }));
+                    return;
+                }
                 ghost = openingSpot(p, openingState.w);
                 if (!ghost) return;
                 if (!ghost.ok) {
@@ -1482,6 +1538,10 @@ export function createTools(app) {
             },
             draw(ctx, cam) {
                 if (!ghost) return;
+                if (ghost.g) {
+                    ghostBox(ctx, cam, windowBox(ghost.g.gb, ghost), ghost.ok ? { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' } : { fill: 'rgba(180,35,24,.35)', stroke: '#b42318' });
+                    return;
+                }
                 const sill = openingState.kind === 'window' ? openingState.sill : 0;
                 const box = openingBox(ghost.wall, ghost.pos, openingState.w, sill, cfg.openingTopCourse - sill, base());
                 ghostBox(ctx, cam, box, ghost.ok ? { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' } : { fill: 'rgba(180,35,24,.35)', stroke: '#b42318' });
@@ -1894,7 +1954,7 @@ export function createTools(app) {
     const FALL_SIDES = ['S', 'N', 'E', 'W'];
     const selectedRoof = () => {
         const sel = store.ui.selection;
-        if (!sel || (sel.type !== 'roof' && sel.type !== 'gable')) return null;
+        if (!sel || !['roof', 'gable', 'gwindow'].includes(sel.type)) return null;
         return store.project.roofs?.find((r) => r.id === (sel.type === 'roof' ? sel.id : String(sel.id).split(':')[0])) ?? null;
     };
     let roofDraw = null;

@@ -168,9 +168,11 @@ primera. El cómputo está en la pestaña
   usar el enlace.
 - **Hastiales**: son mampostería como los muros: cada pieza del despiece del servidor se dibuja como un bloque (con sus
   juntas y los cortes en amarillo) y se recorta en diagonal con la pendiente. «Techos» (en Configuraciones generales)
-  oculta los faldones para verlos. Con un hastial elegido, el panel agrega **ventanas** (75, 100 o 150 cm, con la altura
-  que entra debajo de la pendiente) y las corre o las quita; el servidor cala el vano, pone un dintel de bloques U
-  encima (suma U, hormigón y hierro al cómputo) y avisa si alguna no entra con sus jambas de 25 cm.
+  oculta los faldones para verlos. Las **ventanas** se ponen como en cualquier muro: herramienta Abertura (P) en la
+  pestaña Techo, fantasma verde/rojo sobre el hastial (o el muro alto de un techo a un agua) a la altura donde se apunta
+  y clic; se eligen, se arrastran y se borran con Supr (`assets/editor/gables.js` lleva el puntero al plano del hastial).
+  El servidor cala el vano, pone un dintel de bloques U encima (suma U, hormigón y hierro al cómputo) y avisa si alguna
+  no entra con sus jambas de 25 cm.
 - **Colores**: todos en `assets/styles/tema.css` (interfaz y dibujo, variables `--dibujo-*` que lee
   `assets/lib/theme.js`). Se edita el archivo y se recarga; las miniaturas de la Galería se regeneran con
   `composer miniaturas`.

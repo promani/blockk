@@ -331,7 +331,9 @@ final class RoofPlanner
             $zHigh = $zTop + $rise + $oHigh * $s;
             $planes[] = ['pts' => [$pt($a0 - $oa0, $lowOuter, $zLow), $pt($a1 + $oa1, $lowOuter, $zLow), $pt($a1 + $oa1, $highOuter, $zHigh), $pt($a0 - $oa0, $highOuter, $zHigh)], 'areaM2' => round($rafterLen * $lr / 10000, 2)];
             // Contra un muro de arriba, el hastial termina en la cara de ese muro (gana la pared real).
-            $inset = $highClosed ? $halfUpper($high, true) : 0.0;
+            // Sin muro de arriba, el muro alto (H) es parte del techo: los hastiales terminan en su cara interior y él cubre
+            // las esquinas hasta las caras exteriores (como la traba de una esquina, sin dos muros encimados).
+            $inset = $highClosed ? $halfUpper($high, true) : $roof->gableT / 2;
             $highG = $high + ($lowIsFirst ? -$inset : $inset);
             foreach ([[$a0, 'A', $endA0], [$a1, 'B', $endA1]] as [$a, $name, $closed]) {
                 if (!$closed) {
@@ -341,7 +343,9 @@ final class RoofPlanner
             // Muro alto: el muro del lado alto se levanta hasta la cumbre del faldón (parte fija del techo a un agua), salvo
             // que el faldón apoye contra un muro del nivel de arriba.
             if (!$highClosed) {
-                $gables[] = $this->gable($roof, 'H', [$pt($a0, $high, $zBase), $pt($a1, $high, $zBase), $pt($a1, $high, $zTop + $rise), $pt($a0, $high, $zTop + $rise)], ($a1 - $a0) * ($rise + $lift), true);
+                $e0 = $a0 - $roof->gableT / 2;
+                $e1 = $a1 + $roof->gableT / 2;
+                $gables[] = $this->gable($roof, 'H', [$pt($e0, $high, $zBase), $pt($e1, $high, $zBase), $pt($e1, $high, $zTop + $rise), $pt($e0, $high, $zTop + $rise)], ($e1 - $e0) * ($rise + $lift), true);
             }
             $n = (int) ceil($lr / $roof->spacing) + 1;
             for ($i = 0; $i < $n; ++$i) {

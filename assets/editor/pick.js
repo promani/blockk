@@ -3,6 +3,7 @@ import { Camera } from './camera.js';
 import { convexHull } from './renderer.js';
 import { roofOuter } from './scene.js';
 import { TREE_SIZES } from './site.js';
+import { pickGableWindow } from './gables.js';
 import { furnitureRect, footprint, furnitureOn, treesOn } from './furniture.js';
 
 export const G = 12.5;
@@ -211,7 +212,7 @@ export function alongPosition(app, wall, sx, sy) {
     return ((horizontal ? wx : wy) - (horizontal ? wall.x1 : wall.y1) * G) / G;
 }
 
-function inPoly(pts, x, y) {
+export function inPoly(pts, x, y) {
     let inside = false;
     for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
         const [xi, yi] = pts[i];
@@ -244,7 +245,7 @@ function pickRoof(app, sx, sy) {
     for (const part of [...parts].sort((a, b) => depth(b) - depth(a))) {
         const proj = (pts) => pts.map((q) => cam.project(q[0], q[1], q[2]));
         for (const gb of part.geometry.gables ?? []) {
-            if (gb.enabled && inPoly(proj(gb.pts), sx, sy)) return { type: 'gable', id: gb.id };
+            if (gb.enabled && inPoly(proj(gb.pts), sx, sy)) return pickGableWindow(store, cam, sx, sy, inPoly, gb.id) ?? { type: 'gable', id: gb.id };
         }
         for (const pl of store.ui.showRoof === false ? [] : part.geometry.planes ?? []) {
             if (inPoly(proj(pl.pts), sx, sy)) return { type: 'roof', id: part.id };
