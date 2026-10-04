@@ -396,20 +396,35 @@ function buildGables(roof) {
                     });
                 });
             });
-            // Ventanas del hastial: marco y vidrio en el vano, al medio del espesor (como las de los muros).
+            // Ventanas del hastial: como las de los muros, el marco va por hilada (en la misma capa que los bloques de al
+            // lado, así el orden de dibujo no los encima) y los bloques que tocan el vano no muestran su cabeza.
+            const own = boxes.filter((bx) => bx.gable === gb.id);
             for (const w of gb.windows ?? []) {
                 if (!w.ok) continue;
                 const F = 5;
-                const pane = (u0, u1, z0, z1, d, kind) => boxes.push({
+                const span = (bx) => (axis === 'x' ? [bx.x0, bx.x1] : [bx.y0, bx.y1]);
+                for (const bx of own) {
+                    if (bx.z0 < w.z0 - 0.05 || bx.z1 > w.z1 + 0.05) continue;
+                    const [a, b] = span(bx);
+                    if (Math.abs(b - w.u0) < 0.05) bx.adjB = true;
+                    if (Math.abs(a - w.u1) < 0.05) bx.adjA = true;
+                }
+                const pane = (u0, u1, z0, z1, d, zs, kind, extra = {}) => boxes.push({
                     x0: axis === 'x' ? u0 : at - d, x1: axis === 'x' ? u1 : at + d,
                     y0: axis === 'x' ? at - d : u0, y1: axis === 'x' ? at + d : u1,
-                    z0, z1, zs: z0, kind, axis, adjA: false, adjB: false, top: true, level: 2, gable: gb.id, flat: kind === KIND.GLASS,
+                    z0, z1, zs, kind, axis, adjA: false, adjB: false, top: false, level: 2, gable: gb.id, flat: true, ...extra,
                 });
-                pane(w.u0, w.u1, w.z0, w.z0 + F, half, KIND.FRAME);
-                pane(w.u0, w.u1, w.z1 - F, w.z1, half, KIND.FRAME);
-                pane(w.u0, w.u0 + F, w.z0 + F, w.z1 - F, half, KIND.FRAME);
-                pane(w.u1 - F, w.u1, w.z0 + F, w.z1 - F, half, KIND.FRAME);
-                pane(w.u0 + F, w.u1 - F, w.z0 + F, w.z1 - F, 0.9, KIND.GLASS);
+                pane(w.u0, w.u1, w.z0, w.z0 + F, half, w.z0 - 0.5, KIND.FRAME, { adjA: true, adjB: true, top: true });
+                pane(w.u0, w.u1, w.z1 - F, w.z1, half, w.z1 - F, KIND.FRAME, { adjA: true, adjB: true });
+                for (let zc = w.z0; zc < w.z1 - 0.05; zc += COURSE_H) {
+                    const lo = Math.max(zc, w.z0 + F);
+                    const top = Math.min(zc + COURSE_H, w.z1 - F);
+                    if (top - lo < 0.05) continue;
+                    const hi = top < w.z1 - F - 0.05 ? top + 0.8 : top;
+                    pane(w.u0, w.u0 + F, lo, hi, half, zc, KIND.FRAME, { adjA: true });
+                    pane(w.u1 - F, w.u1, lo, hi, half, zc, KIND.FRAME, { adjB: true });
+                    pane(w.u0 + F, w.u1 - F, lo, hi, 0.9, zc, KIND.GLASS);
+                }
             }
         }
     }
