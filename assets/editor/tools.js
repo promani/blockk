@@ -424,6 +424,32 @@ export function createTools(app) {
     const selectAll = () => setMulti(collectIn(-1e4, -1e4, 1e4, 1e4));
     app.selectAll = selectAll;
     app.multiCount = () => countSel(multi.sel);
+    /** Borra todo lo elegido con un rectángulo, en un solo paso de deshacer. Devuelve false si no había grupo. */
+    app.deleteMulti = () => {
+        const sel = multi.sel;
+        if (!countSel(sel)) return false;
+        setMulti(null);
+        const ids = (key) => new Map((sel[key] ?? []).map(([li, id]) => [`${li}:${id}`, true]));
+        const has = (key, li, id) => ids(key).has(`${li}:${id}`);
+        store.commit('Eliminar', (d) => {
+            d.levels.forEach((lv, li) => {
+                const walls = new Set((sel.walls ?? []).filter(([l]) => l === li).map(([, id]) => id));
+                lv.walls = lv.walls.filter((w) => !walls.has(w.id));
+                lv.openings = lv.openings.filter((o) => !walls.has(o.wall));
+                lv.ubeams = (lv.ubeams ?? []).filter((u) => !walls.has(u.wall));
+                for (const [key, list] of [['slabs', 'slabs'], ['stairs', 'stairs'], ['timber', 'timber'], ['columns', 'columns'], ['labels', 'labels'], ['furniture', 'furniture']]) {
+                    if (lv[list]) lv[list] = lv[list].filter((x) => !has(key, li, x.id));
+                }
+            });
+            const roofs = new Set((sel.roofs ?? []).map(([, id]) => id));
+            d.roofs = (d.roofs ?? []).filter((r) => !roofs.has(r.id));
+            const zones = new Set((sel.zones ?? []).map(([, id]) => id));
+            if (d.zones) d.zones = d.zones.filter((z) => !zones.has(z.id));
+            const trees = new Set((sel.trees ?? []).map(([, id]) => id));
+            if (d.trees) d.trees = d.trees.filter((t) => !trees.has(t.id));
+        });
+        return true;
+    };
     /** El punto (unidades) cae sobre el grupo elegido: se arrastra en vez de elegir otra cosa. */
     const onMulti = (ux, uy) => {
         const box = multi.sel && selBox(multi.sel);
@@ -713,7 +739,8 @@ export function createTools(app) {
                 h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: selectAll }, 'Toda la casa (Ctrl+A)'),
                 n || store.ui.selection ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', title: 'Copia lo elegido y lo deja listo para colocar (Ctrl+C y Ctrl+V hacen lo mismo en dos pasos)', onclick: duplicateSelection }, 'Duplicar (Ctrl+D)') : null,
                 n ? h('span', { class: 'tag' }, `${n} elemento${n > 1 ? 's' : ''} elegido${n > 1 ? 's' : ''}`) : null,
-                n ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => setMulti(null) }, 'Soltar') : null);
+                n ? h('button', { class: 'btn btn-outline btn-sm', type: 'button', onclick: () => setMulti(null) }, 'Soltar') : null,
+                n ? h('button', { class: 'btn btn-danger btn-sm', type: 'button', onclick: () => app.deleteMulti() }, 'Eliminar (Supr)') : null);
         },
         reset() {
             drag = null;

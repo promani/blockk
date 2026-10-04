@@ -228,6 +228,7 @@ export function mountPanels(app) {
     const customOpenings = new Set();
 
     function deleteSelection() {
+        if (app.deleteMulti?.()) return; // varios elegidos con un rectángulo: se borran todos juntos
         const sel_ = store.ui.selection;
         if (!sel_) return;
         const level = store.ui.level;
