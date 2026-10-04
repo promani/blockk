@@ -101,13 +101,18 @@ final class Assistant
      * @param array<string, list<string>>            $answers
      * @param array<string, mixed>|null              $project
      * @param array{mime: string, data: string}|null $attachment
+     * @param string|null                            $mode       pantalla desde la que se escribe: una conversación de la
+     *                                                           Galería que sigue en el editor pasa a modo editor
      *
      * @return array<string, mixed> la conversación actualizada
      *
      * @throws InvalidProjectException si el proyecto enviado no es válido
      */
-    public function reply(array $conv, string $text, array $answers, ?array $project = null, ?array $attachment = null): array
+    public function reply(array $conv, string $text, array $answers, ?array $project = null, ?array $attachment = null, ?string $mode = null): array
     {
+        if ('editor' === $mode || 'galeria' === $mode) {
+            $conv['modo'] = $mode;
+        }
         $text = trim(mb_substr($text, 0, 800));
         if ('' === $text && null !== $attachment) {
             $text = 'Calcá este plano.';
@@ -223,6 +228,8 @@ final class Assistant
         // El turno arranca con el modelo liviano (coordinador), que delega al pesado cuando tiene las órdenes. Con un
         // plano adjunto va directo al pesado: es el que lee la imagen y no hay nada que coordinar.
         $tier = $this->llm->hasLight() && null === $attachment ? LlmClient::LIGHT : LlmClient::HEAVY;
+        $delegated = false; // el coordinador pasó el pedido al constructor
+        $nudged = false;    // ya se le recordó al constructor que tiene que actuar
 
         for ($step = 0; $step < self::MAX_STEPS; ++$step) {
             $system = ['role' => 'system', 'content' => LlmClient::LIGHT === $tier
@@ -258,12 +265,33 @@ final class Assistant
                 $conv['events'][] = ['tipo' => 'asistente', 'texto' => $content];
             }
             if ([] === $calls) {
+                // El coordinador a veces anuncia en texto que pasa el pedido («le paso las indicaciones al
+                // constructor», «ya lo armo») sin llamar a `delegar`: se le pasa igual, si no la casa no cambia.
+                if (LlmClient::LIGHT === $tier && self::announcesWork($content)) {
+                    $this->log($conv, $step, $tier, $t0, 'anuncio sin delegar → constructor');
+                    $tier = LlmClient::HEAVY;
+                    $delegated = true;
+                    continue;
+                }
+                // El constructor que recibió un pedido y contesta sólo con texto no cambió nada: se le pide una vez
+                // que lo haga con las herramientas.
+                if (LlmClient::HEAVY === $tier && $delegated && !$nudged) {
+                    $nudged = true;
+                    $this->log($conv, $step, $tier, $t0, 'constructor sin herramientas → se le pide actuar');
+                    if ('' !== $content) {
+                        array_pop($conv['events']); // su texto («listo, ya está») no corresponde: todavía no hizo nada
+                    }
+                    $conv['messages'][] = ['role' => 'user', 'content' => '(Sistema) Todavía no se cambió nada en la casa. Hacé el cambio pedido ahora con las herramientas (generar_casa, editar_casa…); no contestes sólo con texto. Si de verdad falta un dato, usá preguntar.'];
+                    continue;
+                }
+
                 return;
             }
 
             if (LlmClient::LIGHT === $tier) {
                 if ($this->coordinate($conv, $calls)) {
                     $tier = LlmClient::HEAVY;
+                    $delegated = true;
                     continue;
                 }
                 if ('pregunta' === (end($conv['events'])['tipo'] ?? null)) {
@@ -310,6 +338,16 @@ final class Assistant
             }
         }
         $conv['events'][] = ['tipo' => 'asistente', 'texto' => 'Se me complicó con este pedido. ¿Lo podés decir de otra forma?'];
+    }
+
+    /** ¿El texto del coordinador anuncia que el cambio se va a hacer (sin haberlo pasado con `delegar`)? */
+    private static function announcesWork(string $text): bool
+    {
+        if (str_contains($text, '?')) {
+            return false; // una pregunta («¿querés que se lo pase al constructor?») espera respuesta
+        }
+
+        return 1 === preg_match('/constructor|le pas[eé]|se lo paso|le paso|deleg|ya (lo |la )?(armo|hago|cambio|aplico|agrego|sumo)|ahora (lo |la )?(armo|hago|cambio|aplico|agrego|sumo)|enseguida|voy a (armar|hacer|cambiar|aplicar|agregar|sumar|poner|sacar|mover)/iu', $text);
     }
 
     /**

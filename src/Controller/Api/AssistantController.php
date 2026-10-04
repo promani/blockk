@@ -81,7 +81,7 @@ final class AssistantController extends AbstractController
         set_time_limit(300);
         $before = count($conv['events']);
         try {
-            $conv = $this->assistant->reply($conv, (string) ($body['texto'] ?? ''), $this->answers($body), is_array($body['project'] ?? null) ? $body['project'] : null, Attachment::fromRequest($body['adjunto'] ?? null));
+            $conv = $this->assistant->reply($conv, (string) ($body['texto'] ?? ''), $this->answers($body), is_array($body['project'] ?? null) ? $body['project'] : null, Attachment::fromRequest($body['adjunto'] ?? null), isset($body['modo']) ? (string) $body['modo'] : null);
         } catch (InvalidProjectException $e) {
             return $this->json(['error' => 'invalid_project', 'details' => $e->errors], Response::HTTP_UNPROCESSABLE_ENTITY);
         } catch (\InvalidArgumentException $e) {

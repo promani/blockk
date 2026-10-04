@@ -56,6 +56,9 @@ export function reviewLine(r) {
  * @param {() => object} [o.extra]  datos que viajan con cada mensaje (p. ej. el proyecto del editor)
  * @param {(conv, fresh) => void} [o.onChange]  después de cada respuesta del servidor (fresh: eventos nuevos)
  */
+/** La conversación en curso se recuerda en el navegador: se retoma al volver a la Galería o al editor. */
+const CONV_KEY = 'blockk.ai.conv';
+
 export function createChat(o) {
     const client = clientId();
     const input = o.form.querySelector('input[type="text"]');
@@ -177,6 +180,7 @@ export function createChat(o) {
         const before = conv?.eventos.length ?? 0;
         try {
             conv = await promise;
+            try { localStorage.setItem(CONV_KEY, conv.id); } catch { /* modo privado: no se recuerda */ }
             o.onChange?.(conv, conv.eventos.slice(before));
         } catch (e) {
             if (conv) {
@@ -201,7 +205,7 @@ export function createChat(o) {
         conv.activa = false;
         render();
         const slow = payload.adjunto ? 'Leyendo el plano…' : payload.texto ? 'Pensando…' : 'Armando la casa…';
-        request(api(`/api/assistant/conversations/${conv.id}/messages`, { client, ...payload, ...(o.extra?.() ?? {}) }), slow);
+        request(api(`/api/assistant/conversations/${conv.id}/messages`, { client, modo: o.mode, ...payload, ...(o.extra?.() ?? {}) }), slow);
     }
 
     o.form.addEventListener('submit', (e) => {
@@ -236,6 +240,15 @@ export function createChat(o) {
                 conv = null;
                 return false;
             }
+        },
+        /** Retoma la última conversación de este navegador (si sigue en el servidor). */
+        async resumeSaved() {
+            let id = null;
+            try { id = localStorage.getItem(CONV_KEY); } catch { /* sin almacenamiento */ }
+            if (!id) return false;
+            const ok = await this.resume(id);
+            if (!ok) try { localStorage.removeItem(CONV_KEY); } catch { /* ok */ }
+            return ok;
         },
         reset() { conv = null; clear(o.log); },
         render,

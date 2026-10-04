@@ -45,7 +45,8 @@ export function mountAssistant(app) {
                     // después de calcar un plano adjunto: la misma imagen, de fondo, para corregir contra el original
                     isLast && state === true && chat.lastPlan && app.backdrop ? h('button', { type: 'button', class: 'btn btn-outline btn-sm', id: 'ai-backdrop', onclick: () => { app.backdrop.setFromDataUrl(chat.lastPlan); dialog.close(); } }, 'Usar el plano como fondo') : null));
         },
-        suggestions: () => [],
+        // con una conversación retomada (o en curso) que ya tiene casa, las mismas ideas del arranque
+        suggestions: (conv) => (conv.eventos.some((e) => e.tipo === 'casa') ? IDEAS : []),
         onChange: async (conv, fresh) => {
             // la primera casa de la conversación es la del editor: se marca como ya presente
             const first = conv.eventos.find((e) => e.tipo === 'casa');
@@ -67,6 +68,14 @@ export function mountAssistant(app) {
             chat.render();
         },
         onFirstMessage: (payload) => chat.start({ modo: 'editor', inicio: { tipo: 'proyecto', project: store.project, programa: linkedProgram() }, texto: payload.texto ?? '', ...(payload.adjunto ? { adjunto: payload.adjunto } : {}) }),
+    });
+
+    // Retoma la conversación de este navegador (también la que empezó en la Galería): las casas que ya trae no se
+    // vuelven a aplicar.
+    chat.resumeSaved().then((ok) => {
+        if (!ok) return;
+        chat.conv.eventos.filter((e) => e.tipo === 'casa').forEach((e, i) => applied.set(e.version, i === 0 ? false : true));
+        chat.render();
     });
 
     async function undo(version) {

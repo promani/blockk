@@ -302,6 +302,47 @@ final class AssistantTest extends TestCase
     }
 
     #[Test]
+    public function aCoordinatorThatOnlyAnnouncesTheHandoffStillGetsTheHouseBuilt(): void
+    {
+        $assistant = $this->twoTier();
+        $this->llm->queue = [
+            ScriptedLlm::say('Perfecto, le pasé las indicaciones al constructor.'),
+            ScriptedLlm::call('generar_casa', ['niveles' => 1, 'ambientes' => [['tipo' => 'dormitorio', 'cantidad' => 2]]], 'g1'),
+        ];
+        $conv = $assistant->start(self::CLIENT, ['tipo' => 'nueva'], 'galeria', 'una casa con dos dormitorios');
+
+        self::assertSame([LlmClient::LIGHT, LlmClient::HEAVY], $this->llm->tiers);
+        self::assertContains('casa', $this->types($conv), 'el constructor armó la casa aunque el coordinador no llamó a delegar');
+    }
+
+    #[Test]
+    public function aBuilderThatOnlyAnswersWithTextIsAskedOnceToActuallyDoIt(): void
+    {
+        $assistant = $this->twoTier();
+        $this->llm->queue = [
+            ScriptedLlm::call('delegar', ['instrucciones' => 'casa de 1 planta con 2 dormitorios'], 'd1'),
+            ScriptedLlm::say('Listo, ya está.'),
+            ScriptedLlm::call('generar_casa', ['niveles' => 1, 'ambientes' => [['tipo' => 'dormitorio', 'cantidad' => 2]]], 'g1'),
+        ];
+        $conv = $assistant->start(self::CLIENT, ['tipo' => 'nueva'], 'galeria', 'una casa con dos dormitorios');
+
+        self::assertSame([LlmClient::LIGHT, LlmClient::HEAVY, LlmClient::HEAVY], $this->llm->tiers);
+        self::assertSame(['usuario', 'casa'], $this->types($conv), 'el «listo» sin cambios no se muestra');
+        self::assertStringContainsString('Todavía no se cambió nada', json_encode($this->llm->received[2], JSON_UNESCAPED_UNICODE));
+    }
+
+    #[Test]
+    public function aGalleryConversationContinuedInTheEditorSwitchesToEditorMode(): void
+    {
+        $assistant = $this->twoTier();
+        $this->llm->queue = [ScriptedLlm::say('Hola, ¿qué cambiamos?')];
+        $conv = $assistant->start(self::CLIENT, ['tipo' => 'plantilla', 'slug' => 'casa-en-l'], 'galeria');
+        $conv = $assistant->reply($conv, 'hola', [], null, null, 'editor');
+
+        self::assertSame('editor', $conv['modo']);
+    }
+
+    #[Test]
     public function theWizardFormStillNeedsNoModelAtAll(): void
     {
         $assistant = $this->twoTier();

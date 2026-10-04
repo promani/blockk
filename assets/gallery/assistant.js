@@ -66,6 +66,15 @@ export function mountAssistant({ card, dialog, confirmReplace }) {
     dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
     openBtn.addEventListener('click', () => openInEditor(chat.conv.id).catch((e) => alert(e.message)));
 
+    // La conversación de este navegador sigue en el servidor: se puede retomar donde quedó.
+    chat.resumeSaved().then((ok) => {
+        if (!ok) return;
+        const again = h('button', { type: 'button', class: 'btn btn-outline', id: 'ai-resume' }, 'Retomar la conversación');
+        again.addEventListener('click', open);
+        $('#ai-new', card).before(again);
+        refresh();
+    });
+
     $('#ai-new', card).addEventListener('click', async () => {
         if (!(await confirmReplace())) return;
         open();
