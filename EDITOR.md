@@ -166,6 +166,9 @@ primera. El cómputo está en la pestaña
   abre `/?compartido=<id>`; quien tenga el enlace edita y los cambios se guardan solos (1,2 s después del último). Al
   volver a la pestaña se trae la versión más nueva si no hay cambios propios sin guardar. «Nuevo» y «Abrir» dejan de
   usar el enlace.
+- **Hastiales**: son mampostería como los muros: cada pieza del despiece del servidor se dibuja como un bloque (con sus
+  juntas y los cortes en amarillo) y se recorta en diagonal con la pendiente. «Techos» (en Configuraciones generales)
+  oculta los faldones para verlos.
 - **Colores**: todos en `assets/styles/tema.css` (interfaz y dibujo, variables `--dibujo-*` que lee
   `assets/lib/theme.js`). Se edita el archivo y se recarga; las miniaturas de la Galería se regeneran con
   `composer miniaturas`.

@@ -226,6 +226,7 @@ function pickRoof(app, sx, sy) {
     const { cam, store } = app;
     const parts = store.analysis?.roof?.parts ?? [];
     if (cam.view === 'plan') {
+        if (store.ui.showRoof === false) return null; // techos ocultos: en planta no hay nada que elegir
         const [wx, wy] = cam.unproject(sx, sy, 0);
         const hits = parts.filter((p) => {
             const g = p.geometry;
@@ -245,7 +246,7 @@ function pickRoof(app, sx, sy) {
         for (const gb of part.geometry.gables ?? []) {
             if (gb.enabled && inPoly(proj(gb.pts), sx, sy)) return { type: 'gable', id: gb.id };
         }
-        for (const pl of part.geometry.planes ?? []) {
+        for (const pl of store.ui.showRoof === false ? [] : part.geometry.planes ?? []) {
             if (inPoly(proj(pl.pts), sx, sy)) return { type: 'roof', id: part.id };
         }
     }

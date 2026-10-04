@@ -102,7 +102,7 @@ const levelLabel = () => config.levelShort[store.ui.level] ?? 'Techo';
 
 function persistUi() {
     try {
-        localStorage.setItem(UI_KEY, JSON.stringify({ view: store.ui.view, showLot: store.ui.showLot, showGrid: store.ui.showGrid, showFurniture: store.ui.showFurniture, showTrees: store.ui.showTrees }));
+        localStorage.setItem(UI_KEY, JSON.stringify({ view: store.ui.view, showLot: store.ui.showLot, showGrid: store.ui.showGrid, showFurniture: store.ui.showFurniture, showTrees: store.ui.showTrees, showRoof: store.ui.showRoof }));
     } catch { /* sin persistencia */ }
 }
 
@@ -769,7 +769,7 @@ function sceneKey() {
     const { level, cut, snap, solar } = store.ui;
     const s = store.ui.solar.show ? store.sun() : null;
     const p = store.project;
-    return [sceneVersion, level, cut, snap, solar.show, store.ui.showLot, store.ui.showGrid, store.ui.showFurniture, store.ui.showTrees, store.ui.backdrop?.rev ?? 0, s ? `${s.alt.toFixed(2)}:${s.az.toFixed(2)}` : '-', p.north, p.lot.w, p.lot.d].join(',');
+    return [sceneVersion, level, cut, snap, solar.show, store.ui.showLot, store.ui.showGrid, store.ui.showFurniture, store.ui.showTrees, store.ui.showRoof, store.ui.backdrop?.rev ?? 0, s ? `${s.alt.toFixed(2)}:${s.az.toFixed(2)}` : '-', p.north, p.lot.w, p.lot.d].join(',');
 }
 
 function draw() {
@@ -811,7 +811,7 @@ let contextKey = '';
 store.addEventListener('ui', (e) => {
     // La hora y la época del sol sólo cambian el dibujo: no se redibujan los paneles (cortaría el arrastre del deslizador).
     const keys = Object.keys(e.detail ?? {});
-    if (keys.some((k) => k === 'showLot' || k === 'showGrid')) persistUi();
+    if (keys.some((k) => k === 'showLot' || k === 'showGrid' || k === 'showRoof')) persistUi();
     if (keys.some((k) => k === 'showFurniture' || k === 'showTrees')) {
         // Al apagar muebles o árboles se suelta lo que estuviera elegido de eso y se deja su herramienta.
         persistUi();
@@ -922,6 +922,7 @@ const houses = mountHouses(app, { unlinkShare: () => share.unlink() });
         if (ui.showGrid === false) store.setUi({ showGrid: false }, { silent: true });
         if (ui.showFurniture === false) store.setUi({ showFurniture: false }, { silent: true });
         if (ui.showTrees === false) store.setUi({ showTrees: false }, { silent: true });
+        if (ui.showRoof === false) store.setUi({ showRoof: false }, { silent: true });
     } catch { /* ok */ }
     cam.view = store.ui.view;
     for (const b of $$('#view-toggle button')) b.setAttribute('aria-pressed', String(b.dataset.view === store.ui.view));

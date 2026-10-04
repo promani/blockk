@@ -29,7 +29,7 @@ export function buildScene(project, analysis, config) {
     }
     const timber = buildTimber(analysis.timber, config);
     const floors = buildFloors(analysis.floors, config);
-    const roofs = buildRoofs(analysis.roof);
+    const roofs = [...buildRoofs(analysis.roof), ...buildGables(analysis.roof)];
     const trees = (project.trees ?? []).map(treeBox);
     const all = [...levels.flatMap((l) => l.boxes), ...timber.boxes, ...floors, ...roofs, ...trees];
     // Muebles para la planta: la huella ya resuelta con el catálogo (el renderer no conoce la configuración).
@@ -340,6 +340,75 @@ function buildRoofs(roof) {
     }
 
     return boxes;
+}
+
+/**
+ * Hastiales como mampostería de verdad: cada pieza del despiece del servidor es un bloque más (misma caja que en un
+ * muro, con sus caras y juntas), del espesor del hastial y sobre el eje del muro de apoyo. Las piezas de los bordes
+ * salen rectangulares del despiece; el dibujo las recorta con el contorno del hastial (`clip`): así quedan cortadas en
+ * diagonal siguiendo la pendiente, como en obra.
+ */
+function buildGables(roof) {
+    const boxes = [];
+    for (const part of roof?.parts ?? []) {
+        for (const gb of part.geometry.gables ?? []) {
+            if (!gb.enabled || !gb.plane || !gb.courses?.length) continue;
+            const { axis, at, z } = gb.plane;
+            const half = (gb.thickness ?? 20) / 2;
+            const lens = (gb.pieces ?? []).map((t) => t / 20); // ticks de 0,5 mm → cm
+            const full = Math.max(...lens, 0) - 0.5;
+            const uv = gb.pts.map((p) => [axis === 'y' ? p[1] : p[0], p[2] - z]);
+            const clip = { axis, at, half, pts: gb.pts };
+            // tramos de cada hilada, para saber qué caras de arriba tapa la siguiente
+            const spans = [];
+            let k = 0;
+            for (const c of gb.courses) {
+                const n = c.joints.length + 1;
+                const len = lens.slice(k, k + n);
+                k += n;
+                const ends = [c.u0, ...c.joints, c.u0 + len.reduce((a, b) => a + b, 0)];
+                spans.push({ v0: c.v0, ends, len });
+            }
+            spans.forEach((sp, ci) => {
+                const above = spans[ci + 1];
+                const z0 = z + sp.v0;
+                for (let i = 0; i < sp.ends.length - 1; i++) {
+                    const [a, b] = [sp.ends[i], sp.ends[i + 1]];
+                    const sloped = topAt(uv, a) < sp.v0 + 25 - 0.5 || topAt(uv, b) < sp.v0 + 25 - 0.5;
+                    const covered = above && above.ends[0] <= a + 0.01 && above.ends.at(-1) >= b - 0.01;
+                    boxes.push({
+                        x0: axis === 'x' ? a : at - half,
+                        x1: axis === 'x' ? b : at + half,
+                        y0: axis === 'x' ? at - half : a,
+                        y1: axis === 'x' ? at + half : b,
+                        z0,
+                        z1: z0 + COURSE_H,
+                        zs: z0,
+                        kind: sloped || (sp.len[i] ?? full) < full ? KIND.CUT : KIND.BLOCK,
+                        axis,
+                        adjA: i > 0,
+                        adjB: i < sp.ends.length - 2,
+                        top: !covered,
+                        level: 2,
+                        gable: gb.id,
+                        clip,
+                    });
+                }
+            });
+        }
+    }
+    return boxes;
+}
+
+/** Alto del contorno del hastial (u, v) en la abscisa u. */
+function topAt(uv, u) {
+    let best = -Infinity;
+    for (let i = 0; i < uv.length; i++) {
+        const [a, c] = [uv[i], uv[(i + 1) % uv.length]];
+        if (u < Math.min(a[0], c[0]) - 1e-6 || u > Math.max(a[0], c[0]) + 1e-6) continue;
+        best = Math.max(best, a[0] === c[0] ? Math.max(a[1], c[1]) : a[1] + ((c[1] - a[1]) * (u - a[0])) / (c[0] - a[0]));
+    }
+    return best;
 }
 
 /** Peldaños y descansos de escaleras (nivel 0) y losas de piso (nivel 1). */

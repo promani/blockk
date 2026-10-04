@@ -739,7 +739,8 @@ export function mountPanels(app) {
             // Muebles y árboles se pueden apagar: no se dibujan, no se eligen y su herramienta sale de la barra.
             h('div', { class: 'check-row' },
                 h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', id: 'opt-furniture', checked: store.ui.showFurniture !== false, onchange: (e) => store.setUi({ showFurniture: e.target.checked }) }), 'Muebles'),
-                h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', id: 'opt-trees', checked: store.ui.showTrees !== false, onchange: (e) => store.setUi({ showTrees: e.target.checked }) }), 'Árboles')),
+                h('label', { class: 'field-inline' }, h('input', { type: 'checkbox', id: 'opt-trees', checked: store.ui.showTrees !== false, onchange: (e) => store.setUi({ showTrees: e.target.checked }) }), 'Árboles'),
+                h('label', { class: 'field-inline', title: 'Oculta los faldones (la cubierta y los cabios) para ver los hastiales y la planta alta' }, h('input', { type: 'checkbox', id: 'opt-roof', checked: store.ui.showRoof !== false, onchange: (e) => store.setUi({ showRoof: e.target.checked }) }), 'Techos')),
             app.backdrop?.panel(),
             h('div', { class: 'kv-title' }, 'Norte'),
             northDial(),
