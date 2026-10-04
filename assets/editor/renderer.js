@@ -616,12 +616,11 @@ export class Renderer {
             const [px, py] = cam.project((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
             const reach = (Math.max(b.x1 - b.x0, b.y1 - b.y0) + (b.z1 - b.z0)) * cam.zoom;
             if (px + reach < -margin || px - reach > cam.w + margin || py + reach < -margin || py - reach > cam.h + margin) continue;
-            if (b.level === activeLevel && b.course !== undefined && b.kind <= KIND.UCUT && ui.cut < 12 && b.course >= ui.cut) continue;
-            if (b.opening) {
-                if (b.level === activeLevel && ui.cut < 12 && b.course >= ui.cut) continue;
-            }
+            const cut = b.level === activeLevel && ui.cut < 12;
+            if (cut && b.course !== undefined && b.kind <= KIND.UCUT && b.course >= ui.cut) continue;
+            if (cut && b.opening && b.course >= ui.cut) continue;
             // con los muros recortados, la viga que apoya arriba quedaría flotando
-            if (b.kind === KIND.BEAM && b.level === activeLevel && ui.cut < 12) continue;
+            if (cut && b.kind === KIND.BEAM) continue;
             (b.kind === KIND.TREE ? trees : drawn).push(it);
             this.drawBox(ctx, cam, it, strokeOn);
         }
@@ -1436,26 +1435,27 @@ export class Renderer {
         }
     }
 
-    /** Vigas de madera en planta: encima de losas y tirantes, con el ancho de la sección (3″) y un borde oscuro. */
+    /** Vigas de madera en planta: encima de losas y tirantes, con el ancho de su sección y un borde oscuro. */
     drawPlanBeams(f) {
         const { ctx } = this;
-        const { cam, analysis } = f;
-        const beams = analysis.timber?.beams ?? [];
+        const { cam, scene } = f;
+        const beams = (scene?.timber.boxes ?? []).filter((b) => b.kind === KIND.BEAM);
         if (!beams.length) return;
-        const width = Math.max(3, 7.5 * cam.zoom);
         ctx.save();
         ctx.lineCap = 'butt';
-        for (const [color, w] of [['#5c3a12', width + 2], ['#c48a45', width]]) {
+        for (const [color, extra] of [['#5c3a12', 2], ['#c48a45', 0]]) {
             ctx.strokeStyle = color;
-            ctx.lineWidth = w;
-            ctx.beginPath();
             for (const b of beams) {
-                const p = cam.project(b.x1, b.y1, 0);
-                const q = cam.project(b.x2, b.y2, 0);
+                const alongX = b.axis === 'x';
+                const mid = alongX ? (b.y0 + b.y1) / 2 : (b.x0 + b.x1) / 2;
+                const p = alongX ? cam.project(b.x0, mid, 0) : cam.project(mid, b.y0, 0);
+                const q = alongX ? cam.project(b.x1, mid, 0) : cam.project(mid, b.y1, 0);
+                ctx.lineWidth = Math.max(3, (alongX ? b.y1 - b.y0 : b.x1 - b.x0) * cam.zoom) + extra;
+                ctx.beginPath();
                 ctx.moveTo(p[0], p[1]);
                 ctx.lineTo(q[0], q[1]);
+                ctx.stroke();
             }
-            ctx.stroke();
         }
         ctx.restore();
     }
