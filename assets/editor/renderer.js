@@ -620,6 +620,8 @@ export class Renderer {
             if (b.opening) {
                 if (b.level === activeLevel && ui.cut < 12 && b.course >= ui.cut) continue;
             }
+            // con los muros recortados, la viga que apoya arriba quedaría flotando
+            if (b.kind === KIND.BEAM && b.level === activeLevel && ui.cut < 12) continue;
             (b.kind === KIND.TREE ? trees : drawn).push(it);
             this.drawBox(ctx, cam, it, strokeOn);
         }
@@ -1015,6 +1017,7 @@ export class Renderer {
             if (li === 1 && !ghost) this.drawPlanTimber(f, false);
             if (li === 0) this.drawPlanStairs(f, ghost);
             if (li === 1) this.drawPlanSlabs(f);
+            if (li === 1 && !ghost) this.drawPlanBeams(f);
         }
         this.drawZoneLabels(f);
         this.drawTreeShadows(f);
@@ -1424,16 +1427,30 @@ export class Renderer {
                 ctx.fillText(label, sx, sy);
             }
         }
-        ctx.strokeStyle = '#8a5a1f';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        for (const b of timber.beams ?? []) {
-            const p = cam.project(b.x1, b.y1, 0);
-            const q = cam.project(b.x2, b.y2, 0);
-            ctx.moveTo(p[0], p[1]);
-            ctx.lineTo(q[0], q[1]);
+    }
+
+    /** Vigas de madera en planta: encima de losas y tirantes, con el ancho de la sección (3″) y un borde oscuro. */
+    drawPlanBeams(f) {
+        const { ctx } = this;
+        const { cam, analysis } = f;
+        const beams = analysis.timber?.beams ?? [];
+        if (!beams.length) return;
+        const width = Math.max(3, 7.5 * cam.zoom);
+        ctx.save();
+        ctx.lineCap = 'butt';
+        for (const [color, w] of [['#5c3a12', width + 2], ['#c48a45', width]]) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = w;
+            ctx.beginPath();
+            for (const b of beams) {
+                const p = cam.project(b.x1, b.y1, 0);
+                const q = cam.project(b.x2, b.y2, 0);
+                ctx.moveTo(p[0], p[1]);
+                ctx.lineTo(q[0], q[1]);
+            }
+            ctx.stroke();
         }
-        ctx.stroke();
+        ctx.restore();
     }
 
     // ---------- rosa de los vientos y sol ----------
