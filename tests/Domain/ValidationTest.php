@@ -72,23 +72,22 @@ final class ValidationTest extends TestCase
         $errors = $this->codes(Fixtures::room(40, 30)->room(1, 5, 0, 40, 30)); // PA desplazada 5 unidades
 
         self::assertContains('support.upper', $errors);
-        self::assertContains('timber.missing', $errors, 'PA sin entrepiso definido');
+        self::assertNotContains('timber.missing', $errors, 'el piso de arriba es automático');
     }
 
     #[Test]
     public function alignedUpperLevelPassesTheSupportCheck(): void
     {
-        $codes = $this->codes(Fixtures::room(30, 30)->joists(0, 0, 30, 30, 'x')->room(1, 0, 0, 30, 30));
+        $codes = $this->codes(Fixtures::room(30, 30)->room(1, 0, 0, 30, 30));
 
         self::assertNotContains('support.upper', $codes);
-        self::assertNotContains('timber.missing', $codes);
         self::assertContains('height.total', $codes);
     }
 
     #[Test]
-    public function upperPartitionsOverTheTimberFloorGetAnAdvisoryAndOrphansAnError(): void
+    public function upperPartitionsOverTheSlabGetAnAdvisoryAndOrphansAnError(): void
     {
-        $base = Fixtures::room(30, 30)->joists(0, 0, 30, 30, 'x')->room(1, 0, 0, 30, 30);
+        $base = Fixtures::room(30, 30)->room(1, 0, 0, 30, 30);
         $onFloor = $this->codes((clone $base)->wall(1, 15, 0, 15, 30, 10.0));
         self::assertContains('support.partition', $onFloor);
 
@@ -116,7 +115,7 @@ final class ValidationTest extends TestCase
     public function aThirdLevelIsRejectedAsAStructuralLimit(): void
     {
         $data = Fixtures::room()->build();
-        $data['levels'][] = ['walls' => [], 'openings' => [], 'ubeams' => [], 'timber' => []];
+        $data['levels'][] = ['walls' => [], 'openings' => [], 'ubeams' => []];
 
         try {
             ProjectFactory::fromArray($data);
@@ -137,7 +136,7 @@ final class ValidationTest extends TestCase
         yield 'ids duplicados' => [['levels' => [['walls' => [$wall, [...$wall, 'x1' => 20, 'x2' => 30]]]]], 'duplicado'];
         yield 'id con caracteres inválidos' => [['levels' => [['walls' => [[...$wall, 'id' => '<script>']]]]], 'inválido'];
         yield 'id numérico' => [['levels' => [['walls' => [[...$wall, 'id' => '1']]]]], 'inválido'];
-        yield 'entrepiso gigante' => [['levels' => [['timber' => [['id' => 't1', 'kind' => 'joists', 'x' => 0, 'y' => 0, 'w' => 4000, 'h' => 4000]]]]], 'rango'];
+        yield 'piso gigante' => [['levels' => [[], ['slabs' => [['id' => 'l1', 'x' => 0, 'y' => 0, 'w' => 4000, 'h' => 4000]]]]], 'rango'];
         yield 'latitud inválida' => [['lat' => 120, 'levels' => []], 'lat'];
         yield 'niveles no es lista' => [['levels' => ['a' => []]], 'lista'];
     }

@@ -164,12 +164,8 @@ final class HouseGenerator
         }
 
         if (2 === $levels) {
+            // el piso de cada habitación de arriba es automático (losa)
             $b->stair(0, $Wl - 17, $D - 27, 'N', 'U')->upper();
-            foreach ($rooms as $r) {
-                if (1 === $r['nivel']) {
-                    $b->slab(1, $r['rect'][0], $r['rect'][1], $r['rect'][2], $r['rect'][3]);
-                }
-            }
         }
         if ('un_agua' !== $program['techo']) {
             $alongX = $W >= $D;

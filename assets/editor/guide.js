@@ -51,10 +51,8 @@ export function mountGuide(app, actions) {
         ];
         if (p.upper) {
             const rooms1 = a?.levels?.[1]?.rooms ?? [];
-            const floors = (p.levels[1].slabs?.length ?? 0) + l0.timber.filter((t) => t.kind === 'joists').length;
             list.push(
                 { done: rooms1.length > 0, title: 'Dibujá el Nivel 2', text: 'En la pestaña «Nivel 2» dibujá las habitaciones: el imán se pega a los muros de abajo.', act: [['Ir al Nivel 2', () => actions.go(1, 'room')]] },
-                { done: floors > 0, title: 'Poné el piso del Nivel 2', text: 'Herramienta «Piso»: clic dentro de cada habitación de abajo (losa o madera).', act: [['Piso', () => actions.go(1, 'piso')]] },
                 { done: (l0.stairs?.length ?? 0) > 0, title: 'Agregá la escalera', text: 'En el Nivel 1, «Escalera»: clic dentro de una habitación. Puede ser recta, en L o en U.', act: [['Escalera', () => actions.go(0, 'stair')]] },
             );
         }

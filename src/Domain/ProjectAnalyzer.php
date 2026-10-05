@@ -16,7 +16,6 @@ use App\Domain\Model\InvalidProjectException;
 use App\Domain\Model\Project;
 use App\Domain\Model\Wall;
 use App\Domain\Roof\RoofPlanner;
-use App\Domain\Timber\TimberPlanner;
 use App\Domain\Validation\Issue;
 use App\Domain\Validation\ProjectValidator;
 use App\Domain\Validation\RoomReview;
@@ -31,7 +30,6 @@ final class ProjectAnalyzer
         private readonly WallNormalizer $normalizer = new WallNormalizer(),
         private readonly RegionAnalyzer $regions = new RegionAnalyzer(),
         private readonly CourseBuilder $courses = new CourseBuilder(),
-        private readonly TimberPlanner $timber = new TimberPlanner(),
         private readonly StairPlanner $stairs = new StairPlanner(),
         private readonly SlabPlanner $slabs = new SlabPlanner(),
         private readonly RoofPlanner $roof = new RoofPlanner(),
@@ -101,18 +99,23 @@ final class ProjectAnalyzer
         [$normalized, $notices] = $this->normalize($project);
         $levels = $this->analyzeLevels($normalized);
         $stairPlan = $this->stairs->plan($normalized, $levels[0]->regions);
-        $timber = $this->timber->plan($normalized->level(0), $stairPlan->holes);
-        $slabPlan = $this->slabs->plan($normalized, $levels[0]->regions, $stairPlan->holes);
+        $slabPlan = $this->slabs->plan($normalized, $levels[0]->regions, $normalized->upperEnabled() ? ($levels[1] ?? null)?->regions : null, $stairPlan->holes);
+        if ([] !== $slabPlan->redundant) {
+            // pisos dibujados dentro de una habitación de arriba (proyectos anteriores): ya tiene su losa, se quitan
+            $upper = $normalized->level(1);
+            $upper = $upper->withSlabs(array_values(array_filter($upper->slabs, static fn ($s): bool => !in_array($s->id, $slabPlan->redundant, true))));
+            $normalized = $normalized->withLevel(1, $upper);
+            $levels[1] = new LevelAnalysis($upper, $levels[1]->topology, $levels[1]->regions, $levels[1]->courses);
+        }
         $roofPlan = $this->roof->plan($normalized, $levels);
         $extras = ['stairs' => $stairPlan->bom, 'slabs' => $slabPlan->bom, 'roof' => $roofPlan->bom(), 'gables' => $roofPlan->gablePieces()];
         $bom = $this->bom->calculate(
             $normalized,
             array_map(static fn (LevelAnalysis $l) => $l->courses, $levels),
             array_map(static fn (LevelAnalysis $l) => $l->topology, $levels),
-            $timber,
             $extras,
         );
-        $issues = $this->validator->validate($normalized, $levels, $timber);
+        $issues = $this->validator->validate($normalized, $levels);
         // dónde llega cada escalera en el Nivel 2: el centro de su huella
         $arrivals = array_map(static fn (array $s): array => [(int) floor(($s['bbox']['x'] + $s['bbox']['w'] / 2) / Hcca::GRID_CM), (int) floor(($s['bbox']['y'] + $s['bbox']['h'] / 2) / Hcca::GRID_CM)], $stairPlan->stairs);
         foreach ($levels as $i => $l) {
@@ -127,8 +130,7 @@ final class ProjectAnalyzer
             'analysis' => [
                 'notices' => $notices,
                 'levels' => array_map(fn (LevelAnalysis $l, int $i): array => $this->levelPayload($l, $bom['levels'][$i] ?? []), $levels, array_keys($levels)),
-                'timber' => $timber->toArray(),
-                'floors' => ['stairs' => $stairPlan->stairs, 'slabs' => $slabPlan->slabs],
+                'floors' => ['stairs' => $stairPlan->stairs, 'slabs' => $slabPlan->slabs, 'autoSlabM2' => $slabPlan->bom['autoM2']],
                 'roof' => $roofPlan->toArray(),
                 'bom' => $bom,
                 'issues' => array_map(static fn (Issue $i): array => $i->toArray(), $issues),

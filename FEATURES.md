@@ -14,9 +14,9 @@ pallets, bolsas, hierro y madera compro?»*. Todo lo demás existe para llegar a
 | **Simple antes que completo** | Se dibuja con muros a 90° sobre una retícula de 12,5 cm, con pocas herramientas. No hay modos, capas, materiales ni parámetros por elemento más allá de lo que cambia el cómputo. |
 | **Conversar antes que dibujar** | Se puede pedir la casa («2 plantas, 3 dormitorios, cocina integrada») y ajustarla hablando. La IA no dibuja: conversa y usa un generador determinista que siempre devuelve una casa válida. |
 | **El bloque es la unidad** | El modelo *es* la pared de bloques: hilada por hilada, con trabas, cortes, dinteles y corona. No es un dibujo al que después se le calcula algo: el dibujo se construye con las reglas del sistema. |
-| **Calcular bien lo que importa** | Bloques por espesor, cortes con reutilización, pallets, adhesivo, hormigón y hierro de los bloques U, madera, losas, escaleras, pilares y presupuesto. Cada número sale de una pieza concreta. |
+| **Calcular bien lo que importa** | Bloques por espesor, cortes con reutilización, pallets, adhesivo, hormigón y hierro de los bloques U, madera del techo, losas, escaleras, pilares y presupuesto. Cada número sale de una pieza concreta. |
 | **Perder detalle a propósito** | Sin muebles de catálogo, texturas, cotas de taller, instalaciones ni curvas. Lo que no cambia el cómputo o la coherencia constructiva se deja afuera. |
-| **Avisar, no calcular estructuras** | La Revisión marca lo que no se puede construir (vanos pegados a una esquina, apoyos, luces de madera). Predimensiona; no reemplaza a un profesional. |
+| **Avisar, no calcular estructuras** | La Revisión marca lo que no se puede construir (vanos pegados a una esquina, apoyos, luces de losa). Predimensiona; no reemplaza a un profesional. |
 
 ## 2. Cómo se compara (a grandes rasgos)
 
@@ -70,10 +70,10 @@ trabajo en equipo).
 - **Plano de fondo**: una imagen o la primera página de un PDF apoyada sobre el terreno, debajo del dibujo, para
   calcar encima. Se pone a escala marcando dos puntos de una medida conocida; se mueve, se atenúa y se quita. No entra
   al proyecto ni al cómputo: queda en el navegador.
-- **Dos niveles + techo**: Nivel 1, Nivel 2 (con piso: losa de hormigón o entrepiso de madera) y pestaña Techo.
+- **Dos niveles + techo**: Nivel 1, Nivel 2 (cada habitación lleva sola su losa de hormigón; balcones y terrazas como piso extra, también en voladizo) y pestaña Techo.
 - **Escaleras**: recta, en L y en U, con ancho, huella y giro; abren el hueco en el piso de arriba.
 - **Techos** rectangulares a dos aguas o a un agua, que se apoyan solos en los muros, se cruzan y se cortan entre sí
-  (limahoya); alero, pendiente, cabios y hastiales de bloque despiezados (como muros, con ventanas y su dintel U); los techos se pueden ocultar para ver la mampostería.
+  (limahoya); alero, pendiente, cabios (calculados solos según la luz, no se dibujan) y hastiales de bloque despiezados (como muros, con ventanas y su dintel U); los techos se pueden ocultar para ver la mampostería.
 - **Imán y guías** al dibujar, mover muros arrastrando (el resto se estira), selección múltiple con rectángulo y
   movimiento en grupo, deshacer y rehacer ilimitado, guía «Próximo paso».
 - **Medidas exactas**: la cota se ve mientras se dibuja; en un muro se puede **escribir el largo** y Enter; el ancho y
@@ -90,7 +90,7 @@ trabajo en equipo).
   piso), vidrio por orientación y **sugerencia de ventanas por el sol** (ganancia de invierno y ventilación cruzada).
 - **Revisión constructiva** en vivo, con errores, advertencias e información, cada una vinculada al elemento que la
   causa: jambas de 25 cm, 60 % de vanos en muros portantes, luces de dintel, esbeltez, apoyos del Nivel 2 y de
-  pilares, luces de losa y de madera. Los techos se dibujan para ver la casa completa y computar la madera: no generan observaciones.
+  pilares, luces de losa y voladizos. Los techos se dibujan para ver la casa completa y computar la madera: no generan observaciones.
 - **Recomendaciones por tipo de ambiente**: estar, comedor, dormitorio o escritorio sin ventana y **dormitorio de
   paso** (advertencia); baño, cocina o lavadero sin ventilación, baño que abre a la cocina o al comedor, escalera que
   llega a un dormitorio y superficie por debajo de la referencia (nota). Son recomendaciones, no normativa.
@@ -104,7 +104,7 @@ trabajo en equipo).
   cruz.
 - **Cortes optimizados**: los sobrantes se reutilizan; el descarte de las plantillas queda por debajo del 4 %.
 - **Cómputo completo**: bloques y pallets por espesor, adhesivo y mortero de nivelación, hormigón y hierro de bloques U y
-  de pilares, madera (tirantes, cenefa, OSB, cabios), losas, escaleras y techo.
+  de pilares, losas (la del Nivel 2, automática, y los pisos extra), escaleras y techo (cabios, cumbrera, clavaderas, cubierta).
 - **Presupuesto de referencia** con precios editables; exportación **CSV** y **PDF** vectorial con la planta; envío a un
   distribuidor por correo o WhatsApp.
 - **Calculadora rápida de paño** y **catálogo técnico** de piezas con reglas de colocación.
@@ -168,10 +168,10 @@ trabajo en equipo).
 ### 4.2 Todavía no (ver [BACKLOG.md](BACKLOG.md))
 
 - Que la Revisión use los muebles (paso libre, puertas que los pisan) y que el asistente los coloque.
-- Vigas libres, techo a cuatro aguas o de forma libre, balcones y voladizos.
+- Vigas libres, techo a cuatro aguas o de forma libre, baranda de balcones.
 - Cotas internas y fachadas en los planos.
 - **Mano de obra**: jornales, plazo y costo por rubro (hoy el presupuesto es sólo de materiales).
-- **Losas y entrepisos**: viguetas, paneles, voladizos, doble altura y cubierta plana (hoy, losa maciza o madera).
+- **Losas**: viguetas, paneles, doble altura y cubierta plana (hoy, losa maciza).
 - El asistente con todas las operaciones del editor (pilares, nombres, aberturas).
 
 ## 5. Cuándo conviene y cuándo no

@@ -123,6 +123,8 @@ final class Hcca
     public const int REGULAR_COURSES = 11;
     public const int CROWN_COURSE = 11;
     public const int LEVEL_HEIGHT_CM = 300;
+    /** Espesor de la losa que hace de piso de cada habitación del Nivel 2. */
+    public const int SLAB_THICKNESS_CM = 12;
     /** Un muro puede ser más bajo que el nivel (medianeras, parapetos) o, sin nada encima, llegar hasta 4,00 m (16 hiladas). */
     public const int MAX_WALL_COURSES = 16;
 
@@ -143,7 +145,6 @@ final class Hcca
     public const int MAX_BBOX_UNITS = 900;
     public const int MAX_OPENINGS_PER_LEVEL = 1500;
     public const int MAX_UBEAMS_PER_LEVEL = 500;
-    public const int MAX_TIMBER_PER_LEVEL = 40;
     public const int MAX_SLABS_PER_LEVEL = 20;
     public const int MAX_STAIRS_PER_LEVEL = 10;
     public const int MAX_ZONES = 30;
@@ -329,10 +330,8 @@ final class Hcca
 
     /** Largos comerciales de madera (cm). */
     public const array TIMBER_LENGTHS_CM = [300, 360, 420, 480, 540, 600];
-    public const int JOIST_BEARING_CM = 10;
     public const int JOIST_MIN_SPACING_CM = 30;
     public const int JOIST_MAX_SPACING_CM = 60;
-    public const float OSB_SHEET_M2 = 2.9768; // 1,22 × 2,44 m
 
     /** Bloques por pallet según el sistema activo (Lika: 120 / 72 / 60 y U 42 / 40). */
     public static function palletCapacity(string $kind, int $tTicks): int
@@ -395,9 +394,6 @@ final class Hcca
             'anchor_u' => 1.2,
             'timber_3x8_m' => 6.5,
             'timber_3x10_m' => 8.5,
-            'osb_sheet' => 34.0,
-            'elastic_band_m' => 1.1,
-            'plate_u' => 9.0,
             'timber_3x12_m' => 11.0,
             'roof_cover_m2' => 22.0,
             'batten_m' => 1.4,

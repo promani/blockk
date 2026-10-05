@@ -68,7 +68,7 @@
         "miniaturas": [
             "Composer\\Config::disableProcessTimeout",
             ".claude/skills/capturas/scripts/servidor.sh",
-            "NODE_PATH=$(npm root -g) node bin/miniaturas.cjs"
+            "NODE_PATH=.claude/tools/node_modules node bin/miniaturas.cjs"
         ],
         "assets:compile": "@php bin/console asset-map:compile"
     },

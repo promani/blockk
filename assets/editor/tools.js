@@ -326,7 +326,7 @@ export function createTools(app) {
     /** Elementos cuya planta cae dentro del rectángulo (unidades), en todos los niveles: se mueven juntos, de arriba abajo. */
     const collectIn = (x0, y0, x1, y1) => {
         const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
-        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [], furniture: [] };
+        const sel = { walls: [], stairs: [], slabs: [], roofs: [], columns: [], labels: [], furniture: [] };
         store.project.levels.forEach((lv, li) => {
             for (const m of furnitureOn(store.ui) ? lv.furniture ?? [] : []) {
                 const r = furnitureRect(cfg, m);
@@ -340,10 +340,6 @@ export function createTools(app) {
             }
             for (const c of lv.columns ?? []) if (inside(c.x, c.y)) sel.columns.push([li, c.id]);
             for (const lb of lv.labels ?? []) if (inside(lb.x, lb.y)) sel.labels.push([li, lb.id]);
-            for (const t of lv.timber ?? []) {
-                const ok = t.kind === 'beam' ? inside(t.x1, t.y1) && inside(t.x2, t.y2) : inside(t.x, t.y) && inside(t.x + t.w, t.y + t.h);
-                if (ok) sel.timber.push([li, t.id]);
-            }
         });
         for (const r of store.project.roofs ?? []) if (inside(r.x, r.y) && inside(r.x + r.w, r.y + r.h)) sel.roofs.push([0, r.id]);
         return sel;
@@ -356,7 +352,6 @@ export function createTools(app) {
         const p = store.project;
         for (const [li, id] of sel.walls) { const w = p.levels[li].walls.find((q) => q.id === id); if (w) { xs.push(w.x1, w.x2); ys.push(w.y1, w.y2); } }
         for (const [li, id] of sel.slabs) { const q = p.levels[li].slabs.find((z) => z.id === id); if (q) { xs.push(q.x, q.x + q.w); ys.push(q.y, q.y + q.h); } }
-        for (const [li, id] of sel.timber) { const t = p.levels[li].timber.find((z) => z.id === id); if (t) { if (t.kind === 'beam') { xs.push(t.x1, t.x2); ys.push(t.y1, t.y2); } else { xs.push(t.x, t.x + t.w); ys.push(t.y, t.y + t.h); } } }
         for (const [li, id] of sel.columns) { const c = p.levels[li].columns.find((z) => z.id === id); if (c) { xs.push(c.x); ys.push(c.y); } }
         for (const [li, id] of sel.labels) { const lb = p.levels[li].labels.find((z) => z.id === id); if (lb) { xs.push(lb.x); ys.push(lb.y); } }
         for (const [li, id] of sel.furniture ?? []) { const r = furnitureRect(cfg, p.levels[li].furniture?.find((z) => z.id === id) ?? {}); if (r) { xs.push(r[0] / G, r[2] / G); ys.push(r[1] / G, r[3] / G); } }
@@ -378,11 +373,6 @@ export function createTools(app) {
             for (const [li, id] of sel.columns) { const q = d.levels[li].columns.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
             for (const [li, id] of sel.labels) { const q = d.levels[li].labels.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
             for (const [li, id] of sel.furniture ?? []) { const q = d.levels[li].furniture?.find((z) => z.id === id); if (q) { q.x += dx; q.y += dy; } }
-            for (const [li, id] of sel.timber) {
-                const t = d.levels[li].timber.find((z) => z.id === id);
-                if (!t) continue;
-                if (t.kind === 'beam') { t.x1 += dx; t.x2 += dx; t.y1 += dy; t.y2 += dy; } else { t.x += dx; t.y += dy; }
-            }
             for (const [, id] of sel.roofs) { const r = d.roofs.find((z) => z.id === id); if (r) { r.x += dx; r.y += dy; } }
         });
     /**
@@ -438,7 +428,7 @@ export function createTools(app) {
                 lv.walls = lv.walls.filter((w) => !walls.has(w.id));
                 lv.openings = lv.openings.filter((o) => !walls.has(o.wall));
                 lv.ubeams = (lv.ubeams ?? []).filter((u) => !walls.has(u.wall));
-                for (const [key, list] of [['slabs', 'slabs'], ['stairs', 'stairs'], ['timber', 'timber'], ['columns', 'columns'], ['labels', 'labels'], ['furniture', 'furniture']]) {
+                for (const [key, list] of [['slabs', 'slabs'], ['stairs', 'stairs'], ['columns', 'columns'], ['labels', 'labels'], ['furniture', 'furniture']]) {
                     if (lv[list]) lv[list] = lv[list].filter((x) => !has(key, li, x.id));
                 }
             });
@@ -492,14 +482,14 @@ export function createTools(app) {
     // ---------------- copiar y pegar ----------------
     /** Portapapeles en memoria: copias de los objetos (no ids), con su nivel y la caja (unidades) que ocupan. */
     let clip = null;
-    const CLIP_KINDS = ['walls', 'slabs', 'stairs', 'timber', 'columns', 'labels', 'furniture', 'roofs', 'zones', 'trees'];
+    const CLIP_KINDS = ['walls', 'slabs', 'stairs', 'columns', 'labels', 'furniture', 'roofs', 'zones', 'trees'];
     const clipCount = (c) => CLIP_KINDS.reduce((n, k) => n + c[k].length, 0);
     /** Lo elegido como grupo: el del rectángulo o el elemento suelto (una abertura sola se trata aparte). */
     const selectionGroup = () => multi.sel ?? (store.ui.selection ? groupOf(store.ui.selection) : null);
     /** Un elemento suelto ({ type, id }) como grupo, para moverlo o copiarlo con lo mismo que un grupo. */
     const groupOf = (s) => {
-        const sel = { walls: [], stairs: [], slabs: [], timber: [], roofs: [], columns: [], labels: [], furniture: [], zones: [], trees: [] };
-        const key = { wall: 'walls', stair: 'stairs', slab: 'slabs', timber: 'timber', column: 'columns', label: 'labels', furniture: 'furniture' }[s.type];
+        const sel = { walls: [], stairs: [], slabs: [], roofs: [], columns: [], labels: [], furniture: [], zones: [], trees: [] };
+        const key = { wall: 'walls', stair: 'stairs', slab: 'slabs', column: 'columns', label: 'labels', furniture: 'furniture' }[s.type];
         if (key) {
             const li = store.project.levels.findIndex((lv) => (lv[key] ?? []).some((q) => q.id === s.id));
             if (li >= 0) sel[key].push([li, s.id]);
@@ -544,12 +534,6 @@ export function createTools(app) {
             c.stairs.push({ li, o: structuredClone(q), box });
             grab(box[0], box[1]);
             grab(box[2], box[3]);
-        }
-        for (const [li, id] of sel.timber) {
-            const t = p.levels[li].timber.find((z) => z.id === id);
-            if (!t) continue;
-            c.timber.push({ li, o: structuredClone(t) });
-            if (t.kind === 'beam') { grab(t.x1, t.y1); grab(t.x2, t.y2); } else { grab(t.x, t.y); grab(t.x + t.w, t.y + t.h); }
         }
         for (const [li, id] of sel.columns) { const q = p.levels[li].columns.find((z) => z.id === id); if (q) { c.columns.push({ li, o: structuredClone(q) }); grab(q.x, q.y); } }
         for (const [li, id] of sel.labels) { const q = p.levels[li].labels.find((z) => z.id === id); if (q) { c.labels.push({ li, o: structuredClone(q) }); grab(q.x, q.y); } }
@@ -637,7 +621,7 @@ export function createTools(app) {
         const c = clip;
         const b = c.box;
         const lvl = (li) => target ?? li;
-        const skipped = target === null ? 0 : c.slabs.length + c.stairs.length + c.timber.length + c.roofs.length + c.zones.length + c.trees.length;
+        const skipped = target === null ? 0 : c.slabs.length + c.stairs.length + c.roofs.length + c.zones.length + c.trees.length;
         let single = null;
         store.commit('Pegar', (d) => {
             for (const it of c.walls) {
@@ -653,12 +637,6 @@ export function createTools(app) {
             if (target !== null) return;
             for (const it of c.slabs) d.levels[it.li].slabs.push({ ...it.o, id: nextId(d, 'l'), x: it.o.x + dx, y: it.o.y + dy });
             for (const it of c.stairs) d.levels[it.li].stairs.push({ ...it.o, id: nextId(d, 'e'), x: it.o.x + dx, y: it.o.y + dy });
-            for (const it of c.timber) {
-                const t = { ...it.o, id: nextId(d, 't') };
-                if (t.kind === 'beam') Object.assign(t, { x1: t.x1 + dx, x2: t.x2 + dx, y1: t.y1 + dy, y2: t.y2 + dy });
-                else Object.assign(t, { x: t.x + dx, y: t.y + dy });
-                d.levels[it.li].timber.push(t);
-            }
             for (const it of c.roofs) (d.roofs ??= []).push({ ...it.o, id: nextId(d, 'r'), x: it.o.x + dx, y: it.o.y + dy });
             for (const it of c.zones) { single = { type: 'zone', id: nextId(d, 'z') }; (d.zones ??= []).push({ ...it.o, id: single.id, x: it.o.x + dx, y: it.o.y + dy }); }
             for (const it of c.trees) { single = { type: 'tree', id: nextId(d, 'a') }; (d.trees ??= []).push({ ...it.o, id: single.id, x: it.o.x + dx, y: it.o.y + dy }); }
@@ -733,7 +711,7 @@ export function createTools(app) {
     T.select = {
         hotkey: 'v',
         label: 'Elegir',
-        hint: `Clic en una pieza para elegirla; doble clic elige la habitación. Aberturas, pilares, muebles, escaleras, zonas, árboles y nombres se mueven arrastrándolos; un muro, una losa, un entrepiso o un techo, arrastrándolo una vez elegido. Arrastrá un rectángulo para elegir varios elementos y después movelos juntos (flechas: ${fmt(BL, 1)} cm). Ctrl+C / Ctrl+V copian y pegan lo elegido.`,
+        hint: `Clic en una pieza para elegirla; doble clic elige la habitación. Aberturas, pilares, muebles, escaleras, zonas, árboles y nombres se mueven arrastrándolos; un muro, un piso o un techo, arrastrándolo una vez elegido. Arrastrá un rectángulo para elegir varios elementos y después movelos juntos (flechas: ${fmt(BL, 1)} cm). Ctrl+C / Ctrl+V copian y pegan lo elegido.`,
         options: () => {
             const n = countSel(multi.sel);
             return h('span', { class: 'row' },
@@ -803,8 +781,8 @@ export function createTools(app) {
                         const chain = new Set(collinearChain(lv.walls, w).map((q) => q.id));
                         drag = { kind: 'wall', w, horizontal, line0, line: line0, x0: press.wx, y0: press.wy, ...anchorsFor({ exclude: chain }) };
                     }
-                } else if (['stair', 'slab', 'timber', 'roof'].includes(type)) {
-                    // escaleras, losas, entrepisos, vigas y techos: se corren enteros, de a 12,5 cm, dentro del terreno
+                } else if (['stair', 'slab', 'roof'].includes(type)) {
+                    // escaleras, pisos y techos: se corren enteros, de a 12,5 cm, dentro del terreno
                     const sel = groupOf({ type, id });
                     const box = sel && selBox(sel);
                     const z = type === 'roof' ? ((roofRect(id)?.level ?? 0) + 1) * cfg.levelHeight : type === 'stair' ? 0.5 : cfg.levelHeight;
@@ -916,11 +894,11 @@ export function createTools(app) {
             }
             // Se decide al soltar: sin moverse es un clic (elige lo de abajo); arrastrando, un rectángulo.
             const under = pickAt(app, p.sx, p.sy);
-            // Las piezas sueltas se arrastran directo; un muro, una losa, un entrepiso o un techo, sólo si ya está elegido
+            // Las piezas sueltas se arrastran directo; un muro, un piso o un techo, sólo si ya está elegido
             // (son grandes: apretar sobre ellos y arrastrar sigue siendo el rectángulo de selección).
             const chosen = store.ui.selection;
             const grab = ['opening', 'gwindow', 'column', 'label', 'tree', 'zone', 'furniture', 'stair'].includes(under?.type)
-                || (['wall', 'slab', 'timber', 'roof'].includes(under?.type) && chosen?.type === under.type && chosen.id === under.id);
+                || (['wall', 'slab', 'roof'].includes(under?.type) && chosen?.type === under.type && chosen.id === under.id);
             multi.press = { sx: p.sx, sy: p.sy, wx: p.wx, wy: p.wy, detail: e?.detail ?? 1, item: grab ? under : null };
         },
         up(p) {
@@ -1590,187 +1568,40 @@ export function createTools(app) {
         },
     };
 
-    // ---------------- entrepiso de madera ----------------
-    let floorSection = '3x8';
-    let floorSpacing = 40;
-    let floor = null;
-    // El piso del Nivel 2 (losa o entrepiso de madera) y sus vigas se dibujan desde la pestaña «Nivel 2», sobre las habitaciones de abajo.
-    const groundOnly = () => (!store.project.upper ? 'Primero agregá el Nivel 2 con «+ Agregar nivel».' : store.ui.level === 1 ? null : 'El piso del Nivel 2 se dibuja desde la pestaña «Nivel 2».');
-    const floorRect = (a, p) => {
-        const x = Math.min(a.gx, p.gx);
-        const y = Math.min(a.gy, p.gy);
-        return { x, y, w: Math.abs(p.gx - a.gx), h: Math.abs(p.gy - a.gy) };
-    };
-    T.floor = {
-        magnet: true,
-        hotkey: '',
-        label: 'Entrepiso de madera',
-        hint: 'Clic dentro de un ambiente rectangular, o arrastre un rectángulo a ejes de muros. Los tirantes cruzan la luz menor.',
-        disabled: groundOnly,
-        planeZ: () => cfg.levelHeight,
-        options: () => h('span', { class: 'row' },
-            selectT('Sección', floorSection, Object.entries(cfg.timberSections).map(([k, s]) => [k, s.label]), (v) => { floorSection = v; }),
-            selectT('Separación', floorSpacing, [30, 40, 50, 60].map((v) => [v, `${v} cm`]), (v) => { floorSpacing = Number(v); })),
-        reset() { floor = null; },
-        down(p) {
-            floor = { a: { gx: p.gx, gy: p.gy }, rect: null, dragged: false, at: { x: p.sx, y: p.sy } };
-        },
-        move(p) {
-            if (!floor) return;
-            if (Math.hypot(p.sx - floor.at.x, p.sy - floor.at.y) > DRAG_PX) floor.dragged = true;
-            floor.rect = floor.dragged ? floorRect(floor.a, p) : null;
-            app.render();
-        },
-        up(p) {
-            if (!floor) return;
-            let r = floor.rect;
-            const a = floor.a;
-            floor = null;
-            if (!r) {
-                const rooms = store.analysis?.levels?.[0]?.rooms ?? [];
-                const room = rooms.find((rm) => rm.rect && a.gx >= rm.bbox.x && a.gx < rm.bbox.x + rm.bbox.w && a.gy >= rm.bbox.y && a.gy < rm.bbox.y + rm.bbox.h);
-                if (!room) {
-                    app.toast('Clic dentro de un ambiente rectangular cerrado, o arrastre un rectángulo.', 'error');
-                    return;
-                }
-                r = { x: room.bbox.x, y: room.bbox.y, w: room.bbox.w, h: room.bbox.h };
-            }
-            if (r.w < 4 || r.h < 4) {
-                app.toast('El entrepiso debe medir al menos 50 × 50 cm.', 'error');
-                return;
-            }
-            const dir = r.w <= r.h ? 'x' : 'y';
-            store.commit('Agregar entrepiso', (d) => {
-                d.levels[0].timber.push({ id: nextId(d, 't'), kind: 'joists', x: r.x, y: r.y, w: r.w, h: r.h, dir, section: floorSection, spacing: floorSpacing });
-            });
-        },
-        keyDown(e) {
-            if (e.key === 'Escape' && floor) {
-                floor = null;
-                app.render();
-                return true;
-            }
-            return false;
-        },
-        draw(ctx, cam) {
-            const z = cfg.levelHeight;
-            if (floor?.rect) {
-                const { x, y, w, h: hh } = floor.rect;
-                outlineRect(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, { stroke: '#8a5a1f', fill: 'rgba(217,160,91,.35)', width: 2.5, dash: [6, 4] });
-                const span = Math.min(w, hh) * G;
-                dimLabel(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, `luz ${fmt(span / 100)} m · tirantes en ${w <= hh ? 'X' : 'Y'}`);
-            } else if (app.pointer && inLot(app.pointer.gx, app.pointer.gy)) {
-                nodeMarker(ctx, cam, app.pointer.gx * G, app.pointer.gy * G, z, '#8a5a1f');
-            }
-        },
-    };
-
-    // ---------------- viga de madera ----------------
-    let beamSection = '3x10';
-    let beamA = null;
-    let beamEnd = null;
-    T.beam = {
-        magnet: true,
-        hotkey: 't',
-        label: 'Viga de madera',
-        hint: 'Clic en dos nodos alineados: viga apoyada sobre muros portantes (lleva placa de reparto).',
-        disabled: groundOnly,
-        planeZ: () => cfg.levelHeight,
-        options: () => h('span', { class: 'row' }, selectT('Sección', beamSection, Object.entries(cfg.timberSections).map(([k, s]) => [k, s.label]), (v) => { beamSection = v; })),
-        reset() { beamA = null; beamEnd = null; },
-        move(p) {
-            beamEnd = beamA ? ortho(beamA, p) : null;
-            app.render();
-        },
-        down(p) {
-            if (!beamA) {
-                beamA = { gx: p.gx, gy: p.gy };
-                return;
-            }
-            const b = ortho(beamA, p);
-            const a = beamA;
-            beamA = null;
-            beamEnd = null;
-            if (a.gx === b.gx && a.gy === b.gy) return;
-            store.commit('Agregar viga de madera', (d) => {
-                d.levels[0].timber.push({ id: nextId(d, 't'), kind: 'beam', x1: a.gx, y1: a.gy, x2: b.gx, y2: b.gy, section: beamSection });
-            });
-        },
-        keyDown(e) {
-            if (e.key === 'Escape' && beamA) {
-                beamA = null;
-                beamEnd = null;
-                app.render();
-                return true;
-            }
-            return false;
-        },
-        contextmenu() { beamA = null; beamEnd = null; app.render(); },
-        draw(ctx, cam) {
-            const z = cfg.levelHeight;
-            if (beamA && beamEnd) {
-                const s = cfg.timberSections[beamSection];
-                const x0 = Math.min(beamA.gx, beamEnd.gx) * G;
-                const x1 = Math.max(beamA.gx, beamEnd.gx) * G;
-                const y0 = Math.min(beamA.gy, beamEnd.gy) * G;
-                const y1 = Math.max(beamA.gy, beamEnd.gy) * G;
-                const horizontal = beamA.gy === beamEnd.gy;
-                ghostBox(ctx, cam, { x0: horizontal ? x0 : x0 - s.b / 2, x1: horizontal ? x1 : x1 + s.b / 2, y0: horizontal ? y0 - s.b / 2 : y0, y1: horizontal ? y1 + s.b / 2 : y1, z0: z, z1: z + s.d }, { fill: 'rgba(196,138,69,.6)', stroke: '#8a5a1f' });
-            } else if (app.pointer && inLot(app.pointer.gx, app.pointer.gy)) {
-                nodeMarker(ctx, cam, app.pointer.gx * G, app.pointer.gy * G, z, '#8a5a1f');
-            }
-            if (beamA) nodeMarker(ctx, cam, beamA.gx * G, beamA.gy * G, z, '#8a5a1f');
-        },
-    };
-
-    // ---------------- losa (piso del Nivel 2) ----------------
+    // ---------------- piso extra del Nivel 2 (balcón, terraza) ----------------
+    // Las habitaciones de arriba ya tienen su losa: este piso es para lo que queda afuera de ellas.
     let slabThickness = 12;
-    let slabShrink = 0;
     let slab = null;
-    const needUpper = () => (!store.project.upper ? 'Primero agregá el Nivel 2 con «+ Agregar nivel».' : store.ui.level === 1 ? null : 'La losa es el piso del Nivel 2: elegí la pestaña «Nivel 2».');
-    T.slab = {
+    const needUpper = () => (!store.project.upper ? 'Primero agregá el Nivel 2 con «+ Agregar nivel».' : store.ui.level === 1 ? null : 'El balcón va en el Nivel 2: elegí la pestaña «Nivel 2».');
+    const floorRect = (a, p) => ({ x: Math.min(a.gx, p.gx), y: Math.min(a.gy, p.gy), w: Math.abs(p.gx - a.gx), h: Math.abs(p.gy - a.gy) });
+    T.piso = {
         magnet: true,
-        hotkey: '',
-        label: 'Losa de piso',
-        hint: 'Clic dentro de una habitación de abajo: losa del mismo tamaño (o un módulo más chica). O arrastrá un rectángulo. Debe apoyar sobre muros.',
+        hotkey: 'l',
+        label: 'Piso',
+        hint: 'Arrastrá un rectángulo pegado al Nivel 2 para sumar un balcón o una terraza. Las habitaciones ya tienen su piso.',
         disabled: needUpper,
         planeZ: () => cfg.levelHeight,
-        options: () => h('span', { class: 'row' },
-            selectT('Espesor', slabThickness, [10, 12, 15, 20].map((v) => [v, `${v} cm`]), (v) => { slabThickness = Number(v); }),
-            selectT('Tamaño', slabShrink, [[0, 'Igual a la habitación'], [1, 'Más chica (−12,5 cm por lado)'], [2, 'Más chica (−25 cm por lado)']], (v) => { slabShrink = Number(v); })),
+        options: () => h('span', { class: 'row' }, selectT('Espesor', slabThickness, [10, 12, 15, 20].map((v) => [v, `${v} cm`]), (v) => { slabThickness = Number(v); })),
         reset() { slab = null; },
         down(p) {
-            slab = { a: { gx: p.gx, gy: p.gy }, rect: null, dragged: false, at: { x: p.sx, y: p.sy } };
+            slab = { a: { gx: p.gx, gy: p.gy }, rect: null };
         },
         move(p) {
             if (!slab) return;
-            if (Math.hypot(p.sx - slab.at.x, p.sy - slab.at.y) > DRAG_PX) slab.dragged = true;
-            slab.rect = slab.dragged ? floorRect(slab.a, p) : null;
+            slab.rect = floorRect(slab.a, p);
             app.render();
         },
         up() {
             if (!slab) return;
-            let r = slab.rect;
-            const a = slab.a;
+            const r = slab.rect;
             slab = null;
-            if (!r) {
-                const rooms = store.analysis?.levels?.[0]?.rooms ?? [];
-                const room = rooms.find((rm) => rm.rect && a.gx >= rm.bbox.x && a.gx < rm.bbox.x + rm.bbox.w && a.gy >= rm.bbox.y && a.gy < rm.bbox.y + rm.bbox.h);
-                if (!room) {
-                    // una habitación en L (o de otra forma) no admite una losa de un clic: se dibuja con un rectángulo
-                    const odd = rooms.some((rm) => rm.fill?.some(([x, y, w, hh]) => a.gx >= x && a.gx < x + w && a.gy >= y && a.gy < y + hh));
-                    app.toast(odd ? 'Esa habitación no es rectangular: arrastrá un rectángulo para dibujar la losa.' : 'Clic dentro de una habitación cerrada de la planta baja (o arrastrá un rectángulo).', 'error');
-                    return;
-                }
-                const k = slabShrink;
-                r = { x: room.bbox.x + k, y: room.bbox.y + k, w: room.bbox.w - 2 * k, h: room.bbox.h - 2 * k };
-            }
-            if (r.w < 4 || r.h < 4) {
-                app.toast('La losa debe medir al menos 50 × 50 cm.', 'error');
+            if (!r || r.w < 4 || r.h < 4) {
+                app.toast('Arrastrá un rectángulo de al menos 50 × 50 cm.', 'error');
+                app.render();
                 return;
             }
             const t = slabThickness;
-            store.commit('Agregar losa', (d) => {
+            store.commit('Agregar piso', (d) => {
                 d.levels[1].slabs.push({ id: nextId(d, 'l'), x: r.x, y: r.y, w: r.w, h: r.h, thickness: t });
             });
         },
@@ -1788,41 +1619,10 @@ export function createTools(app) {
                 const { x, y, w, h: hh } = slab.rect;
                 outlineRect(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, { stroke: '#475569', fill: 'rgba(100,116,139,.35)', width: 2.5, dash: [6, 4] });
                 dimLabel(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, `${fmt((w * G) / 100)} × ${fmt((hh * G) / 100)} m · ${fmt(((w * G) / 100) * ((hh * G) / 100))} m²`);
-                return;
-            }
-            const p = app.pointer;
-            if (!p) return;
-            const rooms = store.analysis?.levels?.[0]?.rooms ?? [];
-            const room = rooms.find((rm) => rm.rect && p.gx >= rm.bbox.x && p.gx < rm.bbox.x + rm.bbox.w && p.gy >= rm.bbox.y && p.gy < rm.bbox.y + rm.bbox.h);
-            if (room) {
-                const k = slabShrink;
-                outlineRect(ctx, cam, (room.bbox.x + k) * G, (room.bbox.y + k) * G, (room.bbox.x + room.bbox.w - k) * G, (room.bbox.y + room.bbox.h - k) * G, z, { stroke: '#475569', fill: 'rgba(100,116,139,.3)', width: 2 });
-            } else if (inLot(p.gx, p.gy)) {
-                nodeMarker(ctx, cam, p.gx * G, p.gy * G, z, '#475569');
+            } else if (app.pointer && inLot(app.pointer.gx, app.pointer.gy)) {
+                nodeMarker(ctx, cam, app.pointer.gx * G, app.pointer.gy * G, z, '#475569');
             }
         },
-    };
-
-    // ---------------- piso del Nivel 2: losa de hormigón o entrepiso de madera (una sola herramienta) ----------------
-    let pisoKind = 'slab';
-    const piso = () => (pisoKind === 'slab' ? T.slab : T.floor);
-    T.piso = {
-        magnet: true,
-        hotkey: 'l',
-        label: 'Piso',
-        hint: 'Clic dentro de una habitación de abajo: piso del mismo tamaño (o arrastrá un rectángulo). Losa de hormigón o entrepiso de madera.',
-        disabled: needUpper,
-        planeZ: () => cfg.levelHeight,
-        options: () => h('span', { class: 'row' },
-            h('span', { class: 'seg', role: 'group', 'aria-label': 'Tipo de piso' }, [['slab', 'Losa de hormigón'], ['floor', 'Madera (tirantes)']].map(([v, t]) =>
-                h('button', { type: 'button', 'aria-pressed': String(pisoKind === v), onclick: () => { piso().reset?.(); pisoKind = v; app.refreshOptions(); app.render(); } }, t))),
-            piso().options?.()),
-        reset() { T.slab.reset(); T.floor.reset(); },
-        down: (p, e) => piso().down?.(p, e),
-        move: (p, e) => piso().move?.(p, e),
-        up: (p, e) => piso().up?.(p, e),
-        keyDown: (e) => piso().keyDown?.(e) ?? false,
-        draw: (ctx, cam) => piso().draw?.(ctx, cam),
     };
 
     // ---------------- escalera (con descanso) ----------------
@@ -2435,7 +2235,7 @@ export function createTools(app) {
     app.measurement = () => measure;
 
     // metadatos para la barra de herramientas
-    const SHORT = { measure: 'Medir', furniture: 'Mueble', select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', opening: 'Abertura', column: 'Pilar', label: 'Nombre', zone: 'Zona', tree: 'Árbol', ubeam: 'Viga U', floor: 'Madera', beam: 'Viga madera', slab: 'Losa', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
+    const SHORT = { measure: 'Medir', furniture: 'Mueble', select: 'Elegir', room: 'Habitación', wall: 'Muro', block: 'Bloque', opening: 'Abertura', column: 'Pilar', label: 'Nombre', zone: 'Zona', tree: 'Árbol', ubeam: 'Viga U', stair: 'Escalera', roof: 'Techo', piso: 'Piso' };
     for (const [id, t] of Object.entries(T)) {
         t.id = id;
         t.short = SHORT[id] ?? t.label;

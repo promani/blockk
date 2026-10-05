@@ -17,7 +17,8 @@ del ambiente que sirven).
 - Un bloque Lika mide 50 cm (4 u) × 25 cm de alto (1 hilada) (con `BLOCK_SYSTEM=generico`, 62,5 cm = 5 u). Un muro
   normal tiene 12 hiladas (3 m).
 - Medidas múltiplo de 4 u (50 cm) dan menos cortes; el test exige **descarte < 4 %**.
-- Toda plantilla lleva **techo**; con dos plantas, además **escalera** y **piso** (losa o entrepiso), y ninguna
+- Toda plantilla lleva **techo**; con dos plantas, además **escalera** (el piso del Nivel 2 es automático: cada
+  habitación de arriba lleva su losa), y ninguna
   advertencia (`TemplateCatalogTest`). Un techo de la PB que choca contra un muro de la PA no lleva alero ni hastial
   de ese lado (lo resuelve el `RoofPlanner`).
 - El terreno por defecto es de 24 × 20 m (192 × 160 u). El norte (`north = 0`) queda hacia arriba (y negativa) y
@@ -35,8 +36,8 @@ del ambiente que sirven).
     ->label($level, $x, $y, 'Cocina')             // nombre del ambiente: celda dentro de él (se ve en la planta); varios en un espacio abierto
     ->shift($dx, $dy)                             // corre todo lo que sigue (deja lugar al norte, p. ej. para un alfresco)
     ->roofPart($level, $x, $y, $w, $h, 'gable'|'shed', 'x'|'y'|'N'|'S'|'E'|'W')
-    ->joists($x, $y, $w, $h, 'x'|'y')             // entrepiso de madera sobre el Nivel 1
-    ->slab($level, $x, $y, $w, $h) / ->stair($level, $x, $y, 'N')
+    ->slab($level, $x, $y, $w, $h)                // sólo balcón o terraza (piso extra fuera de las habitaciones del Nivel 2)
+    ->stair($level, $x, $y, 'N')
     ->upper()                                     // habilita el Nivel 2
     ->build()
 ```
@@ -64,7 +65,7 @@ solos). Un vano se ubica en el tramo de muro que lo contiene; si no entra, el bu
   (entre cruces), no del muro entero.
 - **`opening.span`** (advertencia): vanos de más de 2,00 m.
 - Con dos niveles: los muros portantes del Nivel 2 tienen que apoyar sobre portantes del Nivel 1 y los tabiques sobre
-  el entrepiso (`support.*`).
+  la losa automática de una habitación de arriba (`support.*`).
 
 Dejá la plantilla **sin errores ni advertencias**; una nota `info` (por ejemplo `roof.ridge`) es aceptable.
 

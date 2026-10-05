@@ -108,19 +108,7 @@ final class PlanTracer
                 $named[$key] = true;
                 $labels[] = ['id' => 'n'.(++$seq), 'x' => $r['x0'] + intdiv($r['x1'] - $r['x0'], 2), 'y' => $r['y0'] + intdiv($r['y1'] - $r['y0'], 2), 'name' => $r['name']] + ('' === $r['type'] ? [] : ['type' => $r['type']]);
             }
-            $project['levels'][] = ['walls' => $walls, 'openings' => [], 'ubeams' => [], 'timber' => [], 'slabs' => [], 'stairs' => [], 'columns' => [], 'labels' => $labels];
-        }
-
-        if (2 === $levels) {
-            // Piso del Nivel 2: una losa por cada ambiente de abajo que tiene planta alta encima.
-            $upper = array_values(array_filter($rooms, static fn (array $r): bool => 1 === $r['level']));
-            foreach ($rooms as $r) {
-                // si los rectángulos del plano se pisan, la losa del segundo no se repite sobre la del primero
-                $taken = array_map(static fn (array $s): array => ['x0' => $s['x'], 'y0' => $s['y'], 'x1' => $s['x'] + $s['w'], 'y1' => $s['y'] + $s['h']], $project['levels'][1]['slabs']);
-                if (0 === $r['level'] && $this->covered($r, $upper) >= 0.5 && 0.0 === $this->covered($r, $taken)) {
-                    $project['levels'][1]['slabs'][] = ['id' => 'l'.(++$seq), 'x' => $r['x0'], 'y' => $r['y0'], 'w' => $r['x1'] - $r['x0'], 'h' => $r['y1'] - $r['y0'], 'thickness' => 12];
-                }
-            }
+            $project['levels'][] = ['walls' => $walls, 'openings' => [], 'ubeams' => [], 'slabs' => [], 'stairs' => [], 'columns' => [], 'labels' => $labels];
         }
 
         $roof = (string) ($plan['techo'] ?? 'dos_aguas');
@@ -398,22 +386,6 @@ final class PlanTracer
         return 'h' === $axis
             ? ['x1' => $run[0], 'y1' => $line, 'x2' => $run[1], 'y2' => $line, 't' => $run[2]]
             : ['x1' => $line, 'y1' => $run[0], 'x2' => $line, 'y2' => $run[1], 't' => $run[2]];
-    }
-
-    /**
-     * Fracción del ambiente que tiene ambientes de `$others` encima.
-     *
-     * @param array<string, mixed>       $room
-     * @param list<array<string, mixed>> $others
-     */
-    private function covered(array $room, array $others): float
-    {
-        $area = 0;
-        foreach ($others as $o) {
-            $area += max(0, min($room['x1'], $o['x1']) - max($room['x0'], $o['x0'])) * max(0, min($room['y1'], $o['y1']) - max($room['y0'], $o['y0']));
-        }
-
-        return $area / (($room['x1'] - $room['x0']) * ($room['y1'] - $room['y0']));
     }
 
     /**

@@ -45,7 +45,6 @@ final class TemplateCatalogTest extends TestCase
             self::assertNotEmpty($p['roofs'] ?? [], "{$t['slug']}: tiene que tener techo");
             if (2 === $t['levels']) {
                 self::assertNotEmpty($p['levels'][0]['stairs'], "{$t['slug']}: con dos plantas lleva escalera");
-                self::assertNotEmpty(array_merge($p['levels'][1]['slabs'], $p['levels'][0]['timber']), "{$t['slug']}: con dos plantas lleva piso");
             }
             $issues = (new \App\Domain\ProjectAnalyzer())->analyze(\App\Domain\Model\ProjectFactory::fromArray($p))['analysis']['issues'];
             self::assertSame([], array_values(array_filter($issues, static fn (array $i): bool => 'info' !== $i['severity'])), $t['slug']);

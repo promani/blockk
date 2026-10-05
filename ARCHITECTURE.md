@@ -14,7 +14,7 @@ con la respuesta. El asistente de IA es una capa aparte (`src/Assistant`) que us
 | Editor (navegador) | Herramientas, cámara isométrica/planta, render Canvas 2D por algoritmo del pintor, paneles, deshacer/rehacer, guardado en `localStorage` | `assets/editor/` |
 | Cómputo, Galería, Catálogo | Páginas Twig + módulos ES: exportación CSV/PDF (generados en el navegador), plantillas, fichas | `templates/`, `assets/{bom,gallery,catalog}/` |
 | API de cálculo | `POST /api/analyze` y afines; sin estado | `src/Controller/Api/ProjectApiController.php` |
-| Motor (dominio) | Normalización, topología, ambientes, hiladas, cortes, madera, losas, escaleras, techos, cómputo, validación, sol | `src/Domain/` |
+| Motor (dominio) | Normalización, topología, ambientes, hiladas, cortes, losas, escaleras, techos, cómputo, validación, sol | `src/Domain/` |
 | Generador y editor de casas | Programa de ambientes → casa válida; operaciones puntuales sobre un proyecto; calcado de un plano desde sus ambientes | `src/Domain/Design/` |
 | Mis casas | Casas guardadas por navegador, privadas (el enlace para compartir es aparte: `src/Share/`) | `src/Houses/`, `src/Controller/Api/HousesController.php`, `assets/lib/houses.js`, `assets/editor/houses.js`, `assets/gallery/houses.js` |
 | Asistente de IA | Conversación, herramientas, dos modelos (liviano/pesado), persistencia, límites | `src/Assistant/`, `src/Controller/Api/AssistantController.php`, `assets/lib/ai-chat.js` |
@@ -44,7 +44,7 @@ graph LR
     T --> R[RegionAnalyzer<br/>ambientes]
     R --> C[CourseBuilder<br/>hiladas, trabas, U]
     C --> K[StockPacker + CutPlanner<br/>cortes]
-    K --> P[Timber / Slab / Stair / Roof planners]
+    K --> P[Slab / Stair / Roof planners]
     P --> B[BomCalculator<br/>cómputo y precios]
     B --> V[ProjectValidator<br/>observaciones]
 ```
@@ -74,7 +74,7 @@ sequenceDiagram
 ## Datos
 
 - **Proyecto** (`v1`, JSON): `{name, north, lat, lot:{w,d}, settings, upper, roofs:[…], levels:[{walls, openings,
-  ubeams, timber, slabs, stairs, columns, labels}, …]}` (las aberturas llevan `kind` puerta/ventana/portón y `mode`). Lo valida `ProjectFactory` (frontera de confianza: tipos, rangos, ids,
+  ubeams, slabs, stairs, columns, labels}, …]}` (las aberturas llevan `kind` puerta/ventana/portón y `mode`). Lo valida `ProjectFactory` (frontera de confianza: tipos, rangos, ids,
   espesores, presets y presupuestos de tamaño).
 - **Unidades**: coordenadas del proyecto en unidades de **12,5 cm** (enteros); geometría interna en **ticks de 0,5 mm**
   (12,5 cm = 250 ticks), así no hay errores de coma flotante en trabas y remanentes.
@@ -94,7 +94,7 @@ sequenceDiagram
 
 | Método y ruta | Descripción |
 | --- | --- |
-| `POST /api/analyze` | Proyecto → `{project (normalizado), analysis: {levels, timber, floors, roof, bom, issues, telemetry}}`; `422` si es inválido. |
+| `POST /api/analyze` | Proyecto → `{project (normalizado), analysis: {levels, floors, roof, bom, issues, telemetry}}`; `422` si es inválido. |
 | `POST /api/suggest` | Sugerencias bioclimáticas de aberturas. |
 | `GET /api/solar?lat=&season=` | Trayectoria solar (06:00–19:00 cada 15 min). |
 | `GET /api/templates`, `GET /api/templates/{slug}` | Plantillas de la Galería. |

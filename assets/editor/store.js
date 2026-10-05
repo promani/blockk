@@ -2,7 +2,7 @@ import { analyze, solarPath } from '../lib/api.js';
 import { saveProject, blankProject } from '../lib/storage.js';
 
 const HISTORY_LIMIT = 60;
-const EMPTY_LEVEL = Object.freeze({ walls: [], openings: [], ubeams: [], timber: [], slabs: [], stairs: [] });
+const EMPTY_LEVEL = Object.freeze({ walls: [], openings: [], ubeams: [], slabs: [], stairs: [] });
 
 /**
  * Estado del editor: proyecto normalizado + análisis del servidor + estado de interfaz.

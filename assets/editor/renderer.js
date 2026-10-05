@@ -48,9 +48,6 @@ function PAL() {
         [KIND.DOOR]: t.door,
         [KIND.GLASS]: t.glass,
         [KIND.FRAME]: '#f7f8fa',
-        [KIND.JOIST]: t.wood,
-        [KIND.DECK]: mix(t.wood, '#ffffff', 0.45),
-        [KIND.BEAM]: mix(t.wood, '#000000', 0.12),
         [KIND.STEP]: mix(t.slab, '#ffffff', 0.5),
         [KIND.SLAB]: t.slab,
         [KIND.COLUMN]: mix(t.slab, '#000000', 0.18),
@@ -619,8 +616,6 @@ export class Renderer {
             const cut = b.level === activeLevel && ui.cut < 12;
             if (cut && b.course !== undefined && b.kind <= KIND.UCUT && b.course >= ui.cut) continue;
             if (cut && b.opening && b.course >= ui.cut) continue;
-            // con los muros recortados, la viga que apoya arriba quedaría flotando
-            if (cut && b.kind === KIND.BEAM) continue;
             (b.kind === KIND.TREE ? trees : drawn).push(it);
             this.drawBox(ctx, cam, it, strokeOn);
         }
@@ -685,7 +680,7 @@ export class Renderer {
         };
         // Los hastiales son bloques de la escena (buildGables): acá sólo los faldones, que se pueden ocultar.
         if (f.ui?.showRoof === false) return;
-        // Faldones opacos del más lejano al más cercano, sombreados según hacia dónde miran; cada uno con sus propios cabios.
+        // Faldones opacos del más lejano al más cercano, sombreados según hacia dónde miran (los cabios sólo se computan).
         const depth = (pl) => pl.pts.reduce((a, p) => { const [X, Y] = Camera.rotate(p[0], p[1], cam.rot); return a + X + Y; }, 0);
         const planes = [...g.planes].sort((a, b) => depth(a) - depth(b));
         for (const pl of planes) {
@@ -710,30 +705,6 @@ export class Renderer {
                 }
             }
             poly(pl.pts, shade(drawTheme().roof, 0.78 + 0.3 * Math.max(0, light)), shade(drawTheme().roof, 0.62));
-            const xs = pl.pts.map((q) => q[0]);
-            const ys = pl.pts.map((q) => q[1]);
-            const inside = (r) => {
-                const mx = (r.from[0] + r.to[0]) / 2;
-                const my = (r.from[1] + r.to[1]) / 2;
-                return mx >= Math.min(...xs) - 0.5 && mx <= Math.max(...xs) + 0.5 && my >= Math.min(...ys) - 0.5 && my <= Math.max(...ys) + 0.5;
-            };
-            ctx.save();
-            ctx.beginPath();
-            pl.pts.map(P).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-            ctx.closePath();
-            ctx.clip();
-            ctx.strokeStyle = 'rgba(90,40,20,.35)';
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            for (const r of g.rafters ?? []) {
-                if (!inside(r)) continue;
-                const a = P(r.from);
-                const b = P(r.to);
-                ctx.moveTo(a[0], a[1]);
-                ctx.lineTo(b[0], b[1]);
-            }
-            ctx.stroke();
-            ctx.restore();
             if (holes.length) ctx.restore();
         }
         if (g.ridge) {
@@ -1020,10 +991,8 @@ export class Renderer {
             if (!ghost && ui.level !== 2) this.drawPlanRooms(f, li);
             this.drawPlanOpenings(f, project.levels[li], ghost);
             this.drawPlanColumns(f, project.levels[li], ghost);
-            if (li === 1 && !ghost) this.drawPlanTimber(f, false);
             if (li === 0) this.drawPlanStairs(f, ghost);
             if (li === 1) this.drawPlanSlabs(f);
-            if (li === 1 && !ghost) this.drawPlanBeams(f);
         }
         this.drawZoneLabels(f);
         this.drawTreeShadows(f);
@@ -1098,7 +1067,7 @@ export class Renderer {
                 const [sx, sy] = cam.project(sl.rect.x + sl.rect.w / 2, sl.rect.y + sl.rect.h / 2, 0);
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(`Losa ${sl.thickness} cm · ${fmt(sl.areaM2, 1)} m²`, sx, sy);
+                ctx.fillText(`Piso ${sl.thickness} cm · ${fmt(sl.areaM2, 1)} m²`, sx, sy);
             }
         }
         ctx.restore();
@@ -1395,69 +1364,6 @@ export class Renderer {
             }
             ctx.globalAlpha = 1;
         }
-    }
-
-    drawPlanTimber(f, ghost) {
-        const { ctx } = this;
-        const { cam, analysis } = f;
-        const timber = analysis.timber;
-        if (!timber) return;
-        for (const fld of timber.fields ?? []) {
-            // Sombreado suave del paño y tirantes como líneas finas continuas (sin guiones que ensucian la planta).
-            ctx.fillStyle = ghost ? 'rgba(217,160,91,.10)' : 'rgba(217,160,91,.16)';
-            this.fillRectPlan(cam, fld.rect.x, fld.rect.y, fld.rect.x + fld.rect.w, fld.rect.y + fld.rect.h);
-            ctx.strokeStyle = ghost ? 'rgba(176,120,50,.45)' : 'rgba(176,120,50,.8)';
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            const pxGap = fld.spacingCm * cam.zoom;
-            const skip = pxGap < 3 ? Math.ceil(3 / pxGap) : 1; // no dibujar tirantes a menos de 3 px entre sí
-            fld.joists.forEach((j, i) => {
-                if (i % skip) return;
-                const a = cam.project(j.x1, j.y1, 0);
-                const b = cam.project(j.x2, j.y2, 0);
-                ctx.moveTo(a[0], a[1]);
-                ctx.lineTo(b[0], b[1]);
-            });
-            ctx.stroke();
-            if (!ghost && cam.zoom > 0.05) {
-                ctx.font = '600 11px system-ui, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                const [sx, sy] = cam.project(fld.rect.x + fld.rect.w / 2, fld.rect.y + fld.rect.h / 2, 0);
-                const label = `${fld.count} tirantes ${fld.section.replace('x', '″×')}″ c/${fmt(fld.spacingCm, 0)} cm`;
-                const w = ctx.measureText(label).width + 10;
-                ctx.fillStyle = 'rgba(255,255,255,.85)';
-                roundRect(ctx, sx - w / 2, sy - 9, w, 18, 5);
-                ctx.fill();
-                ctx.fillStyle = '#7a4a12';
-                ctx.fillText(label, sx, sy);
-            }
-        }
-    }
-
-    /** Vigas de madera en planta: encima de losas y tirantes, con el ancho de su sección y un borde oscuro. */
-    drawPlanBeams(f) {
-        const { ctx } = this;
-        const { cam, scene } = f;
-        const beams = (scene?.timber.boxes ?? []).filter((b) => b.kind === KIND.BEAM);
-        if (!beams.length) return;
-        ctx.save();
-        ctx.lineCap = 'butt';
-        for (const [color, extra] of [['#5c3a12', 2], ['#c48a45', 0]]) {
-            ctx.strokeStyle = color;
-            for (const b of beams) {
-                const alongX = b.axis === 'x';
-                const mid = alongX ? (b.y0 + b.y1) / 2 : (b.x0 + b.x1) / 2;
-                const p = alongX ? cam.project(b.x0, mid, 0) : cam.project(mid, b.y0, 0);
-                const q = alongX ? cam.project(b.x1, mid, 0) : cam.project(mid, b.y1, 0);
-                ctx.lineWidth = Math.max(3, (alongX ? b.y1 - b.y0 : b.x1 - b.x0) * cam.zoom) + extra;
-                ctx.beginPath();
-                ctx.moveTo(p[0], p[1]);
-                ctx.lineTo(q[0], q[1]);
-                ctx.stroke();
-            }
-        }
-        ctx.restore();
     }
 
     // ---------- rosa de los vientos y sol ----------

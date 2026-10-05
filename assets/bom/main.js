@@ -19,9 +19,6 @@ const PRICE_LABELS = {
     anchor_u: ['Anclaje metálico (planchuela)', 'u'],
     timber_3x8_m: ['Madera 3″×8″', 'm'],
     timber_3x10_m: ['Madera 3″×10″', 'm'],
-    osb_sheet: ['Placa OSB 18 mm', 'placa'],
-    elastic_band_m: ['Banda elástica de apoyo', 'm'],
-    plate_u: ['Placa de reparto de carga', 'u'],
     timber_3x12_m: ['Madera 3″×12″', 'm'],
     roof_cover_m2: ['Cubierta de techo (chapa/teja)', 'm²'],
     batten_m: ['Correas / listones de techo', 'm'],
@@ -88,7 +85,6 @@ function render() {
             h('p', { class: 'small muted' }, state.scope === 'total' ? 'El total de obra optimiza los cortes con todas las piezas juntas: los remanentes se reaprovechan también entre niveles.' : 'Cada nivel se optimiza por separado; la suma puede superar al total de obra.')]),
         telemetry.byType?.some((t) => t.type) ? section('Superficies por tipo de ambiente', [areasTable(telemetry)]) : null,
         section('Optimización de cortes', [comparison(bom), patterns(tot)]),
-        section('Estructura de madera del entrepiso', [timber(analysis.timber)]),
         section('Cotización y comparativa de materiales', [prices(project), quote(bom), sendToDistributor()]),
         section('Criterios y alcance', [h('ul', { class: 'small muted' },
             h('li', {}, 'Cantidades obtenidas del despiece real pieza por pieza (hiladas, traba ≥ 12,5 cm, dinteles y corona en bloque U).'),
@@ -170,25 +166,6 @@ function patterns(tot) {
         h('caption', {}, `${b.label} — ${int(b.cutBlocks)} bloques a cortar · descarte ${pct(b.scrapPct, 2)}`),
         th('<Patrón de corte (cm)', 'Bloques', 'Sobrante (cm)'),
         h('tbody', {}, b.patterns.map((p) => h('tr', {}, h('td', { class: 'pattern l' }, p.pattern.map((v) => cm(v)).join(' + ')), h('td', {}, int(p.blocks)), h('td', {}, cm(p.restCm)))))))));
-}
-
-function timber(t) {
-    if (!t.fields.length && !t.beams.length) return h('p', { class: 'muted' }, 'No hay estructura de entrepiso. Dibujala con las herramientas Entrepiso (E) y Viga de madera (T) sobre la Planta Baja.');
-    const b = t.bom;
-    const rows = [];
-    for (const [section, byLen] of Object.entries(b.pieces)) {
-        for (const [len, qty] of Object.entries(byLen)) rows.push(h('tr', {}, h('td', {}, `Tirante/viga ${config.timberSections[section].label}`), h('td', {}, `${fmt(len / 100, 2)} m`), h('td', {}, int(qty))));
-    }
-    return h('div', {},
-        h('div', { class: 'tablewrap' }, h('table', { class: 'table' }, h('caption', {}, 'Tirantes y vigas por largo comercial'), th('<Pieza', 'Largo', 'Cantidad'), h('tbody', {}, rows))),
-        h('div', { class: 'tablewrap', style: 'margin-top:12px' }, h('table', { class: 'table' }, h('caption', {}, 'Campos de tirantes'), th('<Entrepiso', '<Sección', 'Luz libre', 'Tirantes', 'Entre ejes', 'Largo'),
-            h('tbody', {}, t.fields.map((f, i) => h('tr', {}, h('td', {}, `Campo ${i + 1} (${f.dir === 'x' ? 'tirantes en X' : 'tirantes en Y'})`), tl(f.section.replace('x', '″×') + '″'), h('td', {}, `${fmt(f.clearSpanCm / 100, 2)} m`), h('td', {}, int(f.count)), h('td', {}, `${fmt(f.spacingCm, 1)} cm`), h('td', {}, `${fmt(f.lengthCm / 100, 2)} m`)))))),
-        h('div', { class: 'tablewrap', style: 'margin-top:12px' }, h('table', { class: 'table' }, h('caption', {}, 'Complementos'), th('<Concepto', 'Cantidad', '<Unidad'),
-            h('tbody', {},
-                h('tr', {}, h('td', {}, 'Placas de entrepiso OSB 18 mm (1,22 × 2,44 m, +10 %)'), h('td', {}, int(b.osbSheets)), tl(`placas · ${fmt(b.osbM2, 2)} m²`)),
-                h('tr', {}, h('td', {}, 'Cenefas de cierre de tirantes'), h('td', {}, fmt(Object.values(b.cenefaMl).reduce((a, v) => a + v, 0), 1)), tl('m')),
-                h('tr', {}, h('td', {}, 'Banda elástica de apoyo'), h('td', {}, int(b.elasticBandMl)), tl('m')),
-                h('tr', {}, h('td', {}, 'Placas de reparto de carga (vigas puntuales)'), h('td', {}, int(b.plates)), tl('u'))))));
 }
 
 function prices(project) {

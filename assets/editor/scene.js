@@ -3,13 +3,13 @@
  * listas para dibujar, y resuelve el orden de pintado (algoritmo del pintor) para cada giro de vista.
  *
  * Códigos de pieza: 0 bloque · 1 bloque cortado · 2 bloque U · 3 U cortado.
- * Códigos adicionales de la escena: 4 hoja de puerta · 5 vidrio · 6 tirante · 7 placa de entrepiso · 8 viga.
+ * Códigos adicionales de la escena: 4 hoja de puerta · 5 vidrio · 9 peldaño · 10 losa · 11 techo, y siguientes.
  */
 
 import { TREE_SIZES } from './site.js';
 import { furnitureRect, footprint } from './furniture.js';
 
-export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, JOIST: 6, DECK: 7, BEAM: 8, STEP: 9, SLAB: 10, ROOF: 11, FRAME: 12, COLUMN: 13, TREE: 14, FURNITURE: 15 };
+export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, STEP: 9, SLAB: 10, ROOF: 11, FRAME: 12, COLUMN: 13, TREE: 14, FURNITURE: 15 };
 
 const G = 12.5;
 const COURSE_H = 25;
@@ -27,17 +27,16 @@ export function buildScene(project, analysis, config) {
         addFurniture(boxes, project.levels[li], base, li, config);
         levels.push({ index: li, boxes, base, used: (analysis.levels[li]?.used ?? false) });
     }
-    const timber = buildTimber(analysis.timber, config);
     const floors = buildFloors(analysis.floors, config);
     const roofs = [...buildRoofs(analysis.roof), ...buildGables(analysis.roof)];
     const trees = (project.trees ?? []).map(treeBox);
-    const all = [...levels.flatMap((l) => l.boxes), ...timber.boxes, ...floors, ...roofs, ...trees];
+    const all = [...levels.flatMap((l) => l.boxes), ...floors, ...roofs, ...trees];
     // Muebles para la planta: la huella ya resuelta con el catálogo (el renderer no conoce la configuración).
     const furniture = project.levels.map((level) => (level.furniture ?? []).flatMap((f) => {
         const rect = furnitureRect(config, f);
         return rect ? [{ id: f.id, rect, rot: f.rot, short: config.furniture[f.kind].short, back: Boolean(config.furniture[f.kind].back) }] : [];
     }));
-    return { levels, timber, all, furniture, sorted: new Map() };
+    return { levels, all, furniture, sorted: new Map() };
 }
 
 function addMasonry(boxes, courses, base, li) {
@@ -255,67 +254,6 @@ function addOpenings(boxes, level, base, li) {
             }
         }
     }
-}
-
-function buildTimber(timber, config) {
-    const boxes = [];
-    if (!timber) return { boxes, fields: [] };
-    const top = config.levelHeight;
-    const dims = config.timberSections;
-    for (const f of timber.fields ?? []) {
-        const s = dims[f.section] ?? { b: 7.5, d: 20 };
-        // Los tirantes se dibujan hasta la cara interior de los muros (el apoyo queda dentro de la mampostería).
-        const ix0 = f.rect.x + 10;
-        const ix1 = f.rect.x + f.rect.w - 10;
-        const iy0 = f.rect.y + 10;
-        const iy1 = f.rect.y + f.rect.h - 10;
-        for (const j of f.joists) {
-            const horizontal = Math.abs(j.y1 - j.y2) < 0.01;
-            // los tirantes de borde quedan dentro del muro: no se ven
-            if (horizontal ? j.y1 - s.b / 2 < iy0 || j.y1 + s.b / 2 > iy1 : j.x1 - s.b / 2 < ix0 || j.x1 + s.b / 2 > ix1) continue;
-            boxes.push({
-                x0: horizontal ? Math.max(ix0, Math.min(j.x1, j.x2)) : j.x1 - s.b / 2,
-                x1: horizontal ? Math.min(ix1, Math.max(j.x1, j.x2)) : j.x1 + s.b / 2,
-                y0: horizontal ? j.y1 - s.b / 2 : Math.max(iy0, Math.min(j.y1, j.y2)),
-                y1: horizontal ? j.y1 + s.b / 2 : Math.min(iy1, Math.max(j.y1, j.y2)),
-                z0: top - 2 - s.d,
-                z1: top - 2,
-                zs: top - 2 - s.d,
-                kind: KIND.JOIST,
-                axis: horizontal ? 'x' : 'y',
-                adjA: false,
-                adjB: false,
-                top: true,
-                level: 1,
-                field: f.id,
-            });
-        }
-        // Placa de entrepiso: una sola pieza con el hueco de la escalera, retirada del eje hasta la cara interior de los muros,
-        // con su cara superior al nivel del piso de arriba (así la escalera llega justo, sin escalón).
-        boxes.push(plate(f.rect, f.deckHoles, top - 2, top, KIND.DECK, { field: f.id, deck: true }));
-    }
-    for (const b of timber.beams ?? []) {
-        const s = dims[b.section] ?? { b: 7.5, d: 25 };
-        const horizontal = Math.abs(b.y1 - b.y2) < 0.01;
-        boxes.push({
-            x0: horizontal ? Math.min(b.x1, b.x2) : b.x1 - s.b / 2,
-            x1: horizontal ? Math.max(b.x1, b.x2) : b.x1 + s.b / 2,
-            y0: horizontal ? b.y1 - s.b / 2 : Math.min(b.y1, b.y2),
-            y1: horizontal ? b.y1 + s.b / 2 : Math.max(b.y1, b.y2),
-            z0: top,
-            z1: top + s.d,
-            zs: top,
-            kind: KIND.BEAM,
-            axis: horizontal ? 'x' : 'y',
-            adjA: false,
-            adjB: false,
-            top: true,
-            level: 0, // apoya sobre los muros del Nivel 1: se ve desde esa pestaña
-            beam: b.id,
-        });
-    }
-
-    return { boxes, fields: timber.fields ?? [] };
 }
 
 /** Borde exterior de la cubierta en planta (el alero puede faltar en los lados que chocan contra un muro de arriba). */

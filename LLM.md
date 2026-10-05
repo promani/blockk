@@ -58,7 +58,8 @@ herramienta deja la casa **sin errores**, el turno termina sin otra vuelta al mo
 
 Planta en «tira», determinista (mismo programa → misma casa): bloque social a la izquierda (estar-comedor, con la
 escalera en U si hay 2 plantas), pasillo central y dos bandas: dormitorios al norte (sol de invierno) y servicios al
-sur. En 2 plantas el Nivel 2 repite el esqueleto (muros exteriores sobre exteriores) y el piso es una losa por ambiente.
+sur. En 2 plantas el Nivel 2 repite el esqueleto (muros exteriores sobre exteriores); el piso no se
+emite: cada habitación de arriba lleva sola su losa.
 Elige la sección de cabio que cubre la luz; a un agua, dos faldones sobre un muro portante. Ventanas y puertas siempre
 con jambas de 25 cm y sin pasar el 60 % de vanos de un muro portante. Probado con cientos de programas al azar: o sale
 sin errores ni advertencias, o se rechaza con un motivo («quedaría de 23 m de largo…»).
@@ -81,8 +82,8 @@ WebP de verdad. El clip acepta también **PDF**: el navegador convierte la prime
   lugar y la imagen nunca vuelve al navegador. Si el modelo no puede leerla, se saca de la historia y se avisa.
 - `PlanTracer` (`src/Domain/Design/`) es determinista: lleva las medidas a la retícula, unifica las rectas a menos de
   37,5 cm, arma los muros con los lados de los rectángulos (exterior 20 cm; compartido 10 cm, o 15 cm abajo de una
-  planta alta; sin muro en los lados `abierto`), ubica cada abertura en el muro más cercano con sus jambas, pone una
-  losa bajo la planta alta y un techo si la planta es un rectángulo. Si la planta alta viene dibujada al lado de la
+  planta alta; sin muro en los lados `abierto`), ubica cada abertura en el muro más cercano con sus jambas, pone un
+  techo si la planta es un rectángulo (el piso de la planta alta es automático). Si la planta alta viene dibujada al lado de la
   baja, la superpone por la esquina donde más muros coinciden. Lo que no pudo hacer vuelve como **avisos**, que se
   muestran a la persona.
 - También calca: el **tipo** de cada ambiente; el alto de las ventanas (fija el antepecho) y el **sentido de las

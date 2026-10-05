@@ -16,15 +16,15 @@ distribuidor para cada presupuesto.
 
 ## 3. Solución propuesta
 
-La persona **dibuja su casa** en un editor 3D simple (habitaciones, muros, puertas, ventanas, entrepiso, escalera y
+La persona **dibuja su casa** en un editor 3D simple (habitaciones, muros, puertas, ventanas, escalera, balcón y
 techo, siempre sobre la grilla del bloque) **o se la pide a una IA** respondiendo unas preguntas («2 plantas, 3
 dormitorios, cocina integrada»), y ve en el momento:
 
 - el despiece hilada por hilada, con trabas, dinteles y corona en bloque U;
 - los cortes optimizados (los sobrantes se reutilizan);
 - el cómputo completo: bloques y pallets por espesor, morteros, hormigón y hierro de los bloques U, madera del
-  entrepiso y del techo, losas y escaleras, con un presupuesto de referencia exportable (CSV/PDF);
-- una revisión constructiva que avisa lo que no se puede construir (vanos pegados a esquinas, apoyos, luces de madera).
+  techo, losas y escaleras, con un presupuesto de referencia exportable (CSV/PDF);
+- una revisión constructiva que avisa lo que no se puede construir (vanos pegados a esquinas, apoyos, luces de losa).
 
 La IA no dibuja a mano alzada: conversa, pregunta lo que falta y usa un generador determinista que siempre entrega una
 casa válida, que después se ajusta en el editor.

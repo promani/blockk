@@ -13,10 +13,10 @@ use App\Domain\Hcca;
  */
 final class TemplateBuilder
 {
-    /** @var array<int, array{walls: list<array<string, mixed>>, openings: list<array<string, mixed>>, timber: list<array<string, mixed>>}> */
+    /** @var array<int, array{walls: list<array<string, mixed>>, openings: list<array<string, mixed>>, slabs: list<array<string, mixed>>}> */
     private array $levels = [
-        0 => ['walls' => [], 'openings' => [], 'timber' => [], 'slabs' => [], 'stairs' => [], 'columns' => [], 'labels' => []],
-        1 => ['walls' => [], 'openings' => [], 'timber' => [], 'slabs' => [], 'stairs' => [], 'columns' => [], 'labels' => []],
+        0 => ['walls' => [], 'openings' => [], 'slabs' => [], 'stairs' => [], 'columns' => [], 'labels' => []],
+        1 => ['walls' => [], 'openings' => [], 'slabs' => [], 'stairs' => [], 'columns' => [], 'labels' => []],
     ];
     /** @var array<string, mixed> */
     private array $roof = ['type' => 'none'];
@@ -82,13 +82,6 @@ final class TemplateBuilder
             }
         }
         throw new \LogicException("No hay muro para el vano $preset en $axis=$line desde $start");
-    }
-
-    public function joists(int $x, int $y, int $w, int $h, string $dir, string $section = '3x8'): self
-    {
-        $this->levels[0]['timber'][] = ['id' => 't'.(++$this->seq), 'kind' => 'joists', 'x' => $x + $this->dx, 'y' => $y + $this->dy, 'w' => $w, 'h' => $h, 'dir' => $dir, 'section' => $section, 'spacing' => 40];
-
-        return $this;
     }
 
     /** Techo: $type 'gable' | 'shed'; $dir eje de la cumbrera ('x'|'y') o hacia dónde cae el agua ('N'|'S'|'E'|'W'). */

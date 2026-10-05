@@ -10,8 +10,9 @@ final readonly class SlabPlan
      * @param list<array<string, mixed>> $slabs  cada losa con sus partes (rectángulos en cm sin los huecos de escalera)
      * @param list<array<string, mixed>> $issues
      * @param array<string, mixed>       $bom
+     * @param list<string>               $redundant pisos dibujados dentro de una habitación del Nivel 2 (ya tiene su losa)
      */
-    public function __construct(public array $slabs = [], public array $issues = [], public array $bom = [])
+    public function __construct(public array $slabs = [], public array $issues = [], public array $bom = [], public array $redundant = [])
     {
     }
 }

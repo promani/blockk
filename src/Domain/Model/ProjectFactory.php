@@ -156,11 +156,7 @@ final class ProjectFactory
                 $this->intInRange($u['course'] ?? Hcca::OPENING_TOP_COURSE, 0, Hcca::REGULAR_COURSES - 1, "$path.ubeams[$i].course"),
             );
         }
-        $timber = [];
-        foreach ($this->list($d['timber'] ?? [], Hcca::MAX_TIMBER_PER_LEVEL, "$path.timber") as $i => $t) {
-            $timber[] = $this->timber($t, "$path.timber[$i]", $ids);
-        }
-
+        // `timber` (entrepiso y vigas de madera) ya no existe: los proyectos viejos que lo traen se cargan sin él.
         $slabs = [];
         foreach ($this->list($d['slabs'] ?? [], Hcca::MAX_SLABS_PER_LEVEL, "$path.slabs") as $i => $sl) {
             $slabs[] = new Slab(
@@ -230,7 +226,7 @@ final class ProjectFactory
             );
         }
 
-        return new Level($walls, $openings, $ubeams, $timber, $slabs, $stairs, $columns, $labels, $furniture);
+        return new Level($walls, $openings, $ubeams, $slabs, $stairs, $columns, $labels, $furniture);
     }
 
     /** @param array<string, mixed> $o @param array<string, true> $ids */
@@ -255,43 +251,6 @@ final class ProjectFactory
             flip: (bool) ($o['flip'] ?? false),
             hingeEnd: (bool) ($o['hingeEnd'] ?? false),
             mode: in_array($o['mode'] ?? null, $kind->modes(), true) ? $o['mode'] : $kind->modes()[0],
-        );
-    }
-
-    /** @param array<string, mixed> $t @param array<string, true> $ids */
-    private function timber(array $t, string $path, array &$ids): TimberElement
-    {
-        $id = $this->id($t['id'] ?? null, "$path.id", $ids);
-        $section = (string) ($t['section'] ?? '3x8');
-        if (!isset(Hcca::timberSections()[$section])) {
-            $this->errors[] = "$path.section desconocida";
-            $section = '3x8';
-        }
-        if (($t['kind'] ?? 'joists') === 'beam') {
-            $beam = new TimberBeam(
-                $id,
-                $this->coord($t['x1'] ?? null, "$path.x1"),
-                $this->coord($t['y1'] ?? null, "$path.y1"),
-                $this->coord($t['x2'] ?? null, "$path.x2"),
-                $this->coord($t['y2'] ?? null, "$path.y2"),
-                $section,
-            );
-            if ($beam->x1 !== $beam->x2 && $beam->y1 !== $beam->y2 || 0 === $beam->lengthU()) {
-                $this->errors[] = "$path: la viga debe ser ortogonal y de longitud > 0";
-            }
-
-            return $beam;
-        }
-
-        return new JoistField(
-            $id,
-            $this->coord($t['x'] ?? null, "$path.x"),
-            $this->coord($t['y'] ?? null, "$path.y"),
-            $this->intInRange($t['w'] ?? 8, 2, Hcca::MAX_BBOX_UNITS, "$path.w"),
-            $this->intInRange($t['h'] ?? 8, 2, Hcca::MAX_BBOX_UNITS, "$path.h"),
-            Axis::tryFrom((string) ($t['dir'] ?? 'x')) ?? Axis::X,
-            $section,
-            $this->intInRange($t['spacing'] ?? 40, Hcca::JOIST_MIN_SPACING_CM, Hcca::JOIST_MAX_SPACING_CM, "$path.spacing"),
         );
     }
 

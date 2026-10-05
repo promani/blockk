@@ -104,15 +104,15 @@ qué lado abre); si es corrediza, hacia dónde corre la hoja. Anchos habituales:
 - **Mampostería interior con bloques más finos**: todo lo que **no carga** (divisiones de ambientes, baños, placards,
   despensas, tabiques de la planta alta) se levanta con el bloque más delgado del sistema, **10 cm**, y no con el de 15 o
   20. Se gana superficie útil (cada tabique de 10 cm en lugar de 20 devuelve 10 cm de ancho al ambiente), se baja el peso
-  sobre la losa o el entrepiso y se abarata. Los muros de 15 y 20 cm quedan para el perímetro y para los portantes que
+  sobre la losa y se abarata. Los muros de 15 y 20 cm quedan para el perímetro y para los portantes que
   apoyan losas, el nivel de arriba o el techo. Un tabique fino no lleva dinteles largos ni cargas colgadas
   (cocina, termotanque, mueble alto) sin refuerzo.
 - **Pilares de hormigón armado** (20, 25, 30 o 40 cm de lado, de piso a techo): se usan donde el techo o la losa necesitan
   apoyo y no hay muro: alfresco, galería, porche, portón ancho. Se alinean con los de abajo o con un muro portante (el
   motor avisa con `support.column`) y se reparten a 2,5–3 m entre sí si sostienen un techo.
 - **Alineación vertical**: los portantes de la planta alta apoyan sobre portantes de la baja; los tabiques apoyan en la
-  losa o entrepiso. La **luz de losa** (lado corto) hasta 4 m sin vigas: una losa grande se parte en paños que
-  apoyan sobre muros.
+  losa del Nivel 2, que va sola bajo cada habitación de arriba (no se dibuja). Los pisos que se dibujan (balcón,
+  terraza) tienen **luz** (lado corto) hasta 4 m sin vigas y vuelan hasta 1,20 m sin pilares.
 - **Planta baja más grande que la alta**: el techo bajo apoya contra la pared de arriba (un agua), sin alero ni hastial
   de ese lado.
 - **Techos**: dos aguas con cumbrera a lo largo del lado más largo; pendiente 30 %, alero 0,5 m. En L o con alas, techos
@@ -214,8 +214,9 @@ Salieron de dibujar el plano anterior. Ordenadas por cuánto destraban, con el c
 
 - **Hecho**: **zonas** del terreno (pileta, patio o deck, jardín, camino) y **árboles** con tronco, copa y sombra; el porche
   o alfresco con techo ya se puede dibujar sobre pilares (ver 9.2).
-- **Falta**: **balcón, terraza y voladizo** (una losa sin muros debajo, con baranda, que no cuenta como ambiente) y
-  **escalones de acceso** o desniveles de piso.
+- **Hecho**: **balcón y terraza** como piso extra del Nivel 2 fuera de las habitaciones, también en voladizo (advertencia
+  si vuela más de 1,20 m sin pilares); no cuenta como ambiente.
+- **Falta**: la **baranda** del balcón y **escalones de acceso** o desniveles de piso.
 - **Techo de cuatro aguas** (`hip`): hoy sólo hay dos aguas y un agua (`gable`, `shed`); el plano no muestra la cubierta, pero en una casa así es habitual.
 
 ### 9.6 Validaciones de uso (medio, M)
@@ -233,8 +234,6 @@ Con ambientes nombrados (9.1) y puertas con bisagra (9.3) se puede revisar lo de
 - **Cotas** (medidas por ambiente y totales) en la planta, y **leyenda** de tipos de ambiente por color.
 - **Artefactos fijos** como símbolos (inodoro, lavabo, bacha, ducha, heladera, cocina): no hace falta mobiliario completo, pero
   sirven para medir si abre una puerta o cabe una ducha.
-- **Losas partidas** por la regla de 4 m de luz se ven con una línea punteada en la planta: conviene mostrarlas como un
-  solo paño con un apoyo intermedio.
 - **Lote**: retiros, vereda, acceso vehicular y rampa de garaje.
 
 ### 9.8 Otras observaciones del proceso

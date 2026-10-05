@@ -37,7 +37,7 @@ function figures(a) {
             { key: 'adhesive', label: 'Mortero adhesivo', value: t.total.adhesiveBags, d: 0, unit: 'bolsas' },
             { key: 'concrete', label: 'Hormigón (dinteles, pilares, losas)', value: sum((l) => l.unit === 'm³' && l.group !== 'Mampostería HCCA'), d: 2, unit: 'm³' },
             { key: 'rebar', label: 'Hierro', value: sum((l) => l.unit === 'kg'), d: 0, unit: 'kg' },
-            { key: 'timber', label: 'Madera (tirantes, cabios, vigas)', value: sum((l) => l.unit === 'm' && /madera|pino|tirante|cabio|cenefa|cumbrera/i.test(`${l.group} ${l.desc}`)), d: 1, unit: 'm' },
+            { key: 'timber', label: 'Madera del techo (cabios, cumbrera)', value: sum((l) => l.unit === 'm' && /madera|pino|tirante|cabio|cenefa|cumbrera/i.test(`${l.group} ${l.desc}`)), d: 1, unit: 'm' },
             { key: 'roof', label: 'Cubierta', value: t.roof?.coverM2 ?? 0, d: 1, unit: 'm²' },
             { key: 'slab', label: 'Losa de piso', value: t.slabM2 ?? 0, d: 1, unit: 'm²' },
         ] },

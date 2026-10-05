@@ -41,7 +41,6 @@ final class ClientConfig
             'furniture' => Hcca::furniture(),
             'roomTypes' => array_map(static fn (array $t): string => $t['label'], Hcca::roomTypes()),
             'timberSections' => Hcca::timberSections(),
-            'joistBearing' => Hcca::JOIST_BEARING_CM,
             'levelNames' => Project::LEVEL_NAMES,
             'levelShort' => Project::LEVEL_SHORT,
             'kinds' => array_map(static fn (OpeningKind $k): string => $k->value, OpeningKind::cases()),

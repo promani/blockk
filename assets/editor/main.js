@@ -37,7 +37,7 @@ const ROOF_LEVEL = 2;
  */
 const TOOLSETS = {
     0: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'stair', 'roof'], more: ['measure', 'furniture', 'block', 'ubeam', 'zone', 'tree'] },
-    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['measure', 'furniture', 'block', 'ubeam', 'beam', 'zone', 'tree'] },
+    1: { main: ['select', 'room', 'wall', 'opening', 'column', 'label', 'piso', 'roof'], more: ['measure', 'furniture', 'block', 'ubeam', 'zone', 'tree'] },
     2: { main: ['select', 'roof', 'opening', 'measure'], more: [] },
 };
 /** Muebles y árboles se pueden apagar («Configuraciones generales»): su herramienta sale de la barra y su atajo no hace nada. */
@@ -418,7 +418,7 @@ function setTool(id) {
 function toolDisabled(tool) {
     if (tool.id === 'roof' || tool.id === 'measure') return null;
     if (tool.free) return tool.disabled?.() ?? null; // las del plano de fondo valen en cualquier pestaña
-    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select' && tool.id !== 'opening') return 'En la pestaña Techo solo se dibujan y editan techos y las ventanas de los hastiales: volvé a un nivel para dibujar muros, losas o escaleras.';
+    if (store.ui.level === ROOF_LEVEL && tool.id !== 'select' && tool.id !== 'opening') return 'En la pestaña Techo solo se dibujan y editan techos y las ventanas de los hastiales: volvé a un nivel para dibujar muros, pisos o escaleras.';
     return tool.disabled?.() ?? null;
 }
 
@@ -505,7 +505,7 @@ async function addLevel() {
     refreshOptions();
     panels.renderAll();
     fitView();
-    toast('Nivel 2 agregado. El techo ahora se apoya sobre él. Podés dibujar una losa (L) como piso.');
+    toast('Nivel 2 agregado. El techo ahora se apoya sobre él; cada habitación de arriba lleva su piso sola.');
 }
 
 function setLevel(i) {
@@ -605,7 +605,6 @@ function focusIssue(issue) {
     else if (level.walls.some((w) => w.id === issue.ref)) selection = { type: 'wall', id: issue.ref };
     else if (level.columns?.some((c) => c.id === issue.ref)) selection = { type: 'column', id: issue.ref };
     else if (level.openings.some((o) => o.id === issue.ref)) selection = { type: 'opening', id: issue.ref };
-    else if (store.project.levels[0].timber.some((t) => t.id === issue.ref)) selection = { type: 'timber', id: issue.ref };
     store.setUi({ selection });
     app.render();
 }
@@ -664,12 +663,6 @@ function selectionBox(sel) {
     if (sel.type === 'stair') {
         const st = store.analysis?.floors?.stairs?.find((x) => x.id === sel.id);
         return st ? { x0: st.bbox.x, y0: st.bbox.y, x1: st.bbox.x + st.bbox.w, y1: st.bbox.y + st.bbox.h, z0: 0, z1: config.levelHeight } : null;
-    }
-    if (sel.type === 'timber') {
-        const f = store.analysis?.timber?.fields?.find((x) => x.id === sel.id);
-        if (f) return { x0: f.rect.x, y0: f.rect.y, x1: f.rect.x + f.rect.w, y1: f.rect.y + f.rect.h, z0: config.levelHeight, z1: config.levelHeight + 22 };
-        const b = store.analysis?.timber?.beams?.find((x) => x.id === sel.id);
-        if (b) return { x0: Math.min(b.x1, b.x2) - 4, y0: Math.min(b.y1, b.y2) - 4, x1: Math.max(b.x1, b.x2) + 4, y1: Math.max(b.y1, b.y2) + 4, z0: config.levelHeight, z1: config.levelHeight + 25 };
     }
     return null;
 }
@@ -788,7 +781,7 @@ function draw() {
     renderer.draw({
         cam,
         project: store.project,
-        analysis: store.analysis ?? { levels: [], timber: null },
+        analysis: store.analysis ?? { levels: [] },
         scene: store.analysis ? scene : null,
         ui: store.ui,
         sun: store.ui.solar.show ? store.sun() : null,

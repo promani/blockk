@@ -85,7 +85,7 @@ final class RoofFloorTest extends TestCase
     #[Test]
     public function roofSitsOnTheHighestLevelAndItsBomIsPriced(): void
     {
-        $b = Fixtures::room(30, 30)->joists(0, 0, 30, 30, 'x')->room(1, 0, 0, 30, 30)->roof('gable', 'x');
+        $b = Fixtures::room(30, 30)->room(1, 0, 0, 30, 30)->roof('gable', 'x');
         $result = (new ProjectAnalyzer())->analyze(Fixtures::build($b));
         $a = $result['analysis'];
 
@@ -116,9 +116,9 @@ final class RoofFloorTest extends TestCase
     }
 
     #[Test]
-    public function straightStairHasSixteenTreadsAndCutsAHoleInTheTimberFloor(): void
+    public function straightStairHasSixteenTreadsAndCutsAHoleInTheUpperFloor(): void
     {
-        $b = Fixtures::room(60, 50)->upper()->stair(0, 2, 2, 'N', 'straight', 8)->joists(0, 0, 60, 50, 'x', '3x12')->room(1, 0, 0, 60, 50);
+        $b = Fixtures::room(60, 50)->upper()->stair(0, 2, 2, 'N', 'straight', 8)->room(1, 0, 0, 60, 50);
         $a = $this->analyze($b);
         $stair = $a['floors']['stairs'][0];
 
@@ -128,8 +128,8 @@ final class RoofFloorTest extends TestCase
         self::assertEqualsWithDelta(100.0, $stair['bbox']['w'], 0.01);
         self::assertEqualsWithDelta(448.0, $stair['bbox']['h'], 0.01);
         self::assertNotContains('stair.outside', $this->codes($a));
-        // La placa de entrepiso descuenta el hueco: 7,5 × 6,25 m − 1,00 × 4,48 m
-        self::assertEqualsWithDelta(7.5 * 6.25 - 1.0 * 4.48, $a['timber']['fields'][0]['deckAreaM2'], 0.01);
+        // La losa automática de la habitación de arriba descuenta el hueco: 7,5 × 6,25 m − 1,00 × 4,48 m
+        self::assertEqualsWithDelta(7.5 * 6.25 - 1.0 * 4.48, $a['floors']['autoSlabM2'], 0.01);
     }
 
     #[Test]
@@ -158,43 +158,46 @@ final class RoofFloorTest extends TestCase
     }
 
     #[Test]
-    public function slabMustSitInsideTheRoomsBelowAndSubtractsTheStairHole(): void
+    public function everyUpperRoomHasItsSlabWithoutDrawingIt(): void
     {
-        $inside = $this->analyze(Fixtures::room(40, 30)->upper()->slab(1, 0, 0, 40, 30));
-        self::assertNotContains('slab.outside', $this->codes($inside));
-        self::assertEqualsWithDelta(18.75, $inside['floors']['slabs'][0]['areaM2'], 0.01);
-
-        $smaller = $this->analyze(Fixtures::room(40, 30)->upper()->slab(1, 5, 5, 20, 20));
-        self::assertNotContains('slab.outside', $this->codes($smaller));
-
-        $bigger = $this->analyze(Fixtures::room(40, 30)->upper()->slab(1, 0, 0, 50, 30));
-        self::assertContains('slab.outside', $this->codes($bigger));
-
-        $withStair = $this->analyze(Fixtures::room(60, 50)->upper()->stair(0, 2, 2, 'N', 'straight', 8)->slab(1, 0, 0, 60, 50));
-        self::assertEqualsWithDelta(60 * 12.5 / 100 * 50 * 12.5 / 100 - 1.0 * 4.48, $withStair['floors']['slabs'][0]['areaM2'], 0.01);
-    }
-
-    #[Test]
-    public function slabBomHasConcreteMeshAndFormworkAndCountsAsUpperFloor(): void
-    {
-        $b = Fixtures::room(30, 30)->upper()->slab(1, 0, 0, 30, 30)->room(1, 0, 0, 30, 30);
-        $a = $this->analyze($b);
+        $a = $this->analyze(Fixtures::room(30, 30)->upper()->room(1, 0, 0, 30, 30));
         $codes = array_column($a['bom']['lines'], 'code');
 
         foreach (['LHO', 'LML', 'LEN'] as $c) {
             self::assertContains($c, $codes);
         }
-        self::assertNotContains('timber.missing', $this->codes($a), 'La losa es el piso del Nivel 2');
+        self::assertSame([], $a['floors']['slabs'], 'la losa automática no es un piso dibujado');
+        self::assertEqualsWithDelta(3.75 * 3.75, $a['floors']['autoSlabM2'], 0.01);
         $lho = array_values(array_filter($a['bom']['lines'], static fn (array $l): bool => 'LHO' === $l['code']))[0];
         self::assertEqualsWithDelta(3.75 * 3.75 * 0.12, $lho['qty'], 0.01);
     }
 
     #[Test]
-    public function slabAndTimberFloorCannotOverlap(): void
+    public function aFloorDrawnInsideAnUpperRoomIsDroppedAndAPartialOneIsAnError(): void
     {
-        $b = Fixtures::room(30, 30)->upper()->joists(0, 0, 30, 30, 'x')->slab(1, 0, 0, 30, 30);
+        $base = Fixtures::room(40, 30)->upper()->room(1, 0, 0, 40, 30);
+        $result = (new ProjectAnalyzer())->analyze(Fixtures::build((clone $base)->slab(1, 0, 0, 40, 30)));
+        self::assertSame([], $result['project']['levels'][1]['slabs'], 'de un proyecto anterior: se quita');
+        self::assertEqualsWithDelta(5.0 * 3.75, $result['analysis']['telemetry']['slabM2'], 0.01, 'no se cuenta dos veces');
 
-        self::assertContains('floor.overlap', $this->codes($this->analyze($b)));
+        self::assertContains('floor.overlap', $this->codes($this->analyze((clone $base)->slab(1, 30, 0, 20, 30))));
+    }
+
+    #[Test]
+    public function aBalconyIsAnExtraFloorAndALongCantileverIsAWarning(): void
+    {
+        // balcón de 1,00 m al sur de una planta alta de 5,00 × 3,75 m
+        $short = $this->analyze(Fixtures::room(40, 30)->upper()->room(1, 0, 0, 40, 30)->slab(1, 0, 30, 40, 8));
+        self::assertNotContains('slab.cantilever', $this->codes($short));
+        self::assertNotContains('floor.overlap', $this->codes($short));
+        self::assertEqualsWithDelta(5.0 * 1.0, $short['floors']['slabs'][0]['areaM2'], 0.01);
+        self::assertEqualsWithDelta(5.0 * 3.75 + 5.0, $short['telemetry']['slabM2'], 0.01);
+
+        $long = $this->analyze(Fixtures::room(40, 30)->upper()->room(1, 0, 0, 40, 30)->slab(1, 0, 30, 40, 16));
+        self::assertContains('slab.cantilever', $this->codes($long));
+
+        $withColumns = $this->analyze(Fixtures::room(40, 30)->upper()->room(1, 0, 0, 40, 30)->slab(1, 0, 30, 40, 16)->column(0, 2, 44)->column(0, 38, 44));
+        self::assertNotContains('slab.cantilever', $this->codes($withColumns));
     }
 
     #[Test]
@@ -276,13 +279,13 @@ final class RoofFloorTest extends TestCase
     public function aRoofSitsOnTheWallsAroundItWhateverLevelWasSaved(): void
     {
         // Guardado sobre el Nivel 1 pero rodeado por muros del Nivel 2: apoya arriba.
-        $b = Fixtures::room(40, 30)->joists(0, 0, 40, 30, 'x')->room(1, 0, 0, 40, 30)->roofPart(0, 0, 0, 40, 30);
+        $b = Fixtures::room(40, 30)->room(1, 0, 0, 40, 30)->roofPart(0, 0, 0, 40, 30);
         $part = $this->analyze($b)['roof']['parts'][0];
         self::assertSame(1, $part['level']);
         self::assertEqualsWithDelta(600.0, $part['geometry']['zTop'], 0.01);
 
         // Guardado sobre el Nivel 2 sobre la parte baja (el caso de un techo dibujado con el Nivel 2 activo): apoya abajo.
-        $low = Fixtures::room(64, 40)->wall(0, 32, 0, 32, 40, 20)->joists(0, 0, 32, 40, 'x')->room(1, 0, 0, 32, 40)->roofPart(1, 32, 0, 32, 40, 'shed', 'E');
+        $low = Fixtures::room(64, 40)->wall(0, 32, 0, 32, 40, 20)->room(1, 0, 0, 32, 40)->roofPart(1, 32, 0, 32, 40, 'shed', 'E');
         $part = $this->analyze($low)['roof']['parts'][0];
         self::assertSame(0, $part['level']);
         self::assertEqualsWithDelta(300.0, $part['geometry']['zTop'], 0.01);
@@ -361,7 +364,7 @@ final class RoofFloorTest extends TestCase
     {
         $p = (new TemplateBuilder('Evolutiva'))
             ->room(0, 0, 0, 64, 40)->wall(0, 32, 0, 32, 40, 20)
-            ->room(1, 0, 0, 32, 40)->joists(0, 0, 32, 40, 'x')->upper()
+            ->room(1, 0, 0, 32, 40)->upper()
             ->roofPart(1, 0, 0, 32, 40, 'gable', 'y')
             ->roofPart(0, 32, 0, 32, 40, 'shed', 'E', 30, '3x10')
             ->build();

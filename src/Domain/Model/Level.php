@@ -11,7 +11,6 @@ final readonly class Level
      * @param list<Wall>          $walls
      * @param list<Opening>       $openings
      * @param list<UBeam>         $ubeams
-     * @param list<TimberElement> $timber   estructura de entrepiso que apoya sobre este nivel
      * @param list<Slab>          $slabs    losas que hacen de piso de este nivel
      * @param list<Stair>         $stairs   escaleras que suben desde este nivel
      * @param list<Column>        $columns  pilares de hormigón
@@ -22,7 +21,6 @@ final readonly class Level
         public array $walls = [],
         public array $openings = [],
         public array $ubeams = [],
-        public array $timber = [],
         public array $slabs = [],
         public array $stairs = [],
         public array $columns = [],
@@ -60,13 +58,13 @@ final readonly class Level
      */
     public function withStructure(array $walls, array $openings, array $ubeams): self
     {
-        return new self($walls, $openings, $ubeams, $this->timber, $this->slabs, $this->stairs, $this->columns, $this->labels, $this->furniture);
+        return new self($walls, $openings, $ubeams, $this->slabs, $this->stairs, $this->columns, $this->labels, $this->furniture);
     }
 
-    /** @param list<TimberElement> $timber */
-    public function withTimber(array $timber): self
+    /** @param list<Slab> $slabs */
+    public function withSlabs(array $slabs): self
     {
-        return new self($this->walls, $this->openings, $this->ubeams, $timber, $this->slabs, $this->stairs, $this->columns, $this->labels, $this->furniture);
+        return new self($this->walls, $this->openings, $this->ubeams, $slabs, $this->stairs, $this->columns, $this->labels, $this->furniture);
     }
 
     /** @return array<string, mixed> */
@@ -76,7 +74,6 @@ final readonly class Level
             'walls' => array_map(static fn (Wall $w): array => $w->toArray(), $this->walls),
             'openings' => array_map(static fn (Opening $o): array => $o->toArray(), $this->openings),
             'ubeams' => array_map(static fn (UBeam $u): array => $u->toArray(), $this->ubeams),
-            'timber' => array_map(static fn (TimberElement $t): array => $t->toArray(), $this->timber),
             'slabs' => array_map(static fn (Slab $t): array => $t->toArray(), $this->slabs),
             'stairs' => array_map(static fn (Stair $t): array => $t->toArray(), $this->stairs),
             'columns' => array_map(static fn (Column $c): array => $c->toArray(), $this->columns),

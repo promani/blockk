@@ -256,7 +256,7 @@ function pickRoof(app, sx, sy) {
 
 const area = (p) => (p.geometry.rect.x1 - p.geometry.rect.x0) * (p.geometry.rect.y1 - p.geometry.rect.y0);
 
-/** Elemento bajo el puntero: vano, muro, madera, losa, escalera, habitación (piso) o techo. */
+/** Elemento bajo el puntero: vano, muro, piso extra, escalera, habitación (piso) o techo. */
 export function pickAt(app, sx, sy) {
     const { store, cam } = app;
     if (store.ui.level === 2) return pickRoof(app, sx, sy);
@@ -281,18 +281,6 @@ export function pickAt(app, sx, sy) {
         const opening = level.openings.find((o) => o.wall === wall.id && along >= o.pos && along <= o.pos + o.w);
         if (opening) return { type: 'opening', id: opening.id, wall: wall.id };
         return { type: 'wall', id: wall.id };
-    }
-    if (store.ui.level === 1 && store.analysis?.timber) {
-        const z = store.config.levelHeight;
-        const [wx, wy] = cam.unproject(sx, sy, z + 20);
-        for (const f of store.analysis.timber.fields ?? []) {
-            const r = f.rect;
-            if (wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h) return { type: 'timber', id: f.id };
-        }
-        for (const b of store.analysis.timber.beams ?? []) {
-            const near = Math.abs(b.x1 - b.x2) < 0.01 ? Math.abs(wx - b.x1) < 12 && wy >= Math.min(b.y1, b.y2) - 6 && wy <= Math.max(b.y1, b.y2) + 6 : Math.abs(wy - b.y1) < 12 && wx >= Math.min(b.x1, b.x2) - 6 && wx <= Math.max(b.x1, b.x2) + 6;
-            if (near) return { type: 'timber', id: b.id };
-        }
     }
     if (store.analysis?.floors) {
         if (store.ui.level === 1) {

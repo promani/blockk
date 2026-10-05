@@ -8,12 +8,10 @@ use App\Domain\Geometry\NodeType;
 use App\Domain\Hcca;
 use App\Domain\LevelAnalysis;
 use App\Domain\Model\Axis;
-use App\Domain\Model\JoistField;
 use App\Domain\Model\Opening;
 use App\Domain\Model\Project;
 use App\Domain\Model\Slab;
 use App\Domain\Model\Wall;
-use App\Domain\Timber\TimberPlan;
 
 /**
  * Reglas constructivas de predimensionado del editor. NO reemplazan el cálculo estructural
@@ -32,7 +30,7 @@ final class ProjectValidator
      *
      * @return list<Issue>
      */
-    public function validate(Project $project, array $levels, TimberPlan $timber): array
+    public function validate(Project $project, array $levels): array
     {
         $issues = [];
         $ground = $levels[0];
@@ -64,13 +62,6 @@ final class ProjectValidator
 
         if (null !== $upper && !$upper->level->isEmpty()) {
             $this->upperSupport($issues, $ground, $upper, $project);
-            if ([] === $ground->level->timber && [] === $upper->level->slabs) {
-                $issues[] = new Issue(Issue::WARN, 'timber.missing', 'La Planta Alta no tiene piso: dibuje el entrepiso de madera sobre la Planta Baja (Entrepiso) o una losa en el Nivel 2 (Losa).', 0);
-            }
-        }
-
-        foreach ($timber->issues as $t) {
-            $issues[] = Issue::fromArray($t);
         }
 
         usort($issues, static fn (Issue $a, Issue $b): int => [self::rank($a->severity), $a->level] <=> [self::rank($b->severity), $b->level]);
@@ -180,7 +171,6 @@ final class ProjectValidator
     /** @param list<Issue> $issues */
     private function upperSupport(array &$issues, LevelAnalysis $ground, LevelAnalysis $upper, Project $project): void
     {
-        $floors = array_filter($ground->level->timber, static fn ($t): bool => $t instanceof JoistField);
         foreach ($upper->level->walls as $wall) {
             $covered = $this->coverage($ground, $wall);
             $full = $covered >= $wall->lengthU();
@@ -193,15 +183,15 @@ final class ProjectValidator
                 continue;
             }
             if (!$full) {
+                // el piso de arriba es la losa de las habitaciones (a un lado u otro del tabique) o un piso extra
                 $mx = intdiv($wall->x1 + $wall->x2, 2);
                 $my = intdiv($wall->y1 + $wall->y2, 2);
-                $onFloor = array_any($floors, static fn (JoistField $f): bool => $mx >= $f->x && $mx <= $f->x + $f->w && $my >= $f->y && $my <= $f->y + $f->h);
-                $onSlab = array_any($upper->level->slabs, static fn (Slab $s): bool => $mx >= $s->x && $mx <= $s->x + $s->w && $my >= $s->y && $my <= $s->y + $s->h);
-                $issues[] = match (true) {
-                    $onFloor => new Issue(Issue::INFO, 'support.partition', 'Tabique de PA sobre entrepiso de madera: prever tirante doble bajo el tabique.', 1, $wall->id, $wall->x1, $wall->y1),
-                    $onSlab => new Issue(Issue::INFO, 'support.partition', 'Tabique de PA sobre losa: incluir su peso en el cálculo de la losa.', 1, $wall->id, $wall->x1, $wall->y1),
-                    default => new Issue(Issue::ERROR, 'support.partition', 'Tabique de PA fuera del entrepiso y sin muro debajo: no tiene apoyo.', 1, $wall->id, $wall->x1, $wall->y1),
-                };
+                $alongX = $wall->y1 === $wall->y2;
+                $onRoom = 0 !== $upper->regions->roomAtCell($mx, $my) || 0 !== $upper->regions->roomAtCell($alongX ? $mx : $mx - 1, $alongX ? $my - 1 : $my);
+                $onSlab = $onRoom || array_any($upper->level->slabs, static fn (Slab $s): bool => $mx >= $s->x && $mx <= $s->x + $s->w && $my >= $s->y && $my <= $s->y + $s->h);
+                $issues[] = $onSlab
+                    ? new Issue(Issue::INFO, 'support.partition', 'Tabique de PA sobre losa: incluir su peso en el cálculo de la losa.', 1, $wall->id, $wall->x1, $wall->y1)
+                    : new Issue(Issue::ERROR, 'support.partition', 'Tabique de PA fuera del piso y sin muro debajo: no tiene apoyo.', 1, $wall->id, $wall->x1, $wall->y1);
             }
         }
     }

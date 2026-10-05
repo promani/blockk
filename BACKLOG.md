@@ -33,7 +33,7 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 | 8 | Estimación térmica de la envolvente | 4 | M | La razón de elegir HCCA es la aislación; hoy no se ve. |
 | 9 | Generador con más plantas (L, patio, en U) | 3 | M | El generador solo arma una «tira»; las casas en L se dibujan a mano. |
 | 10 | Cálculo de mano de obra (sección propia, más abajo) | 5 | M | El presupuesto de hoy es sólo de materiales: falta la otra mitad del costo. |
-| 11 | Entrepisos y losas (sección propia, más abajo) | 4 | M–L | Hoy hay una losa maciza y un entrepiso de madera; la losa más usada (viguetas) no existe. |
+| 11 | Entrepisos y losas (sección propia, más abajo) | 4 | M–L | Hoy el piso del Nivel 2 es una losa maciza automática (más balcones y terrazas); la losa más usada (viguetas) no existe. |
 
 ## Detalle
 
@@ -48,7 +48,7 @@ Escala: **valor** 1–5 (cuánto mejora el uso) · **costo** S (días) / M (1–
 - **Qué no hace**: sin materiales, marcas ni colores, y sin render. Es el mínimo detalle que mejora la decisión.
 
 ### 2. Pedido por etapas y lista de compra (valor 4 · S–M)
-- **Qué**: dividir el cómputo en etapas (cimientos y primera hilada, mampostería de Nivel 1, entrepiso, Nivel 2,
+- **Qué**: dividir el cómputo en etapas (cimientos y primera hilada, mampostería de Nivel 1, losa, Nivel 2,
   techo) y una lista de compra por pallets completos con los sueltos aparte.
 - **Por qué**: se compra a medida que se avanza; la etapa define cuándo hace falta cada cosa y reduce el material
   inmovilizado, que es el dolor que dio origen a la herramienta.
@@ -104,7 +104,7 @@ la pregunta que sigue a «¿cuánto compro?»: «¿cuánto me sale levantarla y 
   - **Mampostería**: m² de muro por espesor, con un rendimiento por cuadrilla (oficial + ayudante) distinto para la
     primera hilada (nivelación con mortero), las hiladas corrientes y los cortes.
   - **Dinteles, encadenados y pilares**: metros de bloque U y de pilar: armado, llenado y curado.
-  - **Losas y entrepisos**: m² de encofrado, armado y colado, o m² de tirantes y tablero (ver la sección siguiente).
+  - **Losas**: m² de encofrado, armado y colado (ver la sección siguiente).
   - **Escaleras y techo**: por unidad y por m² de cubierta (estructura, clavaderas, cubierta).
 - **Cómo se carga**: una tabla de **rendimientos de referencia** (m² o metros por jornal) y un **valor del jornal**
   por categoría, editables igual que los precios de materiales. Cada distribuidor o constructor pone los suyos.
@@ -123,8 +123,10 @@ la pregunta que sigue a «¿cuánto compro?»: «¿cuánto me sale levantarla y 
 
 ## Entrepisos y losas
 
-Hoy el piso del Nivel 2 es una **losa maciza de hormigón** (espesor, hormigón, malla y encofrado por m²) o un
-**entrepiso de madera** (tirantes, cenefa y OSB), rectangulares, con avisos de luz y de apoyo. Lo que falta:
+Hoy el piso del Nivel 2 es una **losa maciza de hormigón de 12 cm** que va sola bajo cada habitación de arriba (menos el
+hueco de la escalera; hormigón, malla y encofrado por m²). Con la herramienta Piso se suman **balcones y terrazas**
+(rectángulos de 10 a 20 cm, también en voladizo, con aviso si vuelan más de 1,20 m sin pilares) y se revisa su luz. El
+**entrepiso de madera** se quitó para simplificar. Lo que falta:
 
 - **Losa de viguetas pretensadas y bloques** (cerámicos o de EPS): es la losa más usada en vivienda y hoy no existe.
   Pide el sentido de las viguetas, su separación, la serie según la luz, la capa de compresión con su malla y los
@@ -134,20 +136,18 @@ Hoy el piso del Nivel 2 es una **losa maciza de hormigón** (espesor, hormigón,
 - **Hierro real de la losa maciza**: hoy se computa una malla por m². Falta armadura por dirección según la luz y el
   espesor, refuerzos en apoyos y bordes de huecos, y puntales y encofrado por día de uso.
 - **Sentido de armado y apoyos**: marcar hacia dónde descarga cada paño y revisar que haya muro portante o viga en esos
-  bordes (hoy sólo se revisa que la losa quede dentro de la planta de abajo y su luz menor).
-- **Formas y huecos**: losas en L o recortadas, **hueco de doble altura** sin escalera, **balcones y voladizos** (una
-  losa sin muros debajo, con baranda) y su contrapeso.
+  bordes (hoy sólo se revisa la luz menor y el voladizo de los pisos dibujados).
+- **Formas y huecos**: balcones en L o recortados, **hueco de doble altura** sin escalera, y la **baranda** y el
+  contrapeso de los balcones en voladizo.
 - **Cubierta plana**: una losa como techo (azotea) con pendiente mínima, aislación, membrana y parapetos; hoy el techo
   es sólo de madera a una o dos aguas.
-- **Capas del piso**: contrapiso y carpeta sobre la losa, aislación acústica y cielorraso bajo el entrepiso de madera.
-- **Entrepiso de madera**: vigas principales cuando la luz no la cubre un tirante, arriostres, y elección de la
-  sección por carga de uso (dormitorio, depósito) además de la luz.
+- **Capas del piso**: contrapiso y carpeta sobre la losa, aislación acústica y cielorraso bajo la losa.
 - **Cargas a los muros**: lo que cada losa descarga sobre los muros y pilares de abajo, para avisar cuando un tabique
   o un dintel recibe más de lo razonable. Se apoya en las vigas libres (7).
 - **Mano de obra**: encofrado, armado, colado y desencofrado por m² (ver la sección anterior).
 - **Riesgo**: es el rubro más cercano al cálculo estructural. Se predimensiona con tablas de referencia y se avisa;
   no reemplaza el cálculo de un profesional.
-- **Orden sugerido**: viguetas (lo más pedido), sentido de armado y apoyos, hueco de doble altura y balcón, cubierta
+- **Orden sugerido**: viguetas (lo más pedido), sentido de armado y apoyos, hueco de doble altura y baranda del balcón, cubierta
   plana, y después el resto.
 
 ## Deuda técnica y de producto menor
@@ -174,6 +174,6 @@ Mejoras chicas que no justifican un ítem propio:
 - **¿Cuentas opcionales?** El enlace para compartir y «Mis casas» (por navegador) cubren casi todo el uso sin login; tener cuentas solo se justifica
   si aparecen proyectos que se editan durante semanas o necesitan permisos.
 - **¿El cómputo debe incluir cimientos y terminaciones?** Sería la ampliación de alcance más grande; hoy el foco son
-  mampostería, estructura de madera, losas y cubierta.
+  mampostería, losas, escaleras y techo.
 - **¿Hasta dónde llega la «revisión»?** Mientras avise sin calcular, es una ayuda; si empieza a dar valores
   estructurales o térmicos con aspecto de certificación, necesita una advertencia legal y revisión profesional.

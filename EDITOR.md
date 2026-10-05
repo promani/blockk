@@ -47,7 +47,7 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 | Herramienta | Tecla | Qué hace |
 | --- | --- | --- |
-| Elegir | `V` | Clic en un muro, vano, losa, escalera, techo o hastial para verlo y cambiarlo; doble clic en el piso elige la habitación. Manijas azules para estirar. **Toda pieza se mueve arrastrándola**: aberturas, pilares, muebles, escaleras, zonas, árboles y nombres, directamente; un muro (se corre perpendicular, igual que con su manija; sólo ese tramo: si queda un escalón con el tramo vecino de la misma recta, se cierra con un muro corto), una losa, un entrepiso, una viga de madera o un techo, una vez elegidos con un clic (sin elegir, arrastrar sobre ellos sigue siendo el rectángulo de selección). Arrastrando un rectángulo se eligen varios elementos (muros con sus vanos, escaleras, pisos y techos de todos los niveles) o `Ctrl+A` toda la casa; se borran juntos con `Supr` (o «Eliminar» en la barra), se arrastran o se corren con **Mayús + flechas** de a un bloque dentro del terreno (las flechas solas mueven la cámara). Lo elegido se **copia y pega** (`Ctrl+C` / `Ctrl+V`, o «Duplicar», `Ctrl+D`): ver más abajo. |
+| Elegir | `V` | Clic en un muro, vano, losa, escalera, techo o hastial para verlo y cambiarlo; doble clic en el piso elige la habitación. Manijas azules para estirar. **Toda pieza se mueve arrastrándola**: aberturas, pilares, muebles, escaleras, zonas, árboles y nombres, directamente; un muro (se corre perpendicular, igual que con su manija; sólo ese tramo: si queda un escalón con el tramo vecino de la misma recta, se cierra con un muro corto), una losa o un techo, una vez elegidos con un clic (sin elegir, arrastrar sobre ellos sigue siendo el rectángulo de selección). Arrastrando un rectángulo se eligen varios elementos (muros con sus vanos, escaleras, pisos y techos de todos los niveles) o `Ctrl+A` toda la casa; se borran juntos con `Supr` (o «Eliminar» en la barra), se arrastran o se corren con **Mayús + flechas** de a un bloque dentro del terreno (las flechas solas mueven la cámara). Lo elegido se **copia y pega** (`Ctrl+C` / `Ctrl+V`, o «Duplicar», `Ctrl+D`): ver más abajo. |
 | Habitación | `R` | Arrastrar en diagonal dibuja cuatro muros; empezando desde una pared existente, se comparte. |
 | Muro | `W` | Muro a muro; al volver al punto de partida la cadena se cierra sola (igual que Habitación). Con el primer punto puesto se puede **escribir el largo** en metros (`3,25`) y `Enter` coloca el tramo hacia donde apunta el cursor, redondeado a 12,5 cm; `Retroceso` corrige. |
 | Abertura | `P` (`N`: ventana) | Una sola herramienta con **tipo** (puerta, **arcada** —el vano sin hoja—, ventana, portón), **medida** (de catálogo o «A medida», con **ancho** y **antepecho** libres) y **apertura** (batiente, corrediza, fija, seccional). Apuntar a un muro: el verde indica dónde entra respetando jambas de 25 cm. Después se mueve **arrastrándola** (también a otro muro). |
@@ -58,9 +58,9 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 | Pilar | `C` | Clic en un punto de la retícula: pilar de hormigón armado (20, 25, 30 o 40 cm) de piso a techo. Se arrastra para moverlo; sostiene techos o losas donde no hay muro (alfresco, galería). |
 | Nombre | `A` | Elegir un **tipo** de ambiente o escribir un nombre libre (o las dos cosas) y hacer clic dentro de un ambiente: se ve en la planta. El tipo da las recomendaciones de la Revisión y agrupa los m² del Resumen; sin tipo elegido se deduce del nombre. En un espacio abierto se pueden poner varios; se arrastran. También desde el campo «Nombre» al elegir una habitación. |
 | Escalera | `S` | Clic dentro de una habitación del Nivel 1: recta, en L o en U. Sigue al cursor, se acomoda dentro de la habitación y, si no entra, se gira sola. `X` gira. Después se mueve arrastrándola con Elegir, como cualquier objeto. |
-| Piso | `L` | En el Nivel 2: clic dentro de una habitación de abajo; losa de hormigón o entrepiso de madera, con el hueco de la escalera recortado. |
-| Techo | `H` | Siempre en la barra; desde un nivel lleva a la pestaña Techo. Ahí: clic sobre una habitación (alta o baja: se elige la que se ve bajo el cursor) o un rectángulo sobre los muros. El techo apoya en los muros que lo rodean (el nivel sale solo), el alero va sólo donde cae el agua y, pegado a la planta alta, se propone a un agua bajando desde esa pared. Los cabios se eligen solos según la luz y los techos no generan observaciones: son para ver la casa completa y computar la madera. |
-| Bloque, Viga U, Viga de madera | `B`, `U`, `T` | Bajo «Más»: un bloque suelto, un encadenado U intermedio, una viga de madera. |
+| Piso | `L` | Cada habitación del Nivel 2 ya lleva su losa de hormigón de 12 cm (sin el hueco de la escalera); no se dibuja, se ve como el piso de color del ambiente. Esta herramienta, en el Nivel 2, es sólo para un **piso extra fuera de las habitaciones** (balcón o terraza): se arrastra un rectángulo (10 / 12 / 15 / 20 cm). Puede volar sobre la planta de abajo; si sobresale más de 1,20 m sin pilares debajo, advertencia. Encima de una habitación del Nivel 2, error (ya tiene piso). |
+| Techo | `H` | Siempre en la barra; desde un nivel lleva a la pestaña Techo. Ahí: clic sobre una habitación (alta o baja: se elige la que se ve bajo el cursor) o un rectángulo sobre los muros. El techo apoya en los muros que lo rodean (el nivel sale solo), el alero va sólo donde cae el agua y, pegado a la planta alta, se propone a un agua bajando desde esa pared. Los cabios no se dibujan: se eligen solos según la luz y entran al cómputo. Los techos no generan observaciones: son para ver la casa completa y computar la madera. |
+| Bloque, Viga U | `B`, `U` | Bajo «Más»: un bloque suelto, un encadenado U intermedio. |
 
 ## Asistencias al dibujar
 
@@ -75,12 +75,12 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 ## Copiar y pegar
 
 - `Ctrl+C` copia lo elegido: el grupo del rectángulo o un elemento suelto (un muro lleva sus vanos y vigas U; también
-  pilares, nombres, muebles, techos, losas, escaleras, madera, zonas y árboles). El portapapeles vive en la página (no pasa a
+  pilares, nombres, muebles, techos, losas, escaleras, zonas y árboles). El portapapeles vive en la página (no pasa a
   otra pestaña).
 - `Ctrl+V` deja el grupo como un fantasma azul que sigue al cursor, de a bloques enteros y dentro del terreno; un clic
   lo pega (un solo paso de deshacer, «Pegar») y queda elegido para seguir moviéndolo. `Esc` cancela.
 - Si lo copiado es de un solo nivel y se pega con el otro nivel activo, los muros, vanos, vigas U, pilares y nombres van
-  al **nivel activo**: sirve para repetir la planta arriba. Losas, escaleras, madera y techos no cambian de nivel.
+  al **nivel activo**: sirve para repetir la planta arriba. Losas, escaleras y techos no cambian de nivel.
 - Una **abertura** sola, con otro **muro elegido**, se pega en ese muro (mismo tipo y medidas, en el lugar libre más
   cercano al centro; jambas de 25 cm). Sin elegir otro muro, se repite en el tramo libre más cercano del mismo muro.
 - Al elegir una abertura aparece junto a ella un **menú de tipo** (Puerta, Arcada, Ventana, Portón) para cambiarlo con
@@ -104,18 +104,18 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 - **Mueble**: cuál es (se puede cambiar por otro del catálogo), «Girar 90°», lo que ocupa y su alto. El catálogo está en
   `Hcca::furniture()` (medidas de referencia en cm; las mesas incluyen las sillas). En la isométrica ninguna caja pasa
   de 1 m de alto, para no tapar el ambiente.
-- **Techo**: tipo, sentido de la cumbrera o de la caída, pendiente, alero, sección y separación de cabios. Si dos techos
+- **Techo**: tipo, sentido de la cumbrera o de la caída, pendiente y alero; muestra la cantidad y el largo de los cabios (se eligen solos). Si dos techos
   se superponen sólo queda el más alto (dos techos a dos aguas cruzados forman una cruz). Los **hastiales** de bloque se
   despiezan hilada por hilada y se pueden quitar o cambiar de espesor.
-- **Losa / entrepiso / escalera**: espesor, sección y separación de tirantes, forma y giro de la escalera.
+- **Piso extra / escalera**: espesor del balcón o terraza; forma y giro de la escalera.
 - Ningún panel tiene campos de posición X / Y: las piezas se ubican arrastrándolas con Elegir.
 
 ## Resumen y Revisión según el contexto
 
 - Con Puerta o Ventana: vidrio total, **luz natural por habitación** (referencia ≥ 1/8 del piso), vidrio por
   orientación y «Sugerir ventanas según el sol».
-- Con un muro: sus piezas, cortes y bloques U. Con una habitación: superficie y luz. Con Piso o Escalera: losas,
-  tirantes y escaleras. En la pestaña Techo: los techos.
+- Con un muro: sus piezas, cortes y bloques U. Con una habitación: superficie y luz. Con Piso o Escalera: losas y
+  escaleras. En la pestaña Techo: los techos.
 - La **Revisión** muestra primero las observaciones de lo que se está haciendo; el resto del proyecto queda a un clic.
   Cada observación lleva al elemento.
 

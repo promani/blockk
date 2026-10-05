@@ -12,7 +12,6 @@ use App\Domain\Hcca;
 use App\Domain\Masonry\CourseModel;
 use App\Domain\Masonry\PieceKind;
 use App\Domain\Model\Project;
-use App\Domain\Timber\TimberPlan;
 
 /**
  * Cómputo métrico y despiece constructivo (BOM).
@@ -30,7 +29,7 @@ final class BomCalculator
      *
      * @return array<string, mixed>
      */
-    public function calculate(Project $project, array $models, array $topologies, TimberPlan $timber, array $extras = []): array
+    public function calculate(Project $project, array $models, array $topologies, array $extras = []): array
     {
         $pct = $project->settings->reservePct;
         $levels = [];
@@ -43,7 +42,7 @@ final class BomCalculator
         $usedTopo = array_values(array_filter($topologies, static fn (Topology $t, int $i): bool => !$project->level($i)->isEmpty(), ARRAY_FILTER_USE_BOTH));
         $total = $this->scope($used, $usedTopo, $pct, [] !== $used || [] !== $gables, $gables);
 
-        $lines = $this->lines($total, $timber, $project, $extras);
+        $lines = $this->lines($total, $project, $extras);
         $cost = array_sum(array_map(static fn (array $l): float => $l['subtotal'], $lines));
 
         return [
@@ -51,7 +50,6 @@ final class BomCalculator
             'currency' => $project->settings->currency,
             'levels' => $levels,
             'total' => $total,
-            'timber' => $timber->bom,
             'lines' => $lines,
             'totalCost' => round($cost, 2),
             'comparison' => $this->comparison($total),
@@ -269,7 +267,7 @@ final class BomCalculator
      *
      * @return list<array<string, mixed>>
      */
-    private function lines(array $total, TimberPlan $timber, Project $project, array $extras = []): array
+    private function lines(array $total, Project $project, array $extras = []): array
     {
         $prices = $project->settings->effectivePrices();
         $lines = [];
@@ -307,27 +305,6 @@ final class BomCalculator
         }
         if ($total['anchors'] > 0) {
             $add('Accesorios', 'ANC', 'Anclaje metálico (planchuela) para encuentros en T / cruz', 'u', $total['anchors'], $prices['anchor_u'], 'uno cada 2 hiladas');
-        }
-
-        foreach ($timber->bom['pieces'] ?? [] as $section => $byLength) {
-            $priceM = $prices['timber_'.$section.'_m'];
-            foreach ($byLength as $lengthCm => $qty) {
-                $add('Estructura de madera', 'T'.$section.'-'.$lengthCm, 'Tirante '.Hcca::timberSections()[$section]['label'].' de '.$this->fmt($lengthCm / 100).' m', 'u', $qty, $priceM * $lengthCm / 100);
-            }
-        }
-        foreach ($timber->bom['cenefaMl'] ?? [] as $section => $ml) {
-            if ($ml > 0) {
-                $add('Estructura de madera', 'CEN-'.$section, 'Cenefa perimetral '.$section.' (cierre de tirantes)', 'm', (float) ceil($ml), $prices['timber_'.$section.'_m']);
-            }
-        }
-        if (($timber->bom['osbSheets'] ?? 0) > 0) {
-            $add('Estructura de madera', 'OSB', 'Placa de entrepiso OSB 18 mm 1,22 × 2,44 m', 'placa', $timber->bom['osbSheets'], $prices['osb_sheet'], $this->fmt($timber->bom['osbM2']).' m² + 10 %');
-        }
-        if (($timber->bom['elasticBandMl'] ?? 0) > 0) {
-            $add('Estructura de madera', 'BEL', 'Banda elástica de apoyo de tirantes', 'm', $timber->bom['elasticBandMl'], $prices['elastic_band_m']);
-        }
-        if (($timber->bom['plates'] ?? 0) > 0) {
-            $add('Estructura de madera', 'PLR', 'Placa de reparto de carga bajo apoyo de viga', 'u', $timber->bom['plates'], $prices['plate_u']);
         }
 
         $st = $extras['stairs'] ?? [];

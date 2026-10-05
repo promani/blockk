@@ -278,7 +278,6 @@ final class RoofPlanner
 
         $planes = [];
         $gables = [];
-        $rafterLines = [];
         $ridge = null;
 
         if (!$shed) {
@@ -305,13 +304,8 @@ final class RoofPlanner
                 }
             }
             $ridge = ['from' => $pt($a0 - $oa0, $mid, $zRidge), 'to' => $pt($a1 + $oa1, $mid, $zRidge)];
+            // cabios: no se dibujan, sólo se computan (uno por faldón cada `spacing`)
             $n = (int) ceil($lr / $roof->spacing) + 1;
-            for ($i = 0; $i < $n; ++$i) {
-                $al = $a0 - $oa0 + $i * $lr / max(1, $n - 1);
-                foreach ([-1 => $oc0, 1 => $oc1] as $side => $oe) {
-                    $rafterLines[] = ['from' => $pt($al, $mid + $side * ($half + $oe), $zTop - $oe * $s), 'to' => $pt($al, $mid, $zRidge)];
-                }
-            }
             $pieces = 2 * $n;
             $coverM2 = array_sum($lens) * $lr / 10000;
             $battenMl = array_sum(array_map(static fn (float $l): int => (int) ceil($l / self::BATTEN_SPACING_CM) + 1, $lens)) * $lr / 100;
@@ -348,10 +342,6 @@ final class RoofPlanner
                 $gables[] = $this->gable($roof, 'H', [$pt($e0, $high, $zBase), $pt($e1, $high, $zBase), $pt($e1, $high, $zTop + $rise), $pt($e0, $high, $zTop + $rise)], ($e1 - $e0) * ($rise + $lift), true);
             }
             $n = (int) ceil($lr / $roof->spacing) + 1;
-            for ($i = 0; $i < $n; ++$i) {
-                $al = $a0 - $oa0 + $i * $lr / max(1, $n - 1);
-                $rafterLines[] = ['from' => $pt($al, $lowOuter, $zLow), 'to' => $pt($al, $highOuter, $zHigh)];
-            }
             $pieces = $n;
             $coverM2 = $rafterLen * $lr / 10000;
             $battenMl = ((int) ceil($rafterLen / self::BATTEN_SPACING_CM) + 1) * $lr / 100;
@@ -395,7 +385,6 @@ final class RoofPlanner
                 'planes' => $planes,
                 'gables' => $gables,
                 'ridge' => $ridge,
-                'rafters' => $rafterLines,
                 'dir' => $roof->dir,
             ],
             'bom' => [

@@ -142,7 +142,7 @@ final class BomCalculatorTest extends TestCase
     #[Test]
     public function pricedLinesAddUpToTheTotalCost(): void
     {
-        $bom = $this->bom(Fixtures::room(40, 30, 20.0)->opening(0, 'P100', 'x', 30, 14)->joists(0, 0, 30, 30, 'x'));
+        $bom = $this->bom(Fixtures::room(40, 30, 20.0)->opening(0, 'P100', 'x', 30, 14));
 
         $sum = array_sum(array_column($bom['lines'], 'subtotal'));
         self::assertEqualsWithDelta($bom['totalCost'], $sum, 0.05);

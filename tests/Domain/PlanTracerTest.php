@@ -119,7 +119,7 @@ final class PlanTracerTest extends TestCase
     }
 
     #[Test]
-    public function twoFloorsShareTheOriginAndGetSlabs(): void
+    public function twoFloorsShareTheOrigin(): void
     {
         $r = $this->trace(['ambientes' => [
             ['nombre' => 'Estar', 'x' => 0, 'y' => 0, 'ancho' => 6, 'fondo' => 4],
@@ -132,7 +132,8 @@ final class PlanTracerTest extends TestCase
 
         self::assertTrue($r['project']['upper']);
         self::assertSame(2, $r['analysis']['telemetry']['total']['levelsUsed']);
-        self::assertCount(2, $r['project']['levels'][1]['slabs'], 'losa sobre estar y cocina; el garaje no tiene nada arriba');
+        self::assertSame([], $r['project']['levels'][1]['slabs'], 'el piso de las habitaciones de arriba es automático');
+        self::assertEqualsWithDelta(6 * 7, $r['analysis']['floors']['autoSlabM2'], 1.5, 'losa sobre estar y cocina; el garaje no tiene nada arriba');
         self::assertSame([[1, 'gable'], [0, 'shed']], array_map(static fn (array $x): array => [$x['level'], $x['type']], $r['project']['roofs']), 'el garaje, sin nada encima, lleva su techo bajo a un agua');
         self::assertSame('E', $r['project']['roofs'][1]['dir'], 'cae hacia afuera de la planta alta');
         self::assertStringContainsString('no trae la escalera', implode(' ', $r['notes']));

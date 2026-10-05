@@ -152,13 +152,11 @@ export function mountPanels(app) {
 
     function renderFloorSummary(a) {
         const t = a.telemetry;
-        const fields = a.timber?.fields ?? [];
         const stairs = a.floors?.stairs ?? [];
         add(el.tele,
             h('div', { class: 'kpi-grid' },
                 kpi('m² de losa', fmt(t.slabM2 ?? 0, 1)),
-                kpi('m² de madera', fmt(fields.reduce((acc, f) => acc + (f.deckAreaM2 ?? 0), 0), 1)),
-                kpi('tirantes', int(fields.reduce((acc, f) => acc + f.count, 0))),
+                kpi('balcones', int(a.floors?.slabs?.length ?? 0)),
                 kpi('escaleras', int(stairs.length))),
             stairs.length ? h('dl', { class: 'dl' }, stairs.flatMap((st) => [h('dt', {}, `Escalera ${st.shape === 'straight' ? 'recta' : `en ${st.shape}`}`), h('dd', {}, `${int(st.steps.length)} peldaños de ${fmt(st.riseCm, 1)} cm`)])) : null);
     }
@@ -241,7 +239,6 @@ export function mountPanels(app) {
                 lv.ubeams = lv.ubeams.filter((u) => u.wall !== sel_.id);
             } else if (sel_.type === 'opening') lv.openings = lv.openings.filter((o) => o.id !== sel_.id);
             else if (sel_.type === 'ubeam') lv.ubeams = lv.ubeams.filter((u) => u.id !== sel_.id);
-            else if (sel_.type === 'timber') d.levels[0].timber = d.levels[0].timber.filter((t) => t.id !== sel_.id);
             else if (sel_.type === 'roof') d.roofs = d.roofs.filter((r) => r.id !== sel_.id);
             else if (sel_.type === 'gwindow') {
                 const [rid, wid] = String(sel_.id).split(':');
@@ -702,10 +699,10 @@ export function mountPanels(app) {
         if (s?.type === 'slab') {
             const sl = store.project.levels[1].slabs.find((x) => x.id === s.id);
             if (!sl) return void (store.ui.selection = null);
-            const upd = (fn) => store.commit('Editar losa', (d) => fn(d.levels[1].slabs.find((x) => x.id === sl.id)));
+            const upd = (fn) => store.commit('Editar piso', (d) => fn(d.levels[1].slabs.find((x) => x.id === sl.id)));
             const plan = store.analysis?.floors?.slabs?.find((x) => x.id === sl.id);
             add(el.props,
-                h('div', { class: 'kv-title' }, 'Losa de piso (Nivel 2)'),
+                h('div', { class: 'kv-title' }, 'Piso extra (balcón, terraza)'),
                 field('Espesor', sel(sl.thickness, [10, 12, 15, 20].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.thickness = Number(v); }))),
                 field('Ancho (× 12,5 cm)', num(sl.w, 2, 900, (v) => upd((x) => { x.w = v; }))),
                 field('Profundidad (× 12,5 cm)', num(sl.h, 2, 900, (v) => upd((x) => { x.h = v; }))),
@@ -732,24 +729,6 @@ export function mountPanels(app) {
                     h('dt', {}, 'Peldaños'), h('dd', {}, int(plan.steps.length)),
                     h('dt', {}, 'Descansos'), h('dd', {}, int(plan.landings.length)),
                     h('dt', {}, 'Ocupa'), h('dd', {}, `${fmt(plan.bbox.w / 100)} × ${fmt(plan.bbox.h / 100)} m`)) : null,
-                h('div', { class: 'actions-row' }, delBtn),
-            );
-            return;
-        }
-
-        if (s?.type === 'timber') {
-            const t = store.project.levels[0].timber.find((x) => x.id === s.id);
-            if (!t) return void (store.ui.selection = null);
-            const upd = (fn) => store.commit('Editar madera', (d) => fn(d.levels[0].timber.find((x) => x.id === t.id)));
-            const plan = store.analysis?.timber?.fields?.find((f) => f.id === t.id);
-            const beam = store.analysis?.timber?.beams?.find((b) => b.id === t.id);
-            add(el.props, 
-                h('div', { class: 'kv-title' }, t.kind === 'beam' ? 'Viga de madera' : 'Entrepiso de madera'),
-                field('Sección', sel(t.section, Object.entries(cfg.timberSections).map(([k, x]) => [k, x.label]), (v) => upd((x) => { x.section = v; }))),
-                t.kind === 'joists' ? field('Dirección de tirantes', sel(t.dir, [['x', 'Horizontal (eje X)'], ['y', 'Vertical (eje Y)']], (v) => upd((x) => { x.dir = v; }))) : null,
-                t.kind === 'joists' ? field('Separación', sel(t.spacing, [30, 40, 50, 60].map((v) => [v, `${v} cm`]), (v) => upd((x) => { x.spacing = Number(v); }))) : null,
-                plan ? h('dl', { class: 'dl' }, h('dt', {}, 'Tirantes'), h('dd', {}, int(plan.count)), h('dt', {}, 'Luz libre'), h('dd', {}, `${fmt(plan.clearSpanCm / 100)} m`), h('dt', {}, 'Largo de tirante'), h('dd', {}, `${fmt(plan.lengthCm / 100)} m`), h('dt', {}, 'Entre ejes'), h('dd', {}, `${fmt(plan.spacingCm, 1)} cm`)) : null,
-                beam ? h('dl', { class: 'dl' }, h('dt', {}, 'Luz libre'), h('dd', {}, `${fmt(beam.clearSpanCm / 100)} m`), h('dt', {}, 'Largo'), h('dd', {}, `${fmt(beam.lengthCm / 100)} m`)) : null,
                 h('div', { class: 'actions-row' }, delBtn),
             );
             return;

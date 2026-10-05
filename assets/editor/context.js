@@ -4,7 +4,7 @@
  */
 const G = 12.5;
 const OPENING_TOOLS = new Set(['opening']);
-const FLOOR_TOOLS = new Set(['piso', 'slab', 'floor', 'beam', 'stair']);
+const FLOOR_TOOLS = new Set(['piso', 'stair']);
 
 export const CONTEXT_TITLE = {
     general: '',
@@ -24,7 +24,7 @@ export function contextOf(store) {
         if (sel.type === 'room') return { kind: 'room', id: sel.id };
         if (sel.type === 'roof' || sel.type === 'gable') return { kind: 'roof', id: sel.id };
         if (sel.type === 'gwindow') return { kind: 'roof', id: sel.gable };
-        if (['slab', 'stair', 'timber'].includes(sel.type)) return { kind: 'floor', id: sel.id };
+        if (['slab', 'stair'].includes(sel.type)) return { kind: 'floor', id: sel.id };
     }
     if (store.ui.level === 2) return { kind: 'roof' };
     if (OPENING_TOOLS.has(store.ui.tool)) return { kind: 'openings' };
@@ -84,7 +84,7 @@ export function issueMatches(issue, ctx, store) {
         }
         case 'floor': {
             if (ctx.id) return issue.ref === ctx.id;
-            return /^(stair|slab|floor|timber|support\.partition)/.test(String(issue.code));
+            return /^(stair|slab|floor|support\.partition)/.test(String(issue.code));
         }
         default:
             return true;

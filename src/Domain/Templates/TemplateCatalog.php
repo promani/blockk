@@ -230,7 +230,6 @@ final class TemplateCatalog
                     ->opening(1, 'V125', 'x', 0, 10)
                     ->opening(1, 'V100', 'y', 0, 16)
                     ->opening(1, 'V100', 'x', 40, 4)
-                    ->slab(1, 0, 0, 32, 40)
                     ->upper()
                     ->roofPart(1, 0, 0, 32, 40, 'gable', 'y', 30, '3x8')
                     ->roofPart(0, 32, 0, 32, 40, 'shed', 'E', 30, '3x10')
@@ -323,9 +322,6 @@ final class TemplateCatalog
                     ->opening(1, 'P75', 'x', 70, 8, flip: true)    // vestidor
                     ->opening(1, 'P75', 'x', 88, 8)                // baño en suite → dormitorio principal
                     ->opening(1, 'P87', 'y', 28, 94, flip: true)   // dormitorio principal
-                    ->slab(1, 0, 0, 32, 112)
-                    ->slab(1, 32, 0, 20, 112)
-                    ->slab(1, 52, 0, 20, 112)
                     ->label(1, 12, 12, 'Dormitorio 2')
                     ->label(1, 31, 12, 'Placard')
                     ->label(1, 39, 12, 'Placard')

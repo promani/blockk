@@ -20,9 +20,8 @@ Reglas que aplica el sistema (en `src/Domain/Hcca.php` y el motor):
 | Vanos | Dintel en bloque U (hilada 9; en tabiques sin bloque U, dintel de hormigón in situ), apoyo ≥ 25 cm a cada lado; jambas ≥ 25 cm contra esquinas y muros transversales | `ProjectValidator` |
 | Vanos en muro portante | Suma ≤ 60 % del tramo (advertencia) | `ProjectValidator` |
 | Encuentros en T y cruz | Anclajes metálicos (planchuela) uno cada 2 hiladas | `ANCHORS_PER_TEE/CROSS` |
-| Nivel 2 | Muros portantes sobre muros portantes del Nivel 1; tabiques sobre losa o entrepiso | `ProjectValidator` |
-| Entrepiso de madera | Tirantes 3″×8″ (luz ≤ 3,75 m) o 3″×10″ (≤ 4,75 m) a 40 cm, apoyo ≥ 10 cm sobre la corona con banda elástica | `TimberPlanner` |
-| Losa | Maciza, luz de referencia ≤ 4,00 m; sobre la superficie cerrada de abajo | `SlabPlanner` |
+| Nivel 2 | Muros portantes sobre muros portantes del Nivel 1; tabiques sobre la losa del Nivel 2 | `ProjectValidator` |
+| Losa | Maciza de 12 cm bajo cada habitación del Nivel 2 (automática, sin el hueco de la escalera); pisos extra (balcón, terraza) de 10–20 cm, voladizo ≤ 1,20 m sin pilares (advertencia); luz de referencia ≤ 4,00 m | `SlabPlanner` |
 | Techo | Cabios sobre muros portantes con corona; sección según la luz (3″×8″, 3″×10″, 3″×12″) y largo comercial ≤ 6 m | `RoofPlanner` |
 
 ## Sistema de bloques
@@ -51,7 +50,7 @@ cómputo lo cuenta como bloques equivalentes y hormigón.
 | U15 / U20 | Bloque canal «U» | 50 × 25 × espesor | Dinteles, encadenados y viga corona; se rellena con hormigón y armadura. |
 | O | Pieza con cavidad vertical | según fabricante | Pilaretes en nudos y extremos (informativa: no se despieza sola). |
 | ½ · ¼ | Medio bloque y cortes | 25 · 12,5 cm y a medida | Trabas, jambas y remates. |
-| M 3″×8″ | Tirante de pino tratado | 7,5 × 20 cm | Entrepiso en seco y cabios. |
+| M 3″×8″ | Tirante de pino tratado | 7,5 × 20 cm | Cabios del techo. |
 
 Vanos predefinidos (`Hcca::openingPresets`): puertas P75, P87, P100, P150 (doble); ventanas V62, V100, V125, V150,
 V187; ventiluces VT62, VT100 (antepecho alto); ventanal VG150 (hasta el piso). Todas miden múltiplos de 12,5 cm y el
@@ -94,7 +93,6 @@ U con apoyo ≥ ½ bloque y luz ≤ 2,5 m; no usar los bloques antes de 28 días
 | Hormigón | Relleno del canal de los bloques U (canal del sistema) y dinteles in situ. |
 | Hierro | Ø8 mm en dinteles y vigas U (0,395 kg/m); Ø10 mm en la corona (0,617 kg/m). |
 | Anclajes | Uno cada 2 hiladas en cada T (6) y cruz (12). |
-| Madera | Tirantes por largo comercial (3,00–6,00 m), cenefa, OSB 18 mm, banda elástica y placas de reparto. |
 | Losas y escaleras | Hormigón, malla (+10 %), encofrado; peldaños (contrahuella 15–19 cm, Blondel 60–66 cm) y descansos. |
 | Techo | Cabios por largo, cumbrera, clavaderas, cubierta en m² y bloques de los hastiales hilada por hilada. |
 

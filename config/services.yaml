@@ -26,7 +26,6 @@ services:
             - '../src/Domain/Geometry/{Node,NodeType,Room,RegionMap,NormalizationResult}.php'
             - '../src/Domain/Masonry/{Piece,PieceKind,Run,CourseModel}.php'
             - '../src/Domain/Cutting/CutPlan.php'
-            - '../src/Domain/Timber/TimberPlan.php'
             - '../src/Domain/Validation/Issue.php'
             - '../src/Domain/Solar/Season.php'
             - '../src/Domain/Templates/{TemplateBuilder,TemplateThumbnail}.php'
