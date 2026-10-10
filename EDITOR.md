@@ -89,7 +89,11 @@ Catálogo) se adaptan al ancho; la tarjeta «Proyecto en blanco» se oculta.
 
 ## Propiedades por elemento
 
-- **Muro**: espesor (los del sistema: 10 / 15 / 20 cm con Lika), **alto** (de 50 cm a 3,00 m; sin nada encima hasta 4,00 m) y **corona U**
+- **Alto del nivel** (Configuraciones generales, por pestaña): 3,00, 2,75 o 2,50 m (`levels[i].courses`, 12 a 10 hiladas). Los
+  muros que llegaban al alto anterior lo siguen y el Nivel 2, sus losas, la escalera y el techo arrancan donde termina el de
+  abajo (`Project::levelBaseCm()` en PHP, `levels.js` en el editor). Bajar sólo los muros de PB con el Nivel 2 encima lo
+  deja flotando: la Revisión lo marca (`support.short`) y dice cómo arreglarlo.
+- **Muro**: espesor (los del sistema: 10 / 15 / 20 cm con Lika), **alto** (de 50 cm al alto del nivel; sin nada encima hasta 4,00 m) y **corona U**
   (se puede sacar en paredes que son sólo mampostería).
 - **Abertura**: tipo, **medida** y apertura y, si abre, el giro (bisagra y lado) o el recorrido de la hoja. La medida es una
   **carpintería comercial** del catálogo (`Hcca::commercialOpenings()`: puertas 70 / 80 / 90 y doble 160 × 200, ventiluces,

@@ -33,7 +33,7 @@ final class RoofPlanner
             // El techo apoya sobre los muros que lo rodean: el nivel sale de ahí, no de lo que se haya elegido al dibujarlo.
             $level = $this->supportLevel($part, $levels);
             $upper = $level + 1 < count($levels) ? $levels[$level + 1]->level->walls : [];
-            $built = $this->planPart($part, $level, $upper);
+            $built = $this->planPart($part, $level, $upper, $project->levelTopCm($level));
             $parts[] = $built;
             array_push($issues, ...$built['issues']);
         }
@@ -217,17 +217,18 @@ final class RoofPlanner
     /**
      * @param int        $level nivel sobre el que apoya
      * @param list<Wall> $upper muros del nivel de arriba: un borde del techo que choca contra ellos no lleva alero ni hastial
+     * @param int        $zTop  cota (cm) de la cara superior del nivel de apoyo
      *
      * @return array{id: string, level: int, type: string, geometry: array<string, mixed>, bom: array<string, mixed>, issues: list<array<string, mixed>>}
      */
-    private function planPart(RoofPart $roof, int $level, array $upper = []): array
+    private function planPart(RoofPart $roof, int $level, array $upper, int $zTop): array
     {
         $G = Hcca::GRID_CM;
         $x0 = $roof->x * $G;
         $x1 = ($roof->x + $roof->w) * $G;
         $y0 = $roof->y * $G;
         $y1 = ($roof->y + $roof->h) * $G;
-        $zTop = ($level + 1) * (float) Hcca::LEVEL_HEIGHT_CM;
+        $zTop = (float) $zTop;
         $o = (float) $roof->overhang;
         $s = $roof->slopePct / 100;
         // Los cabios apoyan sobre el borde exterior del muro (no en su eje): la cubierta sube media pared × pendiente (+1 cm)

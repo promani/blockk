@@ -40,7 +40,7 @@ final class ProjectValidator
             $issues[] = new Issue(Issue::ERROR, 'level.orphan', 'El Nivel 2 (Planta Alta) no puede existir sin Nivel 1 (Planta Baja).', 1);
         }
         if (!$project->level(1)->isEmpty()) {
-            $issues[] = new Issue(Issue::INFO, 'height.total', sprintf('Altura autoportante total: %.2f m (límite estructural %.2f m: PB + PA).', 2 * Hcca::LEVEL_HEIGHT_CM / 100, Hcca::MAX_TOTAL_HEIGHT_CM / 100));
+            $issues[] = new Issue(Issue::INFO, 'height.total', sprintf('Altura autoportante total: %.2f m (límite estructural %.2f m: PB + PA).', $project->levelTopCm(1) / 100, Hcca::MAX_TOTAL_HEIGHT_CM / 100));
         }
 
         $this->columns($issues, $project);
@@ -48,9 +48,11 @@ final class ProjectValidator
         foreach ($levels as $index => $analysis) {
             foreach ($analysis->level->walls as $wall) {
                 $this->wall($issues, $index, $wall, $analysis);
-                // Más de 3,00 m sólo si no hay otro nivel encima (y nunca por encima del límite autoportante de 6,00 m).
-                if ($wall->h > Hcca::COURSES && (1 === $index || $project->upperEnabled())) {
-                    $issues[] = new Issue(Issue::ERROR, 'wall.height', sprintf('Muro de %s m de alto: %s', $this->cm($wall->h * 25 / 100), 1 === $index ? 'la Planta Alta no puede pasar de 3,00 m (límite autoportante total 6,00 m).' : 'con Nivel 2 encima, los muros de la Planta Baja miden 3,00 m.'), $index, $wall->id, $wall->x1, $wall->y1);
+                // Más alto que el nivel sólo si no hay otro nivel encima (y nunca por encima del límite autoportante de 6,00 m).
+                $levelCourses = $analysis->level->courses;
+                if ($wall->h > $levelCourses && (1 === $index || $project->upperEnabled())) {
+                    $levelM = $this->m($levelCourses * Hcca::COURSE_CM);
+                    $issues[] = new Issue(Issue::ERROR, 'wall.height', sprintf('Muro de %s m de alto: %s', $this->m($wall->h * Hcca::COURSE_CM), 1 === $index ? "la Planta Alta mide $levelM m y no puede pasarse (límite autoportante total 6,00 m)." : "con Nivel 2 encima, los muros de la Planta Baja miden lo que el nivel ($levelM m)."), $index, $wall->id, $wall->x1, $wall->y1);
                 }
             }
             $this->openings($issues, $index, $analysis);
@@ -175,7 +177,11 @@ final class ProjectValidator
             $covered = $this->coverage($ground, $wall);
             $full = $covered >= $wall->lengthU();
             if ($wall->isLoadBearing()) {
-                if (!$full) {
+                if (!$full && $this->coverage($ground, $wall, false) > 0) {
+                    // Apoya en muros de PB más bajos que el nivel: el Nivel 2 arranca en la cota del nivel y queda en el aire.
+                    $levelM = $this->m($ground->level->heightCm());
+                    $issues[] = new Issue(Issue::ERROR, 'support.short', "Muro portante de PA sobre un muro de PB más bajo que el nivel ($levelM m): el Nivel 2 queda flotando. Para bajar la Planta Baja cambiá «Alto del nivel» en Ajustes del proyecto (los muros lo siguen solos) o devolvé el muro de abajo al alto completo.", 1, $wall->id, $wall->x1, $wall->y1);
+                } elseif (!$full) {
                     $issues[] = new Issue(Issue::ERROR, 'support.upper', 'Muro portante de PA sin apoyo continuo sobre un muro portante de PB: la mampostería autoportante debe descargar directamente sobre la viga corona inferior.', 1, $wall->id, $wall->x1, $wall->y1);
                 } elseif (null !== ($below = $this->thinnestBelow($ground, $wall)) && $below->t < $wall->t) {
                     $issues[] = new Issue(Issue::WARN, 'support.thickness', sprintf('Muro de PA de %s cm apoya sobre un muro de PB de %s cm.', $this->cm(Hcca::ticksToCm($wall->t)), $this->cm(Hcca::ticksToCm($below->t))), 1, $wall->id, $wall->x1, $wall->y1);
@@ -228,12 +234,12 @@ final class ProjectValidator
         }
     }
 
-    /** Longitud (unidades) de $wall cubierta por muros portantes de PB colineales. */
-    private function coverage(LevelAnalysis $ground, Wall $wall): int
+    /** Longitud (unidades) de $wall cubierta por muros portantes de PB colineales que llegan hasta el alto del nivel ($full) o más bajos. */
+    private function coverage(LevelAnalysis $ground, Wall $wall, bool $full = true): int
     {
         $spans = [];
         foreach ($ground->level->walls as $g) {
-            if ($g->axis() === $wall->axis() && $g->lineU() === $wall->lineU() && $g->isLoadBearing() && $g->h >= Hcca::COURSES) {
+            if ($g->axis() === $wall->axis() && $g->lineU() === $wall->lineU() && $g->isLoadBearing() && ($full ? $g->h >= $ground->level->courses : $g->h < $ground->level->courses)) {
                 $s = max($g->startU(), $wall->startU());
                 $e = min($g->endU(), $wall->endU());
                 if ($e > $s) {
@@ -261,6 +267,12 @@ final class ProjectValidator
         usort($below, static fn (Wall $a, Wall $b): int => $a->t <=> $b->t);
 
         return $below[array_key_first($below)];
+    }
+
+    /** Centímetros como metros con dos decimales: 275 → «2,75». */
+    private function m(int $cm): string
+    {
+        return number_format($cm / 100, 2, ',', '');
     }
 
     private function cm(float $v): string

@@ -309,7 +309,7 @@ final class BomCalculator
 
         $st = $extras['stairs'] ?? [];
         if (($st['steps'] ?? 0) > 0) {
-            $add('Escaleras', 'ESC', 'Peldaños de escalera (hormigón/madera, ref.)', 'u', $st['steps'], $prices['stair_step_u'], 'altura 3,00 m entre pisos');
+            $add('Escaleras', 'ESC', 'Peldaños de escalera (hormigón/madera, ref.)', 'u', $st['steps'], $prices['stair_step_u'], sprintf('altura %s m entre pisos', number_format($project->level(0)->heightCm() / 100, 2, ',', '')));
         }
         if (($st['landingM2'] ?? 0) > 0) {
             $add('Escaleras', 'DES', 'Descansos de escalera', 'm²', $st['landingM2'], $prices['stair_landing_m2']);
@@ -319,7 +319,7 @@ final class BomCalculator
         foreach ($project->levels as $level) {
             foreach ($level->columns as $c) {
                 $s = $c->size / 100;
-                $hM = Hcca::LEVEL_HEIGHT_CM / 100;
+                $hM = $level->heightCm() / 100;
                 ++$cols['n'];
                 $cols['m3'] += $s * $s * $hM;
                 $cols['d10M'] += 4 * ($hM + 0.4);

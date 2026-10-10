@@ -235,8 +235,8 @@ final class ProjectAnalyzer
                 'wallLengthM' => $scope['wallLengthM'],
                 'grossM2' => round($l->regions->totalGrossM2(), 2),
                 'netM2' => round($l->regions->totalNetM2(), 2),
-                'courses' => ['regular' => Hcca::REGULAR_COURSES, 'crown' => 1, 'total' => Hcca::COURSES],
-                'heightM' => Hcca::LEVEL_HEIGHT_CM / 100,
+                'courses' => ['regular' => $l->level->courses - 1, 'crown' => 1, 'total' => $l->level->courses],
+                'heightM' => $l->level->heightCm() / 100,
                 'blocks' => array_sum(array_column($scope['blocks'], 'stock')),
             ];
         }
@@ -247,7 +247,7 @@ final class ProjectAnalyzer
             'levels' => $perLevel,
             'total' => [
                 'levelsUsed' => $usedLevels,
-                'heightM' => $usedLevels * Hcca::LEVEL_HEIGHT_CM / 100,
+                'heightM' => array_sum(array_map(static fn (array $l): float => $l['used'] ? $l['heightM'] : 0.0, $perLevel)),
                 'maxHeightM' => Hcca::MAX_TOTAL_HEIGHT_CM / 100,
                 'grossM2' => round(array_sum(array_column($perLevel, 'grossM2')), 2),
                 'netM2' => round(array_sum(array_column($perLevel, 'netM2')), 2),

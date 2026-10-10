@@ -17,6 +17,7 @@ import { roomNamesList, roomTypeItems, nameForType } from './names.js';
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
 import { footprint, furnitureRect, furnitureGroups, furnitureOn } from './furniture.js';
 import { stairCoverage, stairBox, STAIR_BLOCKED } from './stair-fit.js';
+import { levelHeight, levelZ } from './levels.js';
 
 const DRAG_PX = 6;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -29,7 +30,9 @@ export function createTools(app) {
     const cfg = store.config;
     const BU = cfg.blockUnits; // bloque entero en unidades de 12,5 cm
     const BL = cfg.blockL; // largo del bloque en cm
-    const base = () => store.ui.level * cfg.levelHeight;
+    const base = () => levelZ(store.project, store.ui.level);
+    /** Alto del nivel activo (cm). */
+    const levelH = () => levelHeight(store.project, store.ui.level);
     const lot = () => ({ w: store.project.lot.w * 8, d: store.project.lot.d * 8 });
     const inLot = (gx, gy) => gx >= 0 && gy >= 0 && gx <= lot().w && gy <= lot().d;
 
@@ -182,7 +185,7 @@ export function createTools(app) {
         } else if ((sel.type === 'roof' || sel.type === 'gable') && store.ui.level === 2) {
             const r = roofRect(sel.type === 'roof' ? sel.id : String(sel.id).split(':')[0]);
             if (r) {
-                const z = (r.level + 1) * cfg.levelHeight;
+                const z = levelZ(store.project, r.level + 1);
                 for (const [cx, cy] of [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]]) {
                     const [sx, sy] = cam.project(cx * G, cy * G, z);
                     out.push({ kind: 'rcorner', sx, sy, cx, cy, r });
@@ -257,8 +260,8 @@ export function createTools(app) {
         for (const w of only ? [wall] : collinearChain(store.level().walls, wall)) {
             const t = w.t / 2;
             const box = horizontal
-                ? { x0: w.x1 * G, x1: w.x2 * G, y0: newLine * G - t, y1: newLine * G + t, z0: z, z1: z + cfg.levelHeight }
-                : { x0: newLine * G - t, x1: newLine * G + t, y0: w.y1 * G, y1: w.y2 * G, z0: z, z1: z + cfg.levelHeight };
+                ? { x0: w.x1 * G, x1: w.x2 * G, y0: newLine * G - t, y1: newLine * G + t, z0: z, z1: z + levelH() }
+                : { x0: newLine * G - t, x1: newLine * G + t, y0: w.y1 * G, y1: w.y2 * G, z0: z, z1: z + levelH() };
             ghostBox(ctx, cam, box, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
         }
     };
@@ -275,8 +278,8 @@ export function createTools(app) {
             ctx.fill();
             ctx.stroke();
             // flechas ↔ perpendiculares al muro (en pantalla, según la proyección)
-            const a = cam.project(((hd.w.x1 + hd.w.x2) / 2) * G, ((hd.w.y1 + hd.w.y2) / 2) * G - (horizontal ? 30 : 0), base() + cfg.levelHeight);
-            const b = cam.project(((hd.w.x1 + hd.w.x2) / 2) * G - (horizontal ? 0 : 30), ((hd.w.y1 + hd.w.y2) / 2) * G, base() + cfg.levelHeight);
+            const a = cam.project(((hd.w.x1 + hd.w.x2) / 2) * G, ((hd.w.y1 + hd.w.y2) / 2) * G - (horizontal ? 30 : 0), base() + levelH());
+            const b = cam.project(((hd.w.x1 + hd.w.x2) / 2) * G - (horizontal ? 0 : 30), ((hd.w.y1 + hd.w.y2) / 2) * G, base() + levelH());
             const dir = horizontal ? [a[0] - hd.sx, a[1] - hd.sy] : [b[0] - hd.sx, b[1] - hd.sy];
             const len = Math.hypot(dir[0], dir[1]) || 1;
             const ux = dir[0] / len;
@@ -446,7 +449,7 @@ export function createTools(app) {
         const box = multi.sel && selBox(multi.sel);
         return box && ux >= box.x0 - 1 && ux <= box.x1 + 1 && uy >= box.y0 - 1 && uy <= box.y1 + 1 ? box : null;
     };
-    const bandZ = () => (store.ui.level === 2 ? (store.topLevel + 1) * cfg.levelHeight : base());
+    const bandZ = () => (store.ui.level === 2 ? levelZ(store.project, store.topLevel + 1) : base());
 
     /** Dibujo del rectángulo en curso y del grupo elegido (corrido por el arrastre). */
     const drawMulti = (ctx, cam) => {
@@ -465,7 +468,7 @@ export function createTools(app) {
         for (const [li, id] of sel.walls) {
             const w = store.project.levels[li].walls.find((q) => q.id === id);
             if (!w) continue;
-            const zb = li * cfg.levelHeight;
+            const zb = levelZ(store.project, li);
             const t = w.t / 2;
             const hz = (w.h ?? 12) * 25;
             const [x0, x1] = [Math.min(w.x1, w.x2) + dx, Math.max(w.x1, w.x2) + dx].map((v) => v * G);
@@ -663,7 +666,7 @@ export function createTools(app) {
         const flat = { stroke: '#2563eb', fill: 'rgba(37,99,235,.12)', width: 1.5, dash: [6, 4] };
         for (const it of clip.walls) {
             const w = it.o;
-            const zb = (target ?? it.li) * cfg.levelHeight;
+            const zb = levelZ(store.project, target ?? it.li);
             const t = w.t / 2;
             const x0 = (w.x1 + dx) * G;
             const x1 = (w.x2 + dx) * G;
@@ -672,24 +675,24 @@ export function createTools(app) {
             ghostBox(ctx, cam, w.y1 === w.y2 ? { x0, x1, y0: y0 - t, y1: y1 + t, z0: zb, z1: zb + (w.h ?? 12) * 25 } : { x0: x0 - t, x1: x1 + t, y0, y1, z0: zb, z1: zb + (w.h ?? 12) * 25 }, style);
         }
         for (const it of clip.columns) {
-            const zb = (target ?? it.li) * cfg.levelHeight;
+            const zb = levelZ(store.project, target ?? it.li);
             const s = it.o.size / 2;
-            ghostBox(ctx, cam, { x0: (it.o.x + dx) * G - s, x1: (it.o.x + dx) * G + s, y0: (it.o.y + dy) * G - s, y1: (it.o.y + dy) * G + s, z0: zb, z1: zb + cfg.levelHeight }, style);
+            ghostBox(ctx, cam, { x0: (it.o.x + dx) * G - s, x1: (it.o.x + dx) * G + s, y0: (it.o.y + dy) * G - s, y1: (it.o.y + dy) * G + s, z0: zb, z1: zb + levelHeight(store.project, target ?? it.li) }, style);
         }
         for (const it of clip.furniture) {
             const r = furnitureRect(cfg, it.o);
-            const zb = (target ?? it.li) * cfg.levelHeight;
+            const zb = levelZ(store.project, target ?? it.li);
             if (r) ghostBox(ctx, cam, { x0: r[0] + dx * G, x1: r[2] + dx * G, y0: r[1] + dy * G, y1: r[3] + dy * G, z0: zb, z1: zb + footprint(cfg, it.o).h }, style);
         }
         if (target === null) {
-            for (const it of clip.roofs) outlineRect(ctx, cam, (it.o.x + dx) * G, (it.o.y + dy) * G, (it.o.x + it.o.w + dx) * G, (it.o.y + it.o.h + dy) * G, (it.o.level + 1) * cfg.levelHeight, flat);
-            for (const it of clip.slabs) outlineRect(ctx, cam, (it.o.x + dx) * G, (it.o.y + dy) * G, (it.o.x + it.o.w + dx) * G, (it.o.y + it.o.h + dy) * G, cfg.levelHeight, flat);
+            for (const it of clip.roofs) outlineRect(ctx, cam, (it.o.x + dx) * G, (it.o.y + dy) * G, (it.o.x + it.o.w + dx) * G, (it.o.y + it.o.h + dy) * G, levelZ(store.project, it.o.level + 1), flat);
+            for (const it of clip.slabs) outlineRect(ctx, cam, (it.o.x + dx) * G, (it.o.y + dy) * G, (it.o.x + it.o.w + dx) * G, (it.o.y + it.o.h + dy) * G, levelZ(store.project, 1), flat);
             for (const it of clip.zones) outlineRect(ctx, cam, (it.o.x + dx) * G, (it.o.y + dy) * G, (it.o.x + it.o.w + dx) * G, (it.o.y + it.o.h + dy) * G, 0.5, flat);
             for (const it of clip.stairs) outlineRect(ctx, cam, (it.box[0] + dx) * G, (it.box[1] + dy) * G, (it.box[2] + dx) * G, (it.box[3] + dy) * G, 0.5, flat);
             for (const it of clip.trees) treeRing(ctx, cam, it.o.x + dx, it.o.y + dy, it.o.size, '#2563eb');
         }
         const b = clip.box;
-        const z = (target ?? 0) * cfg.levelHeight;
+        const z = levelZ(store.project, target ?? 0);
         outlineRect(ctx, cam, (b.x0 + dx) * G, (b.y0 + dy) * G, (b.x1 + dx) * G, (b.y1 + dy) * G, z, { stroke: '#2563eb', width: 2, dash: [8, 5] });
         const [sx, sy] = cam.project(((b.x0 + b.x1) / 2 + dx) * G, ((b.y0 + b.y1) / 2 + dy) * G, z);
         label(ctx, `Clic para pegar${target === null ? ` · → ${fmt((dx * G) / 100)} m · ↓ ${fmt((dy * G) / 100)} m` : ` en el ${cfg.levelShort?.[target] ?? 'nivel'}`}`, sx, sy, { bg: 'rgba(37,99,235,.92)' });
@@ -785,7 +788,7 @@ export function createTools(app) {
                     // escaleras, pisos y techos: se corren enteros, de a 12,5 cm, dentro del terreno
                     const sel = groupOf({ type, id });
                     const box = sel && selBox(sel);
-                    const z = type === 'roof' ? ((roofRect(id)?.level ?? 0) + 1) * cfg.levelHeight : type === 'stair' ? 0.5 : cfg.levelHeight;
+                    const z = type === 'roof' ? levelZ(store.project, (roofRect(id)?.level ?? 0) + 1) : type === 'stair' ? 0.5 : levelZ(store.project, 1);
                     if (box) drag = { kind: 'shift', sel, box, dx: 0, dy: 0, x0: press.wx, y0: press.wy, z };
                 }
                 if (drag) {
@@ -1056,7 +1059,7 @@ export function createTools(app) {
                 }
                 if (drag.kind === 'column') {
                     const half = drag.c.size / 2;
-                    ghostBox(ctx, cam, { x0: drag.nx * G - half, x1: drag.nx * G + half, y0: drag.ny * G - half, y1: drag.ny * G + half, z0: z, z1: z + cfg.levelHeight }, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
+                    ghostBox(ctx, cam, { x0: drag.nx * G - half, x1: drag.nx * G + half, y0: drag.ny * G - half, y1: drag.ny * G + half, z0: z, z1: z + levelH() }, { fill: 'rgba(37,99,235,.25)', stroke: '#2563eb' });
                     return;
                 }
                 if (drag.kind === 'furniture') {
@@ -1084,7 +1087,7 @@ export function createTools(app) {
                     const span = horizontal ? [Math.min(...chain.map((w) => w.x1)), Math.max(...chain.map((w) => w.x2))] : [Math.min(...chain.map((w) => w.y1)), Math.max(...chain.map((w) => w.y2))];
                     drawAnchors(ctx, cam, horizontal ? drag.ay : drag.ax, horizontal ? 'ay' : 'ax', drag.line, span[0], span[1], z);
                     const mid = chain[Math.floor(chain.length / 2)];
-                    const [sx, sy] = cam.project(horizontal ? ((mid.x1 + mid.x2) / 2) * G : drag.line * G, horizontal ? drag.line * G : ((mid.y1 + mid.y2) / 2) * G, z + cfg.levelHeight);
+                    const [sx, sy] = cam.project(horizontal ? ((mid.x1 + mid.x2) / 2) * G : drag.line * G, horizontal ? drag.line * G : ((mid.y1 + mid.y2) / 2) * G, z + levelH());
                     label(ctx, `${delta >= 0 ? '+' : '−'}${fmt(Math.abs(delta) * G, 1)} cm · ${horizontal ? 'y' : 'x'} = ${fmt((drag.line * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
                 } else if (drag.kind === 'corner') {
                     const { horizontal, vertical } = cornerWalls(store.level(), drag.vx, drag.vy);
@@ -1092,13 +1095,13 @@ export function createTools(app) {
                     if (drag.ny !== drag.vy && horizontal) ghostChain(ctx, cam, horizontal, drag.ny);
                     drawAnchors(ctx, cam, drag.ax, 'ax', drag.nx, drag.ny - 8, drag.ny + 8, z);
                     drawAnchors(ctx, cam, drag.ay, 'ay', drag.ny, drag.nx - 8, drag.nx + 8, z);
-                    const [sx, sy] = cam.project(drag.nx * G, drag.ny * G, z + cfg.levelHeight);
+                    const [sx, sy] = cam.project(drag.nx * G, drag.ny * G, z + levelH());
                     label(ctx, `esquina → x ${fmt((drag.nx * G) / 100)} m · y ${fmt((drag.ny * G) / 100)} m`, sx, sy - 18, { bg: 'rgba(37,99,235,.92)' });
                 } else if (drag.kind === 'rside') {
                     const r = drag.r;
                     const e = { x0: r.x, x1: r.x + r.w, y0: r.y, y1: r.y + r.h };
                     e[drag.side] = drag.nv;
-                    const zr = (r.level + 1) * cfg.levelHeight;
+                    const zr = levelZ(store.project, r.level + 1);
                     outlineRect(ctx, cam, Math.min(e.x0, e.x1) * G, Math.min(e.y0, e.y1) * G, Math.max(e.x0, e.x1) * G, Math.max(e.y0, e.y1) * G, zr, { stroke: '#2563eb', fill: 'rgba(37,99,235,.18)', width: 2.5, dash: [6, 4] });
                     const key = drag.side[0] === 'x' ? 'ax' : 'ay';
                     drawAnchors(ctx, cam, drag[key], key, drag.nv, key === 'ax' ? e.y0 : e.x0, key === 'ax' ? e.y1 : e.x1, zr);
@@ -1108,7 +1111,7 @@ export function createTools(app) {
                     const r = drag.r;
                     const fx = drag.cx === r.x ? r.x + r.w : r.x;
                     const fy = drag.cy === r.y ? r.y + r.h : r.y;
-                    const zr = (r.level + 1) * cfg.levelHeight;
+                    const zr = levelZ(store.project, r.level + 1);
                     outlineRect(ctx, cam, Math.min(fx, drag.nx) * G, Math.min(fy, drag.ny) * G, Math.max(fx, drag.nx) * G, Math.max(fy, drag.ny) * G, zr, { stroke: '#2563eb', fill: 'rgba(37,99,235,.18)', width: 2.5, dash: [6, 4] });
                     drawAnchors(ctx, cam, drag.ax, 'ax', drag.nx, Math.min(fy, drag.ny), Math.max(fy, drag.ny), zr);
                     drawAnchors(ctx, cam, drag.ay, 'ay', drag.ny, Math.min(fx, drag.nx), Math.max(fx, drag.nx), zr);
@@ -1369,14 +1372,14 @@ export function createTools(app) {
                     const y0 = Math.min(start.gy, end.gy) * G;
                     const y1 = Math.max(start.gy, end.gy) * G;
                     const horizontal = start.gy === end.gy;
-                    const box = { x0: horizontal ? x0 : x0 - t / 2, x1: horizontal ? x1 : x1 + t / 2, y0: horizontal ? y0 - t / 2 : y0, y1: horizontal ? y1 + t / 2 : y1, z0: z, z1: z + cfg.levelHeight };
+                    const box = { x0: horizontal ? x0 : x0 - t / 2, x1: horizontal ? x1 : x1 + t / 2, y0: horizontal ? y0 - t / 2 : y0, y1: horizontal ? y1 + t / 2 : y1, z0: z, z1: z + levelH() };
                     ghostBox(ctx, cam, box, { fill: 'rgba(139,197,63,.35)', stroke: '#3f6212' });
                     const len = Math.abs(end.gx - start.gx) + Math.abs(end.gy - start.gy);
                     const modular = len % BU === 0;
                     const closes = chainStart && end.gx === chainStart.gx && end.gy === chainStart.gy && (start.gx !== chainStart.gx || start.gy !== chainStart.gy);
                     if (closes) nodeMarker(ctx, cam, end.gx * G, end.gy * G, z, '#2563eb');
-                    if (len > 0 && typedUnits()) dimLabel(ctx, cam, x0, y0, x1, y1, z + cfg.levelHeight, `${typed} → ${meters(len * G)} m · ${fmt((len * G) / BL, 1)} bloques${modular ? '' : ' · con cortes'} · Enter lo coloca`);
-                    else if (len > 0) dimLabel(ctx, cam, x0, y0, x1, y1, z + cfg.levelHeight, `${fmt((len * G) / 100)} m · ${fmt((len * G) / BL, 1)} bloques${modular ? '' : ' · con cortes'}${closes ? ' · cierra la habitación' : ''}`);
+                    if (len > 0 && typedUnits()) dimLabel(ctx, cam, x0, y0, x1, y1, z + levelH(), `${typed} → ${meters(len * G)} m · ${fmt((len * G) / BL, 1)} bloques${modular ? '' : ' · con cortes'} · Enter lo coloca`);
+                    else if (len > 0) dimLabel(ctx, cam, x0, y0, x1, y1, z + levelH(), `${fmt((len * G) / 100)} m · ${fmt((len * G) / BL, 1)} bloques${modular ? '' : ' · con cortes'}${closes ? ' · cierra la habitación' : ''}`);
                 } else if (opts.module && app.pointer && !start) {
                     const a = { gx: app.pointer.gx, gy: app.pointer.gy };
                     const b = axis === 'x' ? { gx: a.gx + BU, gy: a.gy } : { gx: a.gx, gy: a.gy + BU };
@@ -1580,7 +1583,7 @@ export function createTools(app) {
         label: 'Piso',
         hint: 'Arrastrá un rectángulo pegado al Nivel 2 para sumar un balcón o una terraza. Las habitaciones ya tienen su piso.',
         disabled: needUpper,
-        planeZ: () => cfg.levelHeight,
+        planeZ: () => levelZ(store.project, 1),
         options: () => h('span', { class: 'row' }, selectT('Espesor', slabThickness, [10, 12, 15, 20].map((v) => [v, `${v} cm`]), (v) => { slabThickness = Number(v); })),
         reset() { slab = null; },
         down(p) {
@@ -1614,7 +1617,7 @@ export function createTools(app) {
             return false;
         },
         draw(ctx, cam) {
-            const z = cfg.levelHeight;
+            const z = levelZ(store.project, 1);
             if (slab?.rect) {
                 const { x, y, w, h: hh } = slab.rect;
                 outlineRect(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, { stroke: '#475569', fill: 'rgba(100,116,139,.35)', width: 2.5, dash: [6, 4] });
@@ -1630,7 +1633,7 @@ export function createTools(app) {
     const DIRS = ['E', 'S', 'W', 'N'];
     /** Huellas de la escalera (cm, en planta), con la misma geometría que calcula el servidor. */
     const stairGeometry = (st, gx, gy) => {
-        const n = Math.ceil(cfg.levelHeight / 18);
+        const n = Math.ceil(levelHeight(store.project, 0) / 18);
         const W = st.w * G;
         const tread = st.tread;
         const k1 = st.shape === 'straight' ? n : Math.ceil(n / 2);
@@ -1659,7 +1662,7 @@ export function createTools(app) {
         const maxX = Math.max(...all.map((r) => r[2]));
         const maxY = Math.max(...all.map((r) => r[3]));
         const sh = (r) => [r[0] - minX + gx * G, r[1] - minY + gy * G, r[2] - minX + gx * G, r[3] - minY + gy * G];
-        return { steps: steps.map((r) => sh(toPlan(r))), landings: landings.map((r) => sh(toPlan(r))), w: maxX - minX, h: maxY - minY, n, rise: cfg.levelHeight / n };
+        return { steps: steps.map((r) => sh(toPlan(r))), landings: landings.map((r) => sh(toPlan(r))), w: maxX - minX, h: maxY - minY, n, rise: levelHeight(store.project, 0) / n };
     };
     const cycleDir = () => { stairState.dir = DIRS[(DIRS.indexOf(stairState.dir) + 1) % 4]; app.refreshOptions(); app.render(); };
     /**
@@ -1787,7 +1790,7 @@ export function createTools(app) {
      */
     const roofRoomAt = (sx, sy) => {
         for (let level = store.topLevel; level >= 0; level--) {
-            const [wx, wy] = app.cam.unproject(sx, sy, (level + 1) * cfg.levelHeight);
+            const [wx, wy] = app.cam.unproject(sx, sy, levelZ(store.project, level + 1));
             const gx = Math.floor(wx / G);
             const gy = Math.floor(wy / G);
             const room = (store.analysis?.levels?.[level]?.rooms ?? []).find((rm) => rm.fill?.some(([x, y, w, h]) => gx >= x && gx < x + w && gy >= y && gy < y + h));
@@ -1834,13 +1837,13 @@ export function createTools(app) {
         label: 'Techo',
         hint: 'Clic sobre una habitación (de la planta alta o de la baja) para techarla, o arrastrá un rectángulo sobre los muros. El techo apoya en los muros que lo rodean.',
         // mientras se arrastra, el plano es el de la corona del nivel donde empezó el rectángulo
-        planeZ: () => ((roofDraw?.level ?? store.topLevel) + 1) * cfg.levelHeight,
+        planeZ: () => levelZ(store.project, (roofDraw?.level ?? store.topLevel) + 1),
         options: roofOptions,
         reset() { roofDraw = null; },
         down(p) {
             const hit = roofRoomAt(p.sx, p.sy);
             const level = hit?.level ?? store.topLevel;
-            const [wx, wy] = app.cam.unproject(p.sx, p.sy, (level + 1) * cfg.levelHeight);
+            const [wx, wy] = app.cam.unproject(p.sx, p.sy, levelZ(store.project, level + 1));
             const a = { gx: Math.round(wx / G), gy: Math.round(wy / G) };
             roofDraw = { a, level, hit, rect: null, dragged: false, at: { x: p.sx, y: p.sy } };
             store.ui.roofLevel = level; // el imán se pega a los muros de ese nivel
@@ -1888,7 +1891,7 @@ export function createTools(app) {
         },
         draw(ctx, cam) {
             if (roofDraw?.rect) {
-                const z = (roofDraw.level + 1) * cfg.levelHeight;
+                const z = levelZ(store.project, roofDraw.level + 1);
                 const { x, y, w, h: hh } = roofDraw.rect;
                 outlineRect(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, { stroke: '#7a3b25', fill: 'rgba(196,99,63,.30)', width: 2.5, dash: [6, 4] });
                 dimLabel(ctx, cam, x * G, y * G, (x + w) * G, (y + hh) * G, z, `${fmt((w * G) / 100)} × ${fmt((hh * G) / 100)} m · ${fmt(((w * G) / 100) * ((hh * G) / 100))} m² de planta`);
@@ -1897,7 +1900,7 @@ export function createTools(app) {
             const p = app.pointer;
             if (!p) return;
             const hit = roofRoomAt(p.sx, p.sy);
-            const z = ((hit?.level ?? store.topLevel) + 1) * cfg.levelHeight;
+            const z = levelZ(store.project, (hit?.level ?? store.topLevel) + 1);
             if (hit) {
                 const { room } = hit;
                 outlineRect(ctx, cam, room.bbox.x * G, room.bbox.y * G, (room.bbox.x + room.bbox.w) * G, (room.bbox.y + room.bbox.h) * G, z, { stroke: '#7a3b25', fill: 'rgba(196,99,63,.22)', width: 2 });
@@ -2019,7 +2022,7 @@ export function createTools(app) {
             const p = app.pointer;
             if (!p || !inLot(p.gx, p.gy)) return;
             const s = columnState.size / 2;
-            ghostBox(ctx, cam, { x0: p.gx * G - s, x1: p.gx * G + s, y0: p.gy * G - s, y1: p.gy * G + s, z0: base(), z1: base() + cfg.levelHeight }, { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' });
+            ghostBox(ctx, cam, { x0: p.gx * G - s, x1: p.gx * G + s, y0: p.gy * G - s, y1: p.gy * G + s, z0: base(), z1: base() + levelH() }, { fill: 'rgba(139,197,63,.5)', stroke: '#3f6212' });
         },
     };
 

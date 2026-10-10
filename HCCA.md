@@ -12,7 +12,7 @@ Reglas que aplica el sistema (en `src/Domain/Hcca.php` y el motor):
 | Regla | Valor | Dónde |
 | --- | --- | --- |
 | Bloque | Lika 50 × 25 cm (por defecto) o genérico 62,5 × 25 cm, según `BLOCK_SYSTEM`; retícula de 12,5 cm | `Hcca::SYSTEMS`, `blockL()`, `GRID` |
-| Altura de nivel | 12 hiladas = 3,00 m (11 de bloque + 1 de bloque U de corona) | `COURSES`, `CourseBuilder` |
+| Altura de nivel | 12 hiladas = 3,00 m (11 de bloque + 1 de bloque U de corona); por nivel se puede bajar a 11 (2,75 m) o 10 (2,50 m) | `COURSES`, `MIN_LEVEL_COURSES`, `Level::$courses` |
 | Niveles | Máximo 2 con muros (≤ 6,00 m); el techo apoya sobre el último | `MAX_LEVELS` |
 | Espesores | Lika: portantes 15 / 20 cm, tabiques 10 cm. Genérico: además 7,5 cm | `thicknesses()` |
 | Traba | Juntas verticales de hiladas consecutivas separadas ≥ 12,5 cm; encuentros a 90° alternados hilada a hilada | `CourseBuilder`, `Topology` |

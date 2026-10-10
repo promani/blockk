@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domain\Model;
 
-/** Un nivel estructural (Planta Baja o Planta Alta). Inmutable. */
+use App\Domain\Hcca;
+
+/** Un nivel estructural (Planta Baja o Planta Alta). Inmutable. $courses: alto del nivel en hiladas (12 = 3,00 m). */
 final readonly class Level
 {
     /**
@@ -26,6 +28,7 @@ final readonly class Level
         public array $columns = [],
         public array $labels = [],
         public array $furniture = [],
+        public int $courses = Hcca::COURSES,
     ) {
     }
 
@@ -58,13 +61,18 @@ final readonly class Level
      */
     public function withStructure(array $walls, array $openings, array $ubeams): self
     {
-        return new self($walls, $openings, $ubeams, $this->slabs, $this->stairs, $this->columns, $this->labels, $this->furniture);
+        return new self($walls, $openings, $ubeams, $this->slabs, $this->stairs, $this->columns, $this->labels, $this->furniture, $this->courses);
     }
 
     /** @param list<Slab> $slabs */
     public function withSlabs(array $slabs): self
     {
-        return new self($this->walls, $this->openings, $this->ubeams, $slabs, $this->stairs, $this->columns, $this->labels, $this->furniture);
+        return new self($this->walls, $this->openings, $this->ubeams, $slabs, $this->stairs, $this->columns, $this->labels, $this->furniture, $this->courses);
+    }
+
+    public function heightCm(): int
+    {
+        return $this->courses * Hcca::COURSE_CM;
     }
 
     /** @return array<string, mixed> */
@@ -79,6 +87,8 @@ final readonly class Level
             'columns' => array_map(static fn (Column $c): array => $c->toArray(), $this->columns),
             'labels' => array_map(static fn (Label $l): array => $l->toArray(), $this->labels),
             // sin muebles no se agrega la clave: los proyectos que no los usan quedan como antes
+            // ídem el alto: sólo se guarda si no es el de siempre (3,00 m)
+            ...(Hcca::COURSES === $this->courses ? [] : ['courses' => $this->courses]),
             ...([] === $this->furniture ? [] : ['furniture' => array_map(static fn (Furniture $f): array => $f->toArray(), $this->furniture)]),
         ];
     }

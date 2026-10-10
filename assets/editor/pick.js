@@ -5,6 +5,7 @@ import { roofOuter } from './scene.js';
 import { TREE_SIZES } from './site.js';
 import { pickGableWindow } from './gables.js';
 import { furnitureRect, footprint, furnitureOn, treesOn } from './furniture.js';
+import { levelHeight, levelZ } from './levels.js';
 
 export const G = 12.5;
 
@@ -99,7 +100,7 @@ export function visibleWallHeight(store, w) {
 function pickWallHit(app, sx, sy) {
     const { cam, store } = app;
     const level = store.level();
-    const base = store.ui.level * store.config.levelHeight;
+    const base = levelZ(store.project, store.ui.level);
     const [wx, wy] = cam.unproject(sx, sy, base + 150);
     let best = null;
     for (const w of level.walls) {
@@ -116,8 +117,8 @@ function pickWallHit(app, sx, sy) {
 /** Pilar del nivel activo bajo el puntero, con su profundidad. */
 function pickColumnHit(app, sx, sy) {
     const { cam, store } = app;
-    const base = store.ui.level * store.config.levelHeight;
-    const top = base + store.config.levelHeight;
+    const base = levelZ(store.project, store.ui.level);
+    const top = base + levelHeight(store.project, store.ui.level);
     const [wx, wy] = cam.unproject(sx, sy, base + 150);
     let best = null;
     for (const c of store.level().columns ?? []) {
@@ -134,7 +135,7 @@ function pickColumnHit(app, sx, sy) {
 function pickFurnitureHit(app, sx, sy) {
     const { cam, store } = app;
     if (!furnitureOn(store.ui)) return null;
-    const base = store.ui.level * store.config.levelHeight;
+    const base = levelZ(store.project, store.ui.level);
     let best = null;
     for (const f of store.level().furniture ?? []) {
         const rect = furnitureRect(store.config, f);
@@ -206,7 +207,7 @@ function pickStairHit(app, sx, sy) {
 
 /** Posición a lo largo del muro (unidades de 12,5 cm, fraccionaria) bajo el puntero, a media altura. */
 export function alongPosition(app, wall, sx, sy) {
-    const base = app.store.ui.level * app.store.config.levelHeight;
+    const base = levelZ(app.store.project, app.store.ui.level);
     const [wx, wy] = app.cam.unproject(sx, sy, base + 100);
     const horizontal = wall.y1 === wall.y2;
     return ((horizontal ? wx : wy) - (horizontal ? wall.x1 : wall.y1) * G) / G;
@@ -284,7 +285,7 @@ export function pickAt(app, sx, sy) {
     }
     if (store.analysis?.floors) {
         if (store.ui.level === 1) {
-            const [wx, wy] = cam.unproject(sx, sy, store.config.levelHeight + 8);
+            const [wx, wy] = cam.unproject(sx, sy, levelZ(store.project, 1) + 8);
             for (const sl of store.analysis.floors.slabs ?? []) {
                 const r = sl.rect;
                 if (wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h) return { type: 'slab', id: sl.id };
@@ -293,7 +294,7 @@ export function pickAt(app, sx, sy) {
     }
     if (store.ui.level <= 1) {
         // Piso de una habitación cerrada (se elige para verla y cambiarle el tamaño desde las esquinas).
-        const [wx, wy] = cam.unproject(sx, sy, store.ui.level * store.config.levelHeight);
+        const [wx, wy] = cam.unproject(sx, sy, levelZ(store.project, store.ui.level));
         const ux = wx / G;
         const uy = wy / G;
         for (const room of store.analysis?.levels?.[store.ui.level]?.rooms ?? []) {

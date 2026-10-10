@@ -226,7 +226,9 @@ final class ProjectFactory
             );
         }
 
-        return new Level($walls, $openings, $ubeams, $slabs, $stairs, $columns, $labels, $furniture);
+        $courses = $this->intInRange($d['courses'] ?? Hcca::COURSES, Hcca::MIN_LEVEL_COURSES, Hcca::COURSES, "$path.courses");
+
+        return new Level($walls, $openings, $ubeams, $slabs, $stairs, $columns, $labels, $furniture, $courses);
     }
 
     /** @param array<string, mixed> $o @param array<string, true> $ids */

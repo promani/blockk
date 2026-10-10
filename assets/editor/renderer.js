@@ -12,6 +12,7 @@ import { planeEq, planeHoles, withHoles } from './roofclip.js';
 import { ZONE_KINDS, TREE_SIZES, zoneLabel } from './site.js';
 import { treeModel } from './tree-model.js';
 import { backEdge, furnitureOn, treesOn } from './furniture.js';
+import { levelHeight, levelZ } from './levels.js';
 
 const G = 12.5;
 
@@ -601,13 +602,14 @@ export class Renderer {
         const drawn = [];
         this.drawRoomFloors(f, 0, 0);
         let upperFloors = f.project.upper && activeLevel >= 1;
+        const upperZ = levelZ(f.project, 1);
         for (const it of list) {
             const b = it.b;
             if (b.level > activeLevel) continue;
             if ((b.kind === KIND.TREE && !treesOn(ui)) || (b.kind === KIND.FURNITURE && !furnitureOn(ui))) continue;
-            if (upperFloors && b.zs >= 300) {
+            if (upperFloors && b.zs >= upperZ) {
                 upperFloors = false;
-                this.drawRoomFloors(f, 1, 300);
+                this.drawRoomFloors(f, 1, upperZ);
             }
             // Descarte de cajas fuera de la pantalla (proyectos grandes con zoom cercano).
             const [px, py] = cam.project((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
@@ -619,7 +621,7 @@ export class Renderer {
             (b.kind === KIND.TREE ? trees : drawn).push(it);
             this.drawBox(ctx, cam, it, strokeOn);
         }
-        if (upperFloors) this.drawRoomFloors(f, 1, 300);
+        if (upperFloors) this.drawRoomFloors(f, 1, upperZ);
         if (trees.length) this.drawTreesOver(ctx, cam, trees, drawn, strokeOn);
     }
 
@@ -917,10 +919,9 @@ export class Renderer {
         sctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         sctx.clearRect(0, 0, cam.w, cam.h);
         sctx.fillStyle = '#0f172a';
-        const levelH = 300;
         const maxLevel = ui.level;
         // Sombra de un prisma recto: envolvente de la base y de la tapa corridas por el sol, sobre el suelo.
-        const prism = ([rx0, ry0, rx1, ry1], zBase) => {
+        const prism = ([rx0, ry0, rx1, ry1], zBase, levelH) => {
             const pts = [];
             for (const [px, py] of [[rx0, ry0], [rx1, ry0], [rx1, ry1], [rx0, ry1]]) {
                 const d0 = disp(zBase);
@@ -934,10 +935,11 @@ export class Renderer {
             sctx.fill();
         };
         for (let li = 0; li <= maxLevel; li++) {
-            const zBase = li * levelH;
+            const zBase = levelZ(project, li);
+            const levelH = levelHeight(project, li);
             for (const c of project.levels[li]?.columns ?? []) {
                 const half = c.size / 2;
-                prism([c.x * G - half, c.y * G - half, c.x * G + half, c.y * G + half], zBase);
+                prism([c.x * G - half, c.y * G - half, c.x * G + half, c.y * G + half], zBase, levelH);
             }
             const seen = new Set();
             for (const c of [0, 1]) {
@@ -947,7 +949,7 @@ export class Renderer {
                     const key = rect.join(',');
                     if (seen.has(key)) continue;
                     seen.add(key);
-                    prism(rect, zBase);
+                    prism(rect, zBase, levelH);
                 }
             }
         }

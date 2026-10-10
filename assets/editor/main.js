@@ -21,6 +21,7 @@ import { mountBackdrop } from './backdrop.js';
 import { linkHouse } from '../lib/houses.js';
 import { TYPE_CHOICES, typeOf, applyType } from './openings.js';
 import { findGable, windowBox } from './gables.js';
+import { levelHeight, levelZ } from './levels.js';
 
 const config = JSON.parse($('#blockk-config').textContent);
 const store = new Store(config);
@@ -97,8 +98,8 @@ function toast(message, kind = 'info') {
 
 const activeTool = () => app.tools[store.ui.tool] ?? app.tools.select;
 /** Plano horizontal de trabajo: el del nivel activo (el techo apoya sobre el último nivel con muros). */
-const levelZ = () => (store.ui.level === ROOF_LEVEL ? (store.topLevel + 1) * config.levelHeight : store.ui.level * config.levelHeight);
-const planeZ = () => activeTool().planeZ?.() ?? levelZ();
+const activeLevelZ = () => levelZ(store.project, store.ui.level === ROOF_LEVEL ? store.topLevel + 1 : store.ui.level);
+const planeZ = () => activeTool().planeZ?.() ?? activeLevelZ();
 const levelLabel = () => config.levelShort[store.ui.level] ?? 'Techo';
 
 function persistUi() {
@@ -124,7 +125,7 @@ function fitView() {
     let minY = 0;
     let maxX = p.lot.w * 100;
     let maxY = p.lot.d * 100;
-    let zTop = config.levelHeight;
+    let zTop = levelHeight(p, 0);
     if (!walls.length) {
         // Proyecto vacío: se encuadra un área de ~12 × 10 m en el centro del lote para dibujar cómodo.
         const cx = (p.lot.w * 100) / 2;
@@ -140,7 +141,7 @@ function fitView() {
         maxX = Math.max(...walls.map((w) => w.x2), ...cols.map((c) => c.x)) * G + 150;
         minY = Math.min(...walls.map((w) => w.y1), ...cols.map((c) => c.y)) * G - 150;
         maxY = Math.max(...walls.map((w) => w.y2), ...cols.map((c) => c.y)) * G + 150;
-        zTop = config.levelHeight * (store.topLevel + 1) + (store.ui.level === ROOF_LEVEL ? 160 : 0);
+        zTop = levelZ(p, store.topLevel + 1) + (store.ui.level === ROOF_LEVEL ? 160 : 0);
     }
     cam.fit(minX, minY, maxX, maxY, zTop, 70);
     app.render();
@@ -613,7 +614,7 @@ function focusIssue(issue) {
 function selectionBox(sel) {
     if (!sel) return null;
     const lv = store.level();
-    const base = store.ui.level * config.levelHeight;
+    const base = levelZ(store.project, store.ui.level);
     if (sel.type === 'wall') {
         const w = lv.walls.find((x) => x.id === sel.id);
         if (!w) return null;
@@ -647,7 +648,7 @@ function selectionBox(sel) {
     }
     if (sel.type === 'column') {
         const c = (lv.columns ?? []).find((x) => x.id === sel.id);
-        return c ? { x0: c.x * G - c.size / 2, y0: c.y * G - c.size / 2, x1: c.x * G + c.size / 2, y1: c.y * G + c.size / 2, z0: base, z1: base + config.levelHeight } : null;
+        return c ? { x0: c.x * G - c.size / 2, y0: c.y * G - c.size / 2, x1: c.x * G + c.size / 2, y1: c.y * G + c.size / 2, z0: base, z1: base + levelHeight(store.project, store.ui.level) } : null;
     }
     if (sel.type === 'roof' || sel.type === 'gable') {
         const part = store.analysis?.roof?.parts?.find((p) => p.id === (sel.type === 'roof' ? sel.id : String(sel.id).split(':')[0]));
@@ -658,11 +659,11 @@ function selectionBox(sel) {
     }
     if (sel.type === 'slab') {
         const sl = store.analysis?.floors?.slabs?.find((x) => x.id === sel.id);
-        return sl ? { x0: sl.rect.x, y0: sl.rect.y, x1: sl.rect.x + sl.rect.w, y1: sl.rect.y + sl.rect.h, z0: config.levelHeight, z1: config.levelHeight + sl.thickness } : null;
+        return sl ? { x0: sl.rect.x, y0: sl.rect.y, x1: sl.rect.x + sl.rect.w, y1: sl.rect.y + sl.rect.h, z0: levelZ(store.project, 1), z1: levelZ(store.project, 1) + sl.thickness } : null;
     }
     if (sel.type === 'stair') {
         const st = store.analysis?.floors?.stairs?.find((x) => x.id === sel.id);
-        return st ? { x0: st.bbox.x, y0: st.bbox.y, x1: st.bbox.x + st.bbox.w, y1: st.bbox.y + st.bbox.h, z0: 0, z1: config.levelHeight } : null;
+        return st ? { x0: st.bbox.x, y0: st.bbox.y, x1: st.bbox.x + st.bbox.w, y1: st.bbox.y + st.bbox.h, z0: 0, z1: levelHeight(store.project, 0) } : null;
     }
     return null;
 }
@@ -722,7 +723,7 @@ function drawSelectionExtras(ctx) {
     if (sel.type === 'room') {
         const room = store.analysis?.levels?.[store.ui.level]?.rooms?.find((r) => r.id === sel.id);
         if (!room?.fill) return;
-        const z = store.ui.level * config.levelHeight;
+        const z = levelZ(store.project, store.ui.level);
         ctx.save();
         ctx.fillStyle = 'rgba(37,99,235,.20)';
         ctx.strokeStyle = '#2563eb';

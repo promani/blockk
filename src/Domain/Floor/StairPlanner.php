@@ -28,7 +28,7 @@ final class StairPlanner
         $G = Hcca::GRID_CM;
 
         foreach ($project->level(0)->stairs as $st) {
-            $built = $this->build($st);
+            $built = $this->build($st, $project->level(0)->heightCm());
             $stairs[] = $built['stair'];
             $steps += $built['stepCount'];
             $landingM2 += $built['landingM2'];
@@ -76,9 +76,9 @@ final class StairPlanner
     /**
      * @return array{stair: array<string, mixed>, rects: list<array{float, float, float, float}>, bbox: array{float, float, float, float}, stepCount: int, landingM2: float, rise: float}
      */
-    private function build(Stair $st): array
+    private function build(Stair $st, int $heightCm): array
     {
-        $H = (float) Hcca::LEVEL_HEIGHT_CM;
+        $H = (float) $heightCm;
         $n = (int) ceil($H / self::TARGET_RISE);
         $rise = $H / $n;
         $W = $st->w * Hcca::GRID_CM;

@@ -11,6 +11,7 @@ import { roomNamesList, roomAnchor, roomTypeItems, nameForType, setLabelType } f
 import { ZONE_KINDS, TREE_SIZES } from './site.js';
 import { footprint, furnitureGroups, turnFurniture } from './furniture.js';
 import { contextOf, CONTEXT_TITLE, roomWalls, facing, openingM2, issueMatches } from './context.js';
+import { levelHeight } from './levels.js';
 
 const G = 12.5;
 /** [nombre, latitud, longitud, huso horario (UTC)] */
@@ -428,10 +429,11 @@ export function mountPanels(app) {
                 field('Espesor', sel(w.t, cfg.thicknesses.map((t) => [t, `${cm(t)} cm`]), (v) => modify('Cambiar espesor', (l) => { l.walls.find((x) => x.id === w.id).t = Number(v); }))),
                 (() => {
                     // Alto en hiladas de 25 cm: más bajo que el nivel (medianeras, parapetos) o, sin nada arriba, hasta 4,00 m.
-                    const maxH = store.ui.level === 0 && !store.project.upper ? 16 : 12;
+                    const full = store.level().courses ?? 12;
+                    const maxH = store.ui.level === 0 && !store.project.upper ? 16 : full;
                     const hNow = w.h ?? 12;
                     const opts = [];
-                    for (let n = maxH; n >= 2; n--) opts.push([n, `${fmt((n * 25) / 100)} m${n === 12 ? ' (nivel completo)' : ''} · ${n} hiladas`]);
+                    for (let n = Math.max(maxH, hNow); n >= 2; n--) opts.push([n, `${fmt((n * 25) / 100)} m${n === full ? ' (nivel completo)' : ''} · ${n} hiladas`]);
                     return field('Alto', sel(hNow, opts, (v) => modify('Cambiar alto', (l) => { l.walls.find((x) => x.id === w.id).h = Number(v); })));
                 })(),
                 h('div', { class: 'proprow' }, h('label', { title: 'Última hilada de bloques U rellenos con hormigón y hierro (encadenado). Sacala en paredes que son sólo mampostería.' },
@@ -550,7 +552,7 @@ export function mountPanels(app) {
             add(el.props,
                 h('div', { class: 'kv-title' }, 'Pilar de hormigón armado'),
                 field('Lado', sel(c.size, cfg.columnSizes.map((v) => [v, `${v} × ${v} cm`]), (v) => upd((x) => { x.size = Number(v); }))),
-                h('dl', { class: 'dl' }, h('dt', {}, 'Altura'), h('dd', {}, `${fmt(cfg.levelHeight / 100)} m`)),
+                h('dl', { class: 'dl' }, h('dt', {}, 'Altura'), h('dd', {}, `${fmt(levelHeight(store.project, store.ui.level) / 100)} m`)),
                 h('div', { class: 'actions-row' }, delBtn),
                 h('p', { class: 'muted small' }, 'Para moverlo, arrastralo.'),
             );
@@ -755,8 +757,28 @@ export function mountPanels(app) {
             el.solar,
             h('div', { class: 'kv-title' }, 'Ajustes del proyecto'),
             field('Espesor por defecto', sel(store.ui.thickness, cfg.thicknesses.map((t) => [t, `${cm(t)} cm`]), (v) => { store.setUi({ thickness: Number(v) }); store.patchProject({ settings: { ...store.project.settings, defaultT: Number(v) } }); })),
+            levelHeightField(),
             field('Reserva por rotura (%)', num(store.project.settings?.reservePct ?? 3, 0, 30, (v) => { store.patchProject({ settings: { ...store.project.settings, reservePct: v } }); store.refresh(); })),
         );
+    }
+
+    /**
+     * Alto del nivel activo (2,50 a 3,00 m). Los muros que llegaban al alto anterior lo siguen y lo de arriba (el Nivel 2, sus
+     * losas, la escalera y el techo) se acomoda solo: así bajar la Planta Baja no deja el Nivel 2 flotando.
+     */
+    function levelHeightField() {
+        const li = store.ui.level;
+        if (li > 1) return null;
+        const now = store.level().courses ?? 12;
+        const opts = [12, 11, 10].map((n) => [n, `${fmt((n * 25) / 100, 2)} m · ${n} hiladas${n === 12 ? ' (estándar)' : ''}`]);
+        return h('div', { title: 'Alto de piso a piso, con la hilada de bloques U del encadenado. Los muros de alto completo lo siguen.' },
+            field(`Alto del ${li === 0 ? 'Nivel 1' : 'Nivel 2'}`, sel(now, opts, (v) => store.commit('Alto del nivel', (d) => {
+                const l = d.levels[li];
+                const n = Number(v);
+                for (const w of l.walls) if ((w.h ?? 12) === now) w.h = n;
+                if (n === 12) delete l.courses;
+                else l.courses = n;
+            }))));
     }
 
     /** Pestaña Techo sin selección: lista de techos y ayuda. */

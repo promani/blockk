@@ -123,6 +123,9 @@ final class Hcca
     public const int REGULAR_COURSES = 11;
     public const int CROWN_COURSE = 11;
     public const int LEVEL_HEIGHT_CM = 300;
+    /** Alto de una hilada (cm) y alto mínimo de un nivel: 10 hiladas = 2,50 m (el nivel se elige entre 2,50 y 3,00 m). */
+    public const int COURSE_CM = 25;
+    public const int MIN_LEVEL_COURSES = 10;
     /** Espesor de la losa que hace de piso de cada habitación del Nivel 2. */
     public const int SLAB_THICKNESS_CM = 12;
     /** Un muro puede ser más bajo que el nivel (medianeras, parapetos) o, sin nada encima, llegar hasta 4,00 m (16 hiladas). */

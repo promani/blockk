@@ -47,6 +47,23 @@ final readonly class Project
         return $this->levels[$index] ?? new Level();
     }
 
+    /** Cota (cm) del piso de un nivel: la suma de los altos de los niveles de abajo. Con 2 niveles, la del techo. */
+    public function levelBaseCm(int $index): int
+    {
+        $z = 0;
+        for ($i = 0; $i < $index; ++$i) {
+            $z += $this->level($i)->heightCm();
+        }
+
+        return $z;
+    }
+
+    /** Cota (cm) de la cara superior de un nivel (donde apoya lo que va arriba). */
+    public function levelTopCm(int $index): int
+    {
+        return $this->levelBaseCm($index) + $this->level($index)->heightCm();
+    }
+
     /** ¿Existe el Nivel 2? Es opcional: la casa empieza con un nivel y el techo. */
     public function upperEnabled(): bool
     {

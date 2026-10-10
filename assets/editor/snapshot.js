@@ -1,6 +1,7 @@
 import { Renderer } from './renderer.js';
 import { Camera } from './camera.js';
 import { buildScene } from './scene.js';
+import { levelZ } from './levels.js';
 
 /*
  * Miniaturas con el mismo dibujo del editor: la planta del Nivel 1 (vista Planta) y la casa terminada con techo
@@ -23,7 +24,7 @@ function bounds(project, config) {
         maxX: Math.max(...xs) * G + 60,
         minY: Math.min(...ys) * G - 60,
         maxY: Math.max(...ys) * G + 60,
-        zTop: config.levelHeight * project.levels.filter((l) => l.walls.length).length + 160,
+        zTop: levelZ(project, project.levels.filter((l) => l.walls.length).length) + 160,
     };
 }
 

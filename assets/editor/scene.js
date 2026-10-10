@@ -8,6 +8,7 @@
 
 import { TREE_SIZES } from './site.js';
 import { furnitureRect, footprint } from './furniture.js';
+import { levelHeight, levelZ } from './levels.js';
 
 export const KIND = { BLOCK: 0, CUT: 1, U: 2, UCUT: 3, DOOR: 4, GLASS: 5, STEP: 9, SLAB: 10, ROOF: 11, FRAME: 12, COLUMN: 13, TREE: 14, FURNITURE: 15 };
 
@@ -18,16 +19,16 @@ const EPS = 0.01;
 export function buildScene(project, analysis, config) {
     const levels = [];
     for (let li = 0; li < project.levels.length; li++) {
-        const base = li * config.levelHeight;
+        const base = levelZ(project, li);
         const boxes = [];
         const courses = analysis.levels[li]?.courses ?? [];
         addMasonry(boxes, courses, base, li);
         addOpenings(boxes, project.levels[li], base, li);
-        addColumns(boxes, project.levels[li], base, li, config);
+        addColumns(boxes, project.levels[li], base, li, levelHeight(project, li));
         addFurniture(boxes, project.levels[li], base, li, config);
         levels.push({ index: li, boxes, base, used: (analysis.levels[li]?.used ?? false) });
     }
-    const floors = buildFloors(analysis.floors, config);
+    const floors = buildFloors(analysis.floors, levelZ(project, 1));
     const roofs = [...buildRoofs(analysis.roof), ...buildGables(analysis.roof)];
     const trees = (project.trees ?? []).map(treeBox);
     const all = [...levels.flatMap((l) => l.boxes), ...floors, ...roofs, ...trees];
@@ -127,7 +128,7 @@ function pushSliced(boxes, b) {
 }
 
 /** Pilares de hormigón armado: una caja lisa de piso a techo del nivel. */
-function addColumns(boxes, level, base, li, config) {
+function addColumns(boxes, level, base, li, height) {
     for (const c of level.columns ?? []) {
         const half = c.size / 2;
         pushSliced(boxes, {
@@ -136,7 +137,7 @@ function addColumns(boxes, level, base, li, config) {
             y0: c.y * G - half,
             y1: c.y * G + half,
             z0: base,
-            z1: base + config.levelHeight,
+            z1: base + height,
             zs: base,
             kind: KIND.COLUMN,
             axis: 'x',
@@ -380,8 +381,8 @@ function topAt(uv, u) {
     return best;
 }
 
-/** Peldaños y descansos de escaleras (nivel 0) y losas de piso (nivel 1). */
-function buildFloors(floors, config) {
+/** Peldaños y descansos de escaleras (nivel 0) y losas de piso (nivel 1, cuya cara superior está a la cota `top`). */
+function buildFloors(floors, top) {
     const boxes = [];
     // Cada peldaño (del alto de una contrahuella) y cada descanso es un bloque cerrado, con todas sus caras.
     const base = (o) => ({ axis: 'x', adjA: false, adjB: false, top: true, ...o });
@@ -389,7 +390,6 @@ function buildFloors(floors, config) {
         for (const p of st.steps) boxes.push(base({ x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1, z0: p.z - st.riseCm, z1: p.z, zs: p.z - st.riseCm, kind: KIND.STEP, level: 0, stair: st.id }));
         for (const p of st.landings) boxes.push(base({ x0: p.x0, x1: p.x1, y0: p.y0, y1: p.y1, z0: p.z - 12, z1: p.z, zs: p.z - 12, kind: KIND.STEP, level: 0, stair: st.id }));
     }
-    const top = config.levelHeight;
     for (const sl of floors?.slabs ?? []) {
         // Losa: una sola placa con el hueco de la escalera; su cara superior es el piso del Nivel 2.
         boxes.push(plate(sl.rect, sl.holes, top - sl.thickness, top, KIND.SLAB, { slab: sl.id }));
