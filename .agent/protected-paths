@@ -1,0 +1,5 @@
+# Rutas que el agente no modifica. Un cambio acá lo hace un humano o el agente central.
+.github/workflows/
+.agent/protected-paths
+.agent/project.toml
+Dockerfile
