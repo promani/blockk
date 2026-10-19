@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Prueba de punta a punta sin Docker, sin red y sin credenciales: levanta la app en un puerto libre con Redis y Kimi
+# apagados (REDIS_URL y KIMI_API_KEY vacíos), recorre los flujos principales por HTTP y la baja.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+PORT="$(php -r '$s = stream_socket_server("tcp://127.0.0.1:0"); echo parse_url(stream_socket_get_name($s, false), PHP_URL_PORT);')"
+BASE="http://127.0.0.1:$PORT"
+LOG="$(mktemp)"
+REDIS_URL="" KIMI_API_KEY="" KIMI_MODEL="" KIMI_MODEL_LIGHT="" KIMI_MODEL_VISION="" ADMIN_API_TOKEN="" \
+    NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 php -d variables_order=EGPCS -S "127.0.0.1:$PORT" -t public > "$LOG" 2>&1 &
+PID=$!
+trap 'kill "$PID" 2> /dev/null || true; rm -f "$LOG"' EXIT
+
+for _ in $(seq 1 40); do
+    curl -s -m 1 --noproxy '*' -o /dev/null "$BASE/health" && break
+    sleep 0.25
+done
+
+fail=0
+ok() { echo "ok   $1"; }
+ko() { echo "FALLA $1" >&2; fail=1; }
+get() { curl -fsS -m 30 --noproxy '*' "$BASE$1"; }
+# check <nombre> <expresión PHP sobre $j (JSON decodificado)> <cuerpo>
+check() { if printf '%s' "$3" | php -r '$j = json_decode(stream_get_contents(STDIN), true); exit(('"$2"') ? 0 : 1);' 2> /dev/null; then ok "$1"; else ko "$1"; fi; }
+
+# 1. health
+HEALTH_URL="$BASE/health" "$ROOT/bin/health" > /dev/null && ok "GET /health" || ko "GET /health"
+
+# 2. páginas: editor, cómputo, galería, catálogo
+for pair in "/:Editor" "/computo:Cómputo" "/galeria:Galería" "/catalogo:Catálogo"; do
+    path="${pair%%:*}"; needle="${pair#*:}"
+    page="$(get "$path" || true)"
+    if [[ "$page" == *"$needle"* ]]; then ok "GET $path"; else ko "GET $path"; fi
+done
+
+# 3. galería → plantilla → cómputo: cada plantilla del catálogo se calcula con el motor real
+TEMPLATES="$(get /api/templates)"
+check "GET /api/templates" 'is_array($j) && count($j) > 0' "$TEMPLATES"
+SLUG="$(printf '%s' "$TEMPLATES" | php -r '$j = json_decode(stream_get_contents(STDIN), true); echo $j[0]["slug"];')"
+PROJECT="$(get "/api/templates/$SLUG")"
+ANALYSIS="$(curl -fsS -m 60 --noproxy '*' -X POST -H 'Content-Type: application/json' --data-binary "$PROJECT" "$BASE/api/analyze")"
+check "POST /api/analyze ($SLUG)" 'isset($j["analysis"]["bom"]["total"]) && count($j["analysis"]["levels"]) > 0' "$ANALYSIS"
+
+# 4. un proyecto inválido se rechaza con 422
+CODE="$(curl -s -m 30 --noproxy '*' -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{"levels":[{"walls":[{"id":"w1","x1":0,"y1":0,"x2":5,"y2":5,"t":20}]}]}' "$BASE/api/analyze")"
+[ "$CODE" = "422" ] && ok "POST /api/analyze inválido → 422" || ko "POST /api/analyze inválido → $CODE"
+
+# 5. asistente apagado sin credenciales
+check "GET /api/assistant/status" '$j["enabled"] === false' "$(get /api/assistant/status)"
+
+exit "$fail"

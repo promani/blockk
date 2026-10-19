@@ -27,6 +27,15 @@ final class ApiTest extends WebTestCase
         }
     }
 
+    public function testHealthReportsOk(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/health');
+
+        self::assertResponseIsSuccessful();
+        self::assertSame(['status' => 'ok'], json_decode($client->getResponse()->getContent(), true));
+    }
+
     public function testResponsesCarrySecurityHeaders(): void
     {
         $client = static::createClient();

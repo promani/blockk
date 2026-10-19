@@ -11,6 +11,8 @@ adopted = true
 [commands]
 install = "composer install"
 test = "vendor/bin/phpunit"
+e2e = "bin/e2e"
+health = "bin/health"   # contra HEALTH_URL (por defecto http://127.0.0.1:8000/health)
 # Faltan: lint, build (los define la tarea de onboarding)
 
 [environments]
