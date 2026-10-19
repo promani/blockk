@@ -1,0 +1,17 @@
+# Contrato entre el proyecto y Zordon (standards/README.md). Generado por `zordon adopt`.
+[project]
+name = "Blockk · app"
+stack = "php"
+service = "app"
+plane_project = "BLOCK"
+repo = "promani/blockk"
+autonomy_level = 1
+adopted = true
+
+[commands]
+install = "composer install"
+test = "vendor/bin/phpunit"
+# Faltan: lint, build (los define la tarea de onboarding)
+
+[environments]
+dev = "Dokploy, deploy automático al mergear a main"
