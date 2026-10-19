@@ -19,3 +19,4 @@ jobs:
       - run: composer lint
       - run: composer build
       - run: vendor/bin/phpunit
+      - run: bin/e2e

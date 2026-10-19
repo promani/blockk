@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# GET /health del servicio levantado (HEALTH_URL, por defecto el de `composer start`).
+set -euo pipefail
+URL="${HEALTH_URL:-http://127.0.0.1:8000/health}"
+BODY="$(curl -fsS -m 5 --noproxy '*' "$URL")"
+echo "$BODY"
+echo "$BODY" | grep -q '"status":"ok"' || { echo "health: respuesta inesperada de $URL" >&2; exit 1; }

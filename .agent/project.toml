@@ -13,6 +13,8 @@ install = "composer install"
 test = "vendor/bin/phpunit"
 lint = "composer lint"
 build = "composer build"
+e2e = "bin/e2e"
+health = "bin/health"   # contra HEALTH_URL (por defecto http://127.0.0.1:8000/health)
 
 [environments]
 dev = "Dokploy, deploy automático al mergear a main"
