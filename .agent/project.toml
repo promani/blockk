@@ -11,7 +11,8 @@ adopted = true
 [commands]
 install = "composer install"
 test = "vendor/bin/phpunit"
-# Faltan: lint, build (los define la tarea de onboarding)
+lint = "composer lint"
+build = "composer build"
 
 [environments]
 dev = "Dokploy, deploy automático al mergear a main"

@@ -65,6 +65,14 @@
             "@php -S 127.0.0.1:8000 -t public"
         ],
         "test": "phpunit",
+        "lint": [
+            "find src tests config bin public -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null",
+            "@php bin/console lint:twig templates",
+            "@php bin/console lint:yaml config",
+            "@php bin/console lint:container",
+            "npx --yes eslint@9 -c .claude/skills/verificar/eslint.config.mjs assets --ignore-pattern 'assets/vendor/**'"
+        ],
+        "build": "@php bin/console asset-map:compile",
         "miniaturas": [
             "Composer\\Config::disableProcessTimeout",
             ".claude/skills/capturas/scripts/servidor.sh",
