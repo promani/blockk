@@ -3,3 +3,4 @@
 .agent/protected-paths
 .agent/project.toml
 Dockerfile
+.agent/gates.py
